@@ -207,6 +207,7 @@ export function BatchVerification() {
             <div className="batch-results" aria-label="Individual label results">
               {result.items.map((item) => {
                 const isOpen = openItems.has(item.index);
+                const detailsId = `batch-item-${item.index}-details`;
                 const sortedResults = item.result?.results
                   .slice()
                   .sort((left, right) => resultOrder(left) - resultOrder(right));
@@ -219,6 +220,8 @@ export function BatchVerification() {
                         <p>{statusText(item)}</p>
                       </div>
                       <button
+                        aria-controls={isOpen ? detailsId : undefined}
+                        aria-expanded={isOpen}
                         className="secondary-button"
                         onClick={() => toggleItem(item.index)}
                         type="button"
@@ -228,14 +231,14 @@ export function BatchVerification() {
                     </div>
 
                     {isOpen && item.error && (
-                      <div className="error-panel batch-item-error">
+                      <div className="error-panel batch-item-error" id={detailsId}>
                         <strong>Could not check this label.</strong>
                         <p>{item.error.message}</p>
                       </div>
                     )}
 
                     {isOpen && sortedResults && (
-                      <div className="field-results">
+                      <div className="field-results" id={detailsId}>
                         {sortedResults.map((fieldResult) => (
                           <article
                             className={`field-result field-result--${fieldResult.status.toLowerCase()}`}
@@ -308,6 +311,7 @@ export function BatchVerification() {
                 <input
                   accept="image/jpeg,image/png,image/webp"
                   aria-describedby={row.errors.image ? `batch-image-${row.id}-error` : undefined}
+                  aria-invalid={Boolean(row.errors.image)}
                   className="file-input"
                   id={`batch-image-${row.id}`}
                   onChange={(event) => updateImage(row.id, event.target.files?.[0] ?? null)}

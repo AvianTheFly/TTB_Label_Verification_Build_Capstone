@@ -154,6 +154,55 @@ def test_warning_failure_surfaces_extracted_government_warning_text() -> None:
     assert warning_result["found"] == extracted_warning
 
 
+def test_missing_extracted_government_warning_needs_review_with_found_null() -> None:
+    client, _ = make_client(
+        FakeVisionService(result=make_extracted_label(government_warning=None))
+    )
+
+    response = post_verify(
+        client,
+        application_data=make_application_data(),
+        image_bytes=make_image_bytes(),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["overall_verdict"] == "NEEDS_REVIEW"
+    warning_result = next(
+        result for result in body["results"] if result["field"] == "government_warning"
+    )
+    assert warning_result["status"] == "FAIL"
+    assert warning_result["found"] is None
+
+
+def test_partial_uncertain_extraction_returns_needs_review_not_false_approval() -> None:
+    client, _ = make_client(
+        FakeVisionService(result=ExtractedLabel(brand_name="Old Tom Distillery"))
+    )
+
+    response = post_verify(
+        client,
+        application_data=make_application_data(),
+        image_bytes=make_image_bytes(),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["overall_verdict"] == "NEEDS_REVIEW"
+    failed_fields = {result["field"] for result in body["results"] if result["status"] == "FAIL"}
+    assert failed_fields == {
+        "class_type",
+        "abv",
+        "net_contents",
+        "producer",
+        "country_of_origin",
+        "government_warning",
+    }
+    assert all(
+        result["found"] is None for result in body["results"] if result["field"] in failed_fields
+    )
+
+
 def test_bad_file_type_returns_clear_4xx_error() -> None:
     client, _ = make_client()
 
@@ -258,6 +307,25 @@ def test_vision_service_timeout_maps_to_safe_readable_error() -> None:
     assert len(fake_service.calls) == 1
 
 
+def test_non_label_extraction_failure_maps_to_safe_readable_error() -> None:
+    client, fake_service = make_client(
+        FakeVisionService(
+            error=VisionServiceError("non_label_image", "secret non-label provider detail")
+        )
+    )
+
+    response = post_verify(
+        client,
+        application_data=make_application_data(),
+        image_bytes=make_image_bytes(),
+    )
+
+    assert response.status_code == 502
+    assert_error_envelope(response, "extraction_failed")
+    assert "secret non-label provider detail" not in response.text
+    assert len(fake_service.calls) == 1
+
+
 def test_tests_use_fake_vision_service_without_api_key_or_network(monkeypatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     fake_service = FakeVisionService(result=make_extracted_label())
@@ -286,5 +354,25 @@ def test_verify_logs_request_timing_without_payload_contents(caplog) -> None:
     assert response.status_code == 200
     messages = [record.getMessage() for record in caplog.records]
     assert any("verify_request_completed latency_ms=" in message for message in messages)
+    assert all("OLD TOM DISTILLERY" not in message for message in messages)
+    assert all(CANONICAL_GOVERNMENT_WARNING not in message for message in messages)
+
+
+def test_verify_logs_timing_breakdown_without_payload_contents(caplog) -> None:
+    client, _ = make_client()
+    caplog.set_level("INFO", logger="app.services.verification")
+
+    response = post_verify(
+        client,
+        application_data=make_application_data(),
+        image_bytes=make_image_bytes(),
+    )
+
+    assert response.status_code == 200
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("verify_timing_breakdown preprocessing_ms=" in message for message in messages)
+    assert any("vision_ms=" in message for message in messages)
+    assert any("comparison_ms=" in message for message in messages)
+    assert any("total_latency_ms=" in message for message in messages)
     assert all("OLD TOM DISTILLERY" not in message for message in messages)
     assert all(CANONICAL_GOVERNMENT_WARNING not in message for message in messages)

@@ -139,6 +139,37 @@ def test_batch_can_mix_approved_and_needs_review_labels() -> None:
     assert failed["found"] == "OTHER DISTILLERY"
 
 
+def test_partial_extraction_counts_as_needs_review_in_batch_summary() -> None:
+    service = FakeVisionService(
+        results=[
+            make_extracted_label(),
+            ExtractedLabel(brand_name="Old Tom Distillery"),
+        ]
+    )
+    client = make_client(service)
+
+    response = post_batch(
+        client,
+        application_items=[make_application_data(), make_application_data()],
+        image_items=[
+            (make_image_bytes(), "label-0.png", "image/png"),
+            (make_image_bytes(), "label-1.png", "image/png"),
+        ],
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["summary"] == {"passed": 1, "needs_review": 1, "total": 2}
+    assert body["items"][1]["error"] is None
+    assert body["items"][1]["result"]["overall_verdict"] == "NEEDS_REVIEW"
+    failed_fields = {
+        result["field"]
+        for result in body["items"][1]["result"]["results"]
+        if result["status"] == "FAIL"
+    }
+    assert "government_warning" in failed_fields
+
+
 def test_one_invalid_item_does_not_fail_whole_batch_and_uses_item_error_shape() -> None:
     service = FakeVisionService(results=[make_extracted_label(), make_extracted_label()])
     client = make_client(service)

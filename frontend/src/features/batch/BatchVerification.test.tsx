@@ -293,6 +293,16 @@ describe("BatchVerification", () => {
     expect(container.textContent).toContain("Total");
     expect(container.textContent).toContain("Label 2");
 
+    const firstToggle = Array.from(container.querySelectorAll("button")).find(
+      (candidate) => candidate.textContent === "Hide Details"
+    );
+    expect(firstToggle?.getAttribute("aria-expanded")).toBe("true");
+
+    const closedToggle = Array.from(container.querySelectorAll("button")).find(
+      (candidate) => candidate.textContent === "View Details"
+    );
+    expect(closedToggle?.getAttribute("aria-expanded")).toBe("false");
+
     await clickButtonWithText("View Details");
 
     expect(container.textContent).toContain("Expected");
@@ -332,5 +342,14 @@ describe("BatchVerification", () => {
 
     expect(container.textContent).toContain("Could not check this label.");
     expect(container.textContent).toContain("This label is missing an image.");
+  });
+
+  it("marks batch image and text inputs invalid after an empty submit", async () => {
+    await renderBatchVerification();
+    await submitForm();
+
+    expect(container.textContent).toContain("Each label needs one image and all seven application fields.");
+    expect(fileInput(0).getAttribute("aria-invalid")).toBe("true");
+    expect(textInput("brand_name", 0).getAttribute("aria-invalid")).toBe("true");
   });
 });

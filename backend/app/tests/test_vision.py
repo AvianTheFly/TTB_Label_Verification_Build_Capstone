@@ -170,6 +170,8 @@ async def test_openai_provider_uses_strict_structured_output_and_prompt_rules() 
     assert request["text"]["format"]["schema"] == STRUCTURED_OUTPUT_SCHEMA
     assert "Copy government_warning verbatim" in EXTRACTION_PROMPT
     assert "Do not guess missing fields" in EXTRACTION_PROMPT
+    assert "absent, unreadable, obscured, ambiguous, or uncertain" in EXTRACTION_PROMPT
+    assert "For blurry, angled, or glare-heavy images, return partial data" in EXTRACTION_PROMPT
     assert set(request["text"]["format"]["schema"]["properties"]) == set(
         CANONICAL_EXTRACTION_FIELDS
     )

@@ -1,3 +1,4 @@
+import logging
 from time import perf_counter
 
 from app.core.config import Settings
@@ -5,6 +6,8 @@ from app.domain.comparison import compare_label
 from app.domain.models import ApplicationData, VerificationResult
 from app.services.image_preprocess import preprocess_image
 from app.services.vision import VisionService
+
+logger = logging.getLogger(__name__)
 
 
 async def verify_label_image(
@@ -17,15 +20,40 @@ async def verify_label_image(
     settings: Settings,
 ) -> VerificationResult:
     start = perf_counter()
+    preprocess_start = perf_counter()
     preprocessed = preprocess_image(
         image_bytes,
         content_type,
         filename=filename,
         max_upload_mb=settings.max_upload_mb,
     )
+    preprocessing_ms = _elapsed_ms(preprocess_start)
+
+    vision_start = perf_counter()
     extracted = await vision_service.extract_label(preprocessed)
+    vision_ms = _elapsed_ms(vision_start)
+
+    comparison_start = perf_counter()
     result = compare_label(application, extracted)
-    result.latency_ms = _elapsed_ms(start)
+    comparison_ms = _elapsed_ms(comparison_start)
+    total_latency_ms = _elapsed_ms(start)
+    result.latency_ms = total_latency_ms
+    logger.info(
+        (
+            "verify_timing_breakdown preprocessing_ms=%s vision_ms=%s "
+            "comparison_ms=%s total_latency_ms=%s"
+        ),
+        preprocessing_ms,
+        vision_ms,
+        comparison_ms,
+        total_latency_ms,
+        extra={
+            "preprocessing_ms": preprocessing_ms,
+            "vision_ms": vision_ms,
+            "comparison_ms": comparison_ms,
+            "total_latency_ms": total_latency_ms,
+        },
+    )
     return result
 
 

@@ -165,6 +165,7 @@ export function SingleLabelVerification() {
             <input
               accept="image/jpeg,image/png,image/webp"
               aria-describedby={errors.image ? "image-error" : undefined}
+              aria-invalid={Boolean(errors.image)}
               className="file-input"
               id="label-image"
               name="image"

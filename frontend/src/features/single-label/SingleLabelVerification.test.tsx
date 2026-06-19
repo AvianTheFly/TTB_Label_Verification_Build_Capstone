@@ -116,6 +116,8 @@ describe("SingleLabelVerification", () => {
     expect(container.textContent).toContain("Choose a label image.");
     expect(container.textContent).toContain("Enter the brand name.");
     expect(container.textContent).toContain("Enter the government warning.");
+    expect(fileInput().getAttribute("aria-invalid")).toBe("true");
+    expect(textInput("brand_name").getAttribute("aria-invalid")).toBe("true");
   });
 
   it("sends multipart form data with exactly the canonical application fields", async () => {
