@@ -11,14 +11,18 @@ import type {
   FieldResult,
   VerificationResult
 } from "../../types/api";
-import { FIELD_CONFIGS, fieldLabel, resultOrder } from "../labelFields";
+import { FIELD_CONFIGS, resultOrder } from "../labelFields";
 import {
   ApplicationPackageRecord,
   PackageValidationError,
+  VisibleStatus,
+  allFieldsPass,
   buildReviewedResultsExport,
   emptyExtractedData,
   extractedDataFromResult,
+  hasFailingFields,
   parseApplicationPackages,
+  statusSortRank,
   statusFromResult
 } from "./packageWorkflowUtils";
 
@@ -28,10 +32,6 @@ function errorMessageFor(error: unknown): string {
   }
 
   return "The verification service could not check these applications. Please try again.";
-}
-
-function displayFieldStatus(result: FieldResult): "Passed" | "Needs Review" {
-  return result.status === "PASS" ? "Passed" : "Needs Review";
 }
 
 function sortedResults(result: VerificationResult | null): FieldResult[] {
@@ -56,6 +56,8 @@ export function PackageWorkflow() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const detailHeadingRef = useRef<HTMLHeadingElement>(null);
   const recordsRef = useRef<ApplicationPackageRecord[]>([]);
+  const uploadedFilesRef = useRef<File[]>([]);
+  const compareTimerRef = useRef<number | null>(null);
   const [records, setRecords] = useState<ApplicationPackageRecord[]>([]);
   const [validationErrors, setValidationErrors] = useState<PackageValidationError[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
@@ -66,11 +68,19 @@ export function PackageWorkflow() {
   const [recheckError, setRecheckError] = useState<string | null>(null);
 
   const selectedRecord = records.find((record) => record.package_id === selectedPackageId) ?? null;
-  const validRecords = useMemo(
-    () => records.filter((record) => record.validation_errors.length === 0),
+  const sortedRecords = useMemo(
+    () =>
+      records
+        .slice()
+        .sort(
+          (left, right) =>
+            statusSortRank(left.status) - statusSortRank(right.status) ||
+            left.package_id.localeCompare(right.package_id)
+        ),
     [records]
   );
-  const canCheck = validRecords.length > 0 && !isChecking;
+  const selectedCanFail = selectedRecord ? hasFailingFields(selectedRecord) : false;
+  const selectedCanPass = selectedRecord ? allFieldsPass(selectedRecord) : false;
 
   useEffect(() => {
     recordsRef.current = records;
@@ -78,6 +88,9 @@ export function PackageWorkflow() {
 
   useEffect(
     () => () => {
+      if (compareTimerRef.current !== null) {
+        window.clearTimeout(compareTimerRef.current);
+      }
       for (const record of recordsRef.current) {
         revokePreviewUrl(record.image_preview_url);
       }
@@ -86,23 +99,48 @@ export function PackageWorkflow() {
   );
 
   async function importFiles(fileList: FileList | File[]) {
-    const files = Array.from(fileList);
-    const parsed = await parseApplicationPackages(files);
-    const nextRecords = parsed.records.map((record) => ({
-      ...record,
-      image_preview_url: createPreviewUrl(record.image_file)
-    }));
+    const files = mergeFilesByName(uploadedFilesRef.current, Array.from(fileList));
+    uploadedFilesRef.current = files;
 
-    setRecords((current) => {
-      for (const record of current) {
+    const parsed = await parseApplicationPackages(files);
+    const currentRecords = recordsRef.current;
+    const currentByKey = new Map(currentRecords.map((record) => [recordKey(record), record]));
+    const recordsToCheck: ApplicationPackageRecord[] = [];
+    const nextRecords = parsed.records.map((record) => {
+      const existing = currentByKey.get(recordKey(record));
+      if (existing) {
+        return {
+          ...existing,
+          image_file: record.image_file,
+          application_data: record.application_data,
+          json_filename: record.json_filename,
+          image_filename: record.image_filename
+        };
+      }
+
+      const nextRecord = {
+        ...record,
+        image_preview_url: createPreviewUrl(record.image_file)
+      };
+      recordsToCheck.push(nextRecord);
+      return nextRecord;
+    });
+
+    for (const record of currentRecords) {
+      if (!nextRecords.some((nextRecord) => nextRecord.image_preview_url === record.image_preview_url)) {
         revokePreviewUrl(record.image_preview_url);
       }
-      return nextRecords;
-    });
+    }
+
+    setRecords(nextRecords);
     setValidationErrors(parsed.errors);
-    setSelectedPackageId(nextRecords[0]?.package_id ?? null);
+    setSelectedPackageId((current) =>
+      current && nextRecords.some((record) => record.package_id === current) ? current : null
+    );
     setCheckError(null);
     setRecheckError(null);
+
+    void checkApplications(recordsToCheck);
   }
 
   function handleFileInputChange(event: ChangeEvent<HTMLInputElement>) {
@@ -127,7 +165,8 @@ export function PackageWorkflow() {
     void importFiles(event.dataTransfer.files);
   }
 
-  async function checkApplications() {
+  async function checkApplications(recordsToCheck: ApplicationPackageRecord[]) {
+    const validRecords = recordsToCheck.filter((record) => record.validation_errors.length === 0);
     if (validRecords.length === 0) {
       return;
     }
@@ -215,46 +254,96 @@ export function PackageWorkflow() {
     window.requestAnimationFrame(() => detailHeadingRef.current?.focus());
   }
 
+  function closeDetail() {
+    setSelectedPackageId(null);
+  }
+
   function updateExtractedField(field: CanonicalLabelField, value: string) {
     if (!selectedRecord) {
       return;
     }
 
     const currentExtracted = selectedRecord.reviewed_extracted_data ?? emptyExtractedData();
+    const nextExtracted = {
+      ...currentExtracted,
+      [field]: value
+    };
     setRecords((current) =>
       current.map((record) =>
         record.package_id === selectedRecord.package_id
           ? {
               ...record,
-              reviewed_extracted_data: {
-                ...currentExtracted,
-                [field]: value
-              }
+              reviewed_extracted_data: nextExtracted
             }
           : record
       )
     );
+    scheduleCompare(selectedRecord.package_id, selectedRecord.application_data, nextExtracted);
   }
 
-  async function recheckExtractedText() {
-    if (!selectedRecord) {
-      return;
+  function scheduleCompare(
+    packageId: string,
+    applicationData: ApplicationPackageRecord["application_data"],
+    extractedData: ApplicationPackageRecord["reviewed_extracted_data"]
+  ) {
+    if (compareTimerRef.current !== null) {
+      window.clearTimeout(compareTimerRef.current);
     }
 
+    compareTimerRef.current = window.setTimeout(() => {
+      void recheckExtractedText(packageId, applicationData, extractedData ?? emptyExtractedData());
+    }, 350);
+  }
+
+  async function recheckExtractedText(
+    packageId: string,
+    applicationData: ApplicationPackageRecord["application_data"],
+    extractedData: ApplicationPackageRecord["reviewed_extracted_data"]
+  ) {
     setIsRechecking(true);
     setRecheckError(null);
-
     try {
-      const result = await compareExtractedData(
-        selectedRecord.application_data,
-        selectedRecord.reviewed_extracted_data ?? emptyExtractedData()
+      const result = await compareExtractedData(applicationData, extractedData ?? emptyExtractedData());
+      setRecords((current) =>
+        current.map((record) =>
+          record.package_id === packageId
+            ? {
+                ...record,
+                reviewed_extracted_data: extractedData ?? emptyExtractedData(),
+                comparison_result: result,
+                status: statusFromResult(result),
+                item_error: null
+              }
+            : record
+        )
       );
-      updateRecordWithResult(selectedRecord.package_id, result);
     } catch (error) {
       setRecheckError(errorMessageFor(error));
     } finally {
       setIsRechecking(false);
     }
+  }
+
+  function setRecordStatus(packageId: string, status: VisibleStatus) {
+    setRecords((current) =>
+      current.map((record) => (record.package_id === packageId ? { ...record, status } : record))
+    );
+    closeDetail();
+  }
+
+  function revertExtractedData(record: ApplicationPackageRecord) {
+    const revertedData = record.original_extracted_data ?? emptyExtractedData();
+    setRecords((current) =>
+      current.map((candidate) =>
+        candidate.package_id === record.package_id
+          ? {
+              ...candidate,
+              reviewed_extracted_data: revertedData
+            }
+          : candidate
+      )
+    );
+    scheduleCompare(record.package_id, record.application_data, revertedData);
   }
 
   function downloadReviewedResults() {
@@ -324,30 +413,32 @@ export function PackageWorkflow() {
           </div>
         )}
 
-        <div className="package-actions">
-          <button className="primary-button" disabled={!canCheck} onClick={checkApplications} type="button">
-            {isChecking ? "Checking..." : "Check Applications"}
-          </button>
+        <div className="package-actions package-actions--export">
+          {isChecking && <p className="loading-message">Checking uploaded applications...</p>}
           <button
             className="secondary-button"
             disabled={records.length === 0}
             onClick={downloadReviewedResults}
             type="button"
           >
-            Download Reviewed Results JSON
+            Submit
           </button>
         </div>
 
-        <section className="package-grid" aria-label="Uploaded applications">
+        <section className="applications-section" aria-labelledby="applications-title">
+          <div className="section-rule">
+            <h2 id="applications-title">Applications</h2>
+          </div>
+          <div className="package-grid" aria-label="Uploaded applications">
           {records.length === 0 ? (
             <div className="empty-state">
               <h2>No Applications Loaded</h2>
               <p>Choose JSON and image files to begin.</p>
             </div>
           ) : (
-            records.map((record) => (
+            sortedRecords.map((record) => (
               <article
-                className={`package-card package-card--${record.status === "Passed" ? "passed" : record.status === "Needs Review" ? "review" : "pending"}`}
+                className={`package-card package-card--${cardStatusClass(record.status)}`}
                 key={record.package_id}
               >
                 <button
@@ -361,8 +452,7 @@ export function PackageWorkflow() {
                     <span className="package-card__thumbnail package-card__thumbnail--blank" />
                   )}
                   <span className="package-card__body">
-                    <strong>{record.package_id}</strong>
-                    <span>{record.image_filename}</span>
+                    <strong>{record.application_data.brand_name}</strong>
                     <span className="status-chip">{record.status}</span>
                     {record.item_error && <span className="package-card__error">{record.item_error}</span>}
                   </span>
@@ -370,43 +460,93 @@ export function PackageWorkflow() {
               </article>
             ))
           )}
+          </div>
         </section>
 
         {selectedRecord && (
-          <section className="detail-panel" aria-labelledby="detail-title">
+          <div
+            className="detail-overlay"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) {
+                closeDetail();
+              }
+            }}
+            role="presentation"
+          >
+          <section
+            aria-labelledby="detail-title"
+            aria-modal="true"
+            className="detail-panel"
+            onMouseDown={(event) => event.stopPropagation()}
+            role="dialog"
+          >
             <div className="detail-panel__header">
-              <div>
-                <p className="result-label">{selectedRecord.package_id}</p>
-                <h2 id="detail-title" ref={detailHeadingRef} tabIndex={-1}>
-                  {selectedRecord.image_filename}
-                </h2>
+              <button
+                aria-label="Close detail view"
+                className="detail-close-button"
+                onClick={closeDetail}
+                type="button"
+              >
+                X
+              </button>
+              <div className="detail-title-group">
+                <div>
+                  <p className="result-label">Application #</p>
+                  <p className="detail-application-id">{applicationNumber(selectedRecord.package_id)}</p>
+                </div>
+                <div>
+                  <p className="result-label">Brand Name</p>
+                  <h2 id="detail-title" ref={detailHeadingRef} tabIndex={-1}>
+                    {selectedRecord.application_data.brand_name}
+                  </h2>
+                </div>
               </div>
-              <span className="status-chip status-chip--large">{selectedRecord.status}</span>
+              <span className={`status-chip status-chip--large status-chip--${cardStatusClass(selectedRecord.status)}`}>
+                {selectedRecord.status}
+              </span>
+            </div>
+
+            <div className="review-actions review-actions--top" aria-label="Review decision">
+              <button
+                className="decision-button decision-button--fail"
+                disabled={!selectedCanFail}
+                onClick={() => setRecordStatus(selectedRecord.package_id, "Fail")}
+                type="button"
+              >
+                FAIL
+              </button>
+              <button
+                className="decision-button decision-button--review"
+                onClick={() => setRecordStatus(selectedRecord.package_id, "Needs Review")}
+                type="button"
+              >
+                NEEDS REVIEW
+              </button>
+              <button
+                className="decision-button decision-button--pass"
+                disabled={!selectedCanPass}
+                onClick={() => setRecordStatus(selectedRecord.package_id, "Passed")}
+                type="button"
+              >
+                PASS
+              </button>
             </div>
 
             <div className="detail-layout">
               <div className="detail-image-frame">
                 {selectedRecord.image_preview_url && (
                   <img
-                    alt={`Label image for ${selectedRecord.image_filename}`}
+                    alt={`Label image for ${selectedRecord.application_data.brand_name}`}
                     src={selectedRecord.image_preview_url}
                   />
                 )}
               </div>
 
               <div className="detail-fields">
-                <FieldSet
-                  data={selectedRecord.application_data}
-                  legend="Application Values"
-                  mode="readonly"
-                  prefix="application"
-                />
-                <FieldSet
-                  data={selectedRecord.reviewed_extracted_data ?? emptyExtractedData()}
-                  legend="Extracted Values"
-                  mode="editable"
+                <DataPanel
                   onChange={updateExtractedField}
-                  prefix="extracted"
+                  onRevert={() => revertExtractedData(selectedRecord)}
+                  record={selectedRecord}
                 />
               </div>
             </div>
@@ -418,103 +558,194 @@ export function PackageWorkflow() {
               </div>
             )}
 
-            <button
-              className="primary-button"
-              disabled={isRechecking}
-              onClick={recheckExtractedText}
-              type="button"
-            >
-              {isRechecking ? "Rechecking..." : "Recheck Extracted Text"}
-            </button>
+            {isRechecking && <p className="loading-message">Rechecking extracted text...</p>}
 
-            <section className="comparison-results" aria-label="Backend comparison results">
-              <h3>Backend Results</h3>
-              {selectedRecord.comparison_result ? (
-                sortedResults(selectedRecord.comparison_result).map((fieldResult) => (
-                  <article
-                    className={`comparison-row comparison-row--${fieldResult.status.toLowerCase()}`}
-                    key={fieldResult.field}
-                  >
-                    <div className="comparison-row__heading">
-                      <h4>{fieldLabel(fieldResult.field)}</h4>
-                      <span className="status-badge">{displayFieldStatus(fieldResult)}</span>
-                    </div>
-                    <dl>
-                      <div>
-                        <dt>Application value</dt>
-                        <dd>{fieldResult.expected || "Not provided"}</dd>
-                      </div>
-                      <div>
-                        <dt>Extracted value</dt>
-                        <dd>{fieldResult.found || "Not found"}</dd>
-                      </div>
-                      <div>
-                        <dt>Reason</dt>
-                        <dd>{fieldResult.message}</dd>
-                      </div>
-                    </dl>
-                  </article>
-                ))
-              ) : (
-                <p className="empty-comparison">Pending Check</p>
-              )}
-            </section>
+            <div className="review-actions" aria-label="Review decision">
+              <button
+                className="decision-button decision-button--fail"
+                disabled={!selectedCanFail}
+                onClick={() => setRecordStatus(selectedRecord.package_id, "Fail")}
+                type="button"
+              >
+                FAIL
+              </button>
+              <button
+                className="decision-button decision-button--review"
+                onClick={() => setRecordStatus(selectedRecord.package_id, "Needs Review")}
+                type="button"
+              >
+                NEEDS REVIEW
+              </button>
+              <button
+                className="decision-button decision-button--pass"
+                disabled={!selectedCanPass}
+                onClick={() => setRecordStatus(selectedRecord.package_id, "Passed")}
+                type="button"
+              >
+                PASS
+              </button>
+            </div>
           </section>
+          </div>
         )}
       </section>
     </main>
   );
 }
 
-interface FieldSetProps {
-  data: Record<CanonicalLabelField, string | null>;
-  legend: string;
-  mode: "readonly" | "editable";
-  onChange?: (field: CanonicalLabelField, value: string) => void;
-  prefix: string;
+interface DataPanelProps {
+  onRevert: () => void;
+  record: ApplicationPackageRecord;
+  onChange: (field: CanonicalLabelField, value: string) => void;
 }
 
-function FieldSet({ data, legend, mode, onChange, prefix }: FieldSetProps) {
+function DataPanel({ onRevert, record, onChange }: DataPanelProps) {
+  const extractedData = record.reviewed_extracted_data ?? emptyExtractedData();
+  const fieldResults = new Map(sortedResults(record.comparison_result).map((result) => [result.field, result]));
+  const hoverTimerRef = useRef<number | null>(null);
+  const [hoveredField, setHoveredField] = useState<CanonicalLabelField | null>(null);
+  const [pinnedFields, setPinnedFields] = useState<Set<CanonicalLabelField>>(() => new Set());
+
+  useEffect(
+    () => () => {
+      if (hoverTimerRef.current !== null) {
+        window.clearTimeout(hoverTimerRef.current);
+      }
+    },
+    []
+  );
+
+  function scheduleFieldHover(field: CanonicalLabelField) {
+    if (pinnedFields.has(field)) {
+      return;
+    }
+    if (hoverTimerRef.current !== null) {
+      window.clearTimeout(hoverTimerRef.current);
+    }
+    hoverTimerRef.current = window.setTimeout(() => setHoveredField(field), 1000);
+  }
+
+  function clearFieldHover(field: CanonicalLabelField) {
+    if (hoverTimerRef.current !== null) {
+      window.clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    if (!pinnedFields.has(field) && hoveredField === field) {
+      setHoveredField(null);
+    }
+  }
+
+  function togglePinnedField(field: CanonicalLabelField) {
+    setPinnedFields((current) => {
+      const next = new Set(current);
+      if (next.has(field)) {
+        next.delete(field);
+      } else {
+        next.add(field);
+      }
+      return next;
+    });
+    setHoveredField(null);
+  }
+
   return (
-    <fieldset className="package-fieldset">
-      <legend>{legend}</legend>
-      <div className="field-grid">
+    <section className="data-panel" aria-labelledby="data-title">
+      <div className="data-panel__header">
+        <h3 id="data-title">Data</h3>
+        <button className="secondary-button" onClick={onRevert} type="button">
+          Revert back to AI extracted values
+        </button>
+      </div>
+      <div className="data-grid">
         {FIELD_CONFIGS.map((field) => {
-          const id = `${prefix}-${field.name}`;
-          const value = data[field.name] ?? "";
-          const commonProps = {
-            id,
-            name: field.name,
-            value
-          };
+          const applicationId = `application-${field.name}`;
+          const extractedId = `extracted-${field.name}`;
+          const fieldResult = fieldResults.get(field.name);
+          const extractedValue = extractedData[field.name] ?? "";
+          const statusLabel = fieldResult
+            ? fieldResult.status === "PASS"
+              ? "PASS"
+              : record.status === "Fail"
+                ? "FAIL"
+                : "Needs Review"
+            : "Pending Check";
+          const isExpanded = pinnedFields.has(field.name) || hoveredField === field.name;
 
           return (
             <div
-              className={`form-field ${field.multiline ? "form-field--wide" : ""}`}
+              className={`data-row data-row--${fieldResult?.status.toLowerCase() ?? "pending"} ${isExpanded ? "data-row--expanded" : ""}`}
               key={field.name}
+              onClick={(event) => {
+                if ((event.target as HTMLElement).closest("input, textarea, button")) {
+                  return;
+                }
+                togglePinnedField(field.name);
+              }}
+              onMouseEnter={() => scheduleFieldHover(field.name)}
+              onMouseLeave={() => clearFieldHover(field.name)}
             >
-              <label htmlFor={id}>{field.label}</label>
-              {field.multiline ? (
-                <textarea
-                  {...commonProps}
-                  aria-label={`${legend} ${field.label}`}
-                  onChange={(event) => onChange?.(field.name, event.target.value)}
-                  readOnly={mode === "readonly"}
-                  rows={4}
-                />
-              ) : (
-                <input
-                  {...commonProps}
-                  aria-label={`${legend} ${field.label}`}
-                  onChange={(event) => onChange?.(field.name, event.target.value)}
-                  readOnly={mode === "readonly"}
-                  type="text"
-                />
-              )}
+              <div className="data-row__heading">
+                <h4>{field.label}</h4>
+                <span className="field-status">{statusLabel}</span>
+              </div>
+              <div className="data-pair">
+                <div className="data-value-group">
+                  <span className="data-value-label">Application:</span>
+                  <p
+                    aria-label={`Application Value ${field.label}`}
+                    className="application-value-text"
+                    id={applicationId}
+                  >
+                    {record.application_data[field.name]}
+                  </p>
+                </div>
+                <div className="data-value-group">
+                  <label htmlFor={extractedId}>Actual:</label>
+                  <input
+                    aria-label={`Extracted Value ${field.label}`}
+                    id={extractedId}
+                    name={field.name}
+                    onChange={(event) => onChange(field.name, event.target.value)}
+                    type="text"
+                    value={extractedValue}
+                  />
+                </div>
+              </div>
+              {fieldResult && <p className="data-row__message">{fieldResult.message}</p>}
             </div>
           );
         })}
       </div>
-    </fieldset>
+    </section>
   );
+}
+
+function mergeFilesByName(currentFiles: File[], incomingFiles: File[]): File[] {
+  const filesByName = new Map(currentFiles.map((file) => [file.name, file]));
+  for (const file of incomingFiles) {
+    filesByName.set(file.name, file);
+  }
+
+  return Array.from(filesByName.values());
+}
+
+function recordKey(record: Pick<ApplicationPackageRecord, "json_filename" | "image_filename">): string {
+  return `${record.json_filename}|${record.image_filename}`;
+}
+
+function cardStatusClass(status: VisibleStatus): string {
+  if (status === "Passed") {
+    return "passed";
+  }
+  if (status === "Fail") {
+    return "fail";
+  }
+  if (status === "Needs Review") {
+    return "review";
+  }
+  return "pending";
+}
+
+function applicationNumber(packageId: string): string {
+  return packageId.replace(/^application-/, "");
 }

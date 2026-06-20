@@ -6,7 +6,7 @@ import type {
 } from "../../types/api";
 import { ACCEPTED_IMAGE_TYPES, FIELD_CONFIGS } from "../labelFields";
 
-export type VisibleStatus = "Pending Check" | "Passed" | "Needs Review";
+export type VisibleStatus = "Pending Check" | "Passed" | "Needs Review" | "Fail";
 
 export interface PackageValidationError {
   code:
@@ -42,6 +42,7 @@ export interface ReviewedResultsExport {
   schema_version: "application-package-review-v1";
   generated_at: string;
   summary: {
+    failed: number;
     passed: number;
     needs_review: number;
     pending: number;
@@ -99,13 +100,37 @@ export function statusFromResult(result: VerificationResult): VisibleStatus {
   return result.overall_verdict === "APPROVED" ? "Passed" : "Needs Review";
 }
 
+export function hasFailingFields(record: ApplicationPackageRecord): boolean {
+  return record.comparison_result?.results.some((fieldResult) => fieldResult.status === "FAIL") ?? false;
+}
+
+export function allFieldsPass(record: ApplicationPackageRecord): boolean {
+  return (
+    record.comparison_result?.results.length === CANONICAL_FIELDS.length &&
+    record.comparison_result.results.every((fieldResult) => fieldResult.status === "PASS")
+  );
+}
+
+export function statusSortRank(status: VisibleStatus): number {
+  const ranks: Record<VisibleStatus, number> = {
+    "Needs Review": 0,
+    Fail: 1,
+    "Pending Check": 2,
+    Passed: 3
+  };
+
+  return ranks[status];
+}
+
 export function buildReviewedResultsExport(
   records: ApplicationPackageRecord[],
   generatedAt = new Date().toISOString()
 ): ReviewedResultsExport {
   const summary = records.reduce(
     (counts, record) => {
-      if (record.status === "Passed") {
+      if (record.status === "Fail") {
+        counts.failed += 1;
+      } else if (record.status === "Passed") {
         counts.passed += 1;
       } else if (record.status === "Needs Review") {
         counts.needs_review += 1;
@@ -115,7 +140,7 @@ export function buildReviewedResultsExport(
       counts.total += 1;
       return counts;
     },
-    { passed: 0, needs_review: 0, pending: 0, total: 0 }
+    { failed: 0, passed: 0, needs_review: 0, pending: 0, total: 0 }
   );
 
   return {

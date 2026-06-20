@@ -148,6 +148,7 @@ async function clickButton(text: string) {
   await act(async () => {
     buttonWithText(text).click();
   });
+  await waitForAsyncUpdates();
 }
 
 async function changeField(label: string, value: string) {
@@ -320,6 +321,7 @@ describe("PackageWorkflow", () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
     await act(async () => {
       root.unmount();
     });
@@ -334,12 +336,38 @@ describe("PackageWorkflow", () => {
 
     expect(container.querySelector('[data-testid="package-upload-area"]')).not.toBeNull();
     expect(container.textContent).toContain("Choose Files");
-    expect(container.textContent).toContain("Download Reviewed Results JSON");
+    expect(container.textContent).toContain("Submit");
+    expect(container.textContent).toContain("Applications");
+    expect(container.textContent).not.toContain("Check Applications");
     expect(container.textContent).not.toContain("Single Label");
     expect(container.textContent).not.toContain("Batch Upload");
   });
 
-  it("calls /verify when one application is checked", async () => {
+  it("adds later uploads to the current batch instead of replacing them", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => verificationResult()
+      })
+    );
+
+    await renderPackageWorkflow();
+    await chooseFiles([jsonFile("first.json", "first.png"), imageFile("first.png")]);
+    await chooseFiles([
+      jsonFile("second.json", "second.png", {
+        ...canonicalApplicationData,
+        brand_name: "SECOND BRAND"
+      }),
+      imageFile("second.png")
+    ]);
+
+    expect(container.textContent).toContain("OLD TOM DISTILLERY");
+    expect(container.textContent).toContain("SECOND BRAND");
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("calls /verify automatically when one application is uploaded", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -350,8 +378,6 @@ describe("PackageWorkflow", () => {
 
     await renderPackageWorkflow();
     await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
-    await clickButton("Check Applications");
-    await waitForAsyncUpdates();
 
     expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:8000/verify", {
       method: "POST",
@@ -364,7 +390,7 @@ describe("PackageWorkflow", () => {
     expect(container.textContent).toContain("Passed");
   });
 
-  it("calls /verify/batch for multiple applications and maps index results by record", async () => {
+  it("calls /verify/batch automatically for multiple applications and maps index results by record", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -409,8 +435,6 @@ describe("PackageWorkflow", () => {
       imageFile("first.png"),
       jsonFile("second.json", "second.png")
     ]);
-    await clickButton("Check Applications");
-    await waitForAsyncUpdates();
 
     expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:8000/verify/batch", {
       method: "POST",
@@ -421,15 +445,13 @@ describe("PackageWorkflow", () => {
     expect((formData.getAll("images")[1] as File).name).toBe("second.png");
 
     const firstCard = container.textContent ?? "";
-    expect(firstCard).toContain("application-1");
-    expect(firstCard).toContain("first.png");
+    expect(firstCard).toContain("FIRST BRAND");
     expect(firstCard).toContain("Needs Review");
-    expect(firstCard).toContain("application-2");
-    expect(firstCard).toContain("second.png");
+    expect(firstCard).toContain("OLD TOM DISTILLERY");
     expect(firstCard).toContain("Passed");
   });
 
-  it("opens detail view with image, read-only application fields, and editable extracted fields", async () => {
+  it("opens detail view with brand header, image, read-only application fields, and editable extracted fields", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -440,29 +462,33 @@ describe("PackageWorkflow", () => {
 
     await renderPackageWorkflow();
     await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
-    await clickButton("Check Applications");
-    await waitForAsyncUpdates();
     await act(async () => {
       firstPackageButton().click();
     });
 
-    const image = container.querySelector('img[alt="Label image for label.png"]');
+    const image = container.querySelector('img[alt="Label image for OLD TOM DISTILLERY"]');
     expect(image).not.toBeNull();
+    expect(container.querySelector("#detail-title")?.textContent).toBe("OLD TOM DISTILLERY");
+    expect(container.textContent).toContain("Data");
+    expect(container.textContent).toContain("Application #");
+    expect(container.textContent).toContain("Application:");
+    expect(container.textContent).toContain("Actual:");
+    expect(container.textContent).not.toContain("Backend Results");
+    expect(container.textContent).not.toContain("label.png");
 
-    const applicationBrand = container.querySelector('[aria-label="Application Values Brand Name"]');
-    const extractedBrand = container.querySelector('[aria-label="Extracted Values Brand Name"]');
-    expect(applicationBrand).toBeInstanceOf(HTMLInputElement);
+    const applicationBrand = container.querySelector('[aria-label="Application Value Brand Name"]');
+    const extractedBrand = container.querySelector('[aria-label="Extracted Value Brand Name"]');
+    expect(applicationBrand).toBeInstanceOf(HTMLParagraphElement);
     expect(extractedBrand).toBeInstanceOf(HTMLInputElement);
-    expect((applicationBrand as HTMLInputElement).readOnly).toBe(true);
     expect((extractedBrand as HTMLInputElement).readOnly).toBe(false);
     expect((extractedBrand as HTMLInputElement).value).toBe("Old Tom Distillery");
 
-    await changeField("Extracted Values Brand Name", "Corrected Brand");
+    await changeField("Extracted Value Brand Name", "Corrected Brand");
 
     expect((extractedBrand as HTMLInputElement).value).toBe("Corrected Brand");
   });
 
-  it("recheck calls /compare and updates backend result status", async () => {
+  it("editing extracted values calls /compare and updates backend result status", async () => {
     vi.stubGlobal(
       "fetch",
       vi
@@ -492,10 +518,15 @@ describe("PackageWorkflow", () => {
 
     await renderPackageWorkflow();
     await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
-    await clickButton("Check Applications");
-    await waitForAsyncUpdates();
-    await changeField("Extracted Values Brand Name", "Corrected Brand");
-    await clickButton("Recheck Extracted Text");
+    await act(async () => {
+      firstPackageButton().click();
+    });
+    vi.useFakeTimers();
+    await changeField("Extracted Value Brand Name", "Corrected Brand");
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
     await waitForAsyncUpdates();
 
     expect(fetch).toHaveBeenLastCalledWith("http://127.0.0.1:8000/compare", {
@@ -507,7 +538,107 @@ describe("PackageWorkflow", () => {
     expect(body.application_data).toEqual(canonicalApplicationData);
     expect(body.extracted_data.brand_name).toBe("Corrected Brand");
     expect(container.textContent).toContain("Needs Review");
-    expect(container.textContent).toContain("Corrected Brand");
+    expect(
+      (container.querySelector('[aria-label="Extracted Value Brand Name"]') as HTMLInputElement)
+        .value
+    ).toBe("Corrected Brand");
+  });
+
+  it("uses backend field results to enable review decision buttons", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () =>
+          verificationResult({
+            overall_verdict: "NEEDS_REVIEW",
+            results: [
+              {
+                field: "brand_name",
+                match_type: "fuzzy",
+                expected: "OLD TOM DISTILLERY",
+                found: "WRONG BRAND",
+                status: "FAIL",
+                message: "Values do not match after fuzzy normalization."
+              }
+            ]
+          })
+      })
+    );
+
+    await renderPackageWorkflow();
+    await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
+    await act(async () => {
+      firstPackageButton().click();
+    });
+
+    expect(buttonWithText("FAIL").disabled).toBe(false);
+    expect(buttonWithText("PASS").disabled).toBe(true);
+    await clickButton("FAIL");
+    expect(container.textContent).toContain("Fail");
+    expect(container.textContent).not.toContain("Data");
+  });
+
+  it("does not open detail from card hover and closes detail when clicking outside", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => verificationResult()
+      })
+    );
+
+    await renderPackageWorkflow();
+    await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
+    vi.useFakeTimers();
+    await act(async () => {
+      firstPackageButton().dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+      vi.advanceTimersByTime(2500);
+    });
+    expect(container.textContent).not.toContain("Data");
+
+    await act(async () => {
+      firstPackageButton().click();
+    });
+    const overlay = container.querySelector(".detail-overlay");
+    expect(overlay).not.toBeNull();
+    await act(async () => {
+      overlay?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    });
+    expect(container.textContent).not.toContain("Data");
+  });
+
+  it("reverts reviewed values back to AI extracted values", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => verificationResult()
+        })
+        .mockResolvedValue({
+          ok: true,
+          json: async () => verificationResult()
+        })
+    );
+
+    await renderPackageWorkflow();
+    await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
+    await act(async () => {
+      firstPackageButton().click();
+    });
+    await changeField("Extracted Value Brand Name", "Corrected Brand");
+    expect(
+      (container.querySelector('[aria-label="Extracted Value Brand Name"]') as HTMLInputElement)
+        .value
+    ).toBe("Corrected Brand");
+
+    await clickButton("Revert back to AI extracted values");
+    expect(
+      (container.querySelector('[aria-label="Extracted Value Brand Name"]') as HTMLInputElement)
+        .value
+    ).toBe("Old Tom Distillery");
   });
 
   it("exports reviewed results JSON with reviewed extracted data", async () => {
@@ -521,16 +652,18 @@ describe("PackageWorkflow", () => {
 
     await renderPackageWorkflow();
     await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
-    await clickButton("Check Applications");
-    await waitForAsyncUpdates();
-    await changeField("Extracted Values Brand Name", "Corrected Brand");
-    await clickButton("Download Reviewed Results JSON");
+    await act(async () => {
+      firstPackageButton().click();
+    });
+    await changeField("Extracted Value Brand Name", "Corrected Brand");
+    await clickButton("Submit");
 
     expect(createdBlobs).toHaveLength(1);
     const exportJson = JSON.parse(await readBlobText(createdBlobs[0]));
     expect(exportJson.schema_version).toBe("application-package-review-v1");
     expect(typeof exportJson.generated_at).toBe("string");
     expect(exportJson.summary).toEqual({
+      failed: 0,
       passed: 1,
       needs_review: 0,
       pending: 0,
@@ -549,13 +682,26 @@ describe("PackageWorkflow", () => {
     expect(exportJson.applications[0].field_results).toHaveLength(7);
   });
 
-  it("exports pending items honestly", async () => {
-    await renderPackageWorkflow();
-    await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
-    await clickButton("Download Reviewed Results JSON");
+  it("exports pending items honestly", () => {
+    const exportJson = buildReviewedResultsExport([
+      {
+        package_id: "application-1",
+        json_filename: "application.json",
+        image_filename: "label.png",
+        image_file: imageFile("label.png"),
+        image_preview_url: "",
+        application_data: canonicalApplicationData,
+        original_extracted_data: null,
+        reviewed_extracted_data: null,
+        comparison_result: null,
+        status: "Pending Check",
+        validation_errors: [],
+        item_error: null
+      }
+    ]);
 
-    const exportJson = JSON.parse(await readBlobText(createdBlobs[0]));
     expect(exportJson.summary).toEqual({
+      failed: 0,
       passed: 0,
       needs_review: 0,
       pending: 1,
@@ -595,6 +741,7 @@ describe("PackageWorkflow", () => {
 
     expect(exported.generated_at).toBe("2026-06-20T00:00:00.000Z");
     expect(exported.summary).toEqual({
+      failed: 0,
       passed: 0,
       needs_review: 1,
       pending: 0,
