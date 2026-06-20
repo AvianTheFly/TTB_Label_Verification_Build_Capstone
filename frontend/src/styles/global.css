@@ -760,6 +760,7 @@ p {
 
 .detail-application-id {
   margin: 0;
+  text-align: center;
   font-size: 1.45rem;
   font-weight: 950;
 }
@@ -778,6 +779,8 @@ p {
 }
 
 .detail-image-frame {
+  position: sticky;
+  top: 0;
   min-height: 420px;
   border: 2px solid #d1d5db;
   border-radius: 8px;
@@ -826,20 +829,6 @@ p {
   border: 2px solid #d1d5db;
   border-radius: 8px;
   background: #ffffff;
-  cursor: pointer;
-  transition:
-    box-shadow 160ms ease,
-    grid-column 160ms ease,
-    min-height 160ms ease;
-}
-
-.data-row:hover,
-.data-row--expanded {
-  box-shadow: 0 12px 26px rgba(17, 24, 39, 0.14);
-}
-
-.data-row--expanded {
-  flex-basis: 100%;
 }
 
 .data-row--pass {
@@ -868,23 +857,10 @@ p {
   font-size: 1.12rem;
 }
 
-.field-status {
-  width: max-content;
-  max-width: 100%;
-  padding: 5px 9px;
-  border-radius: 6px;
-  background: #1f2937;
-  color: #ffffff;
-  font-size: 0.9rem;
-  font-weight: 900;
-}
-
-.data-row--pass .field-status {
-  background: #11724f;
-}
-
-.data-row--fail .field-status {
-  background: #b42318;
+.field-decision-buttons {
+  display: flex;
+  gap: 6px;
+  align-items: center;
 }
 
 .data-pair {
@@ -908,28 +884,57 @@ p {
 
 .application-value-text {
   margin: 0;
-  max-height: 1.55em;
   color: #4b5563;
   font-weight: 800;
-  overflow: hidden;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
-.data-row--expanded .application-value-text {
-  max-height: none;
-}
-
-.data-row input {
-  width: 100%;
-  min-height: 44px;
-  padding: 9px 11px;
-  border: 2px solid #52616b;
-  border-radius: 8px;
-  background: #ffffff;
+.ai-detected-value-text {
+  margin: 0;
   color: #111827;
+  font-weight: 850;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
-.data-row input:focus {
+.field-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  color: #ffffff;
+  cursor: pointer;
+  opacity: 0.5;
+}
+
+.field-icon-button svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
+.field-icon-button--fail {
+  background: #b42318;
+}
+
+.field-icon-button--review {
+  background: #b45309;
+}
+
+.field-icon-button--pass {
+  background: #11724f;
+}
+
+.field-icon-button[aria-pressed="true"] {
+  border-color: #111827;
+  opacity: 1;
+}
+
+.field-icon-button:focus {
   outline: 4px solid #0f766e;
   outline-offset: 3px;
 }
@@ -1093,6 +1098,10 @@ p {
     width: min(100%, 96vw);
     max-height: 95vh;
     padding: 18px;
+  }
+
+  .detail-image-frame {
+    position: static;
   }
 
   .detail-panel__header {

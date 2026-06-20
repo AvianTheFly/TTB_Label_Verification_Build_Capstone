@@ -258,29 +258,6 @@ export function PackageWorkflow() {
     setSelectedPackageId(null);
   }
 
-  function updateExtractedField(field: CanonicalLabelField, value: string) {
-    if (!selectedRecord) {
-      return;
-    }
-
-    const currentExtracted = selectedRecord.reviewed_extracted_data ?? emptyExtractedData();
-    const nextExtracted = {
-      ...currentExtracted,
-      [field]: value
-    };
-    setRecords((current) =>
-      current.map((record) =>
-        record.package_id === selectedRecord.package_id
-          ? {
-              ...record,
-              reviewed_extracted_data: nextExtracted
-            }
-          : record
-      )
-    );
-    scheduleCompare(selectedRecord.package_id, selectedRecord.application_data, nextExtracted);
-  }
-
   function scheduleCompare(
     packageId: string,
     applicationData: ApplicationPackageRecord["application_data"],
@@ -544,7 +521,6 @@ export function PackageWorkflow() {
 
               <div className="detail-fields">
                 <DataPanel
-                  onChange={updateExtractedField}
                   onRevert={() => revertExtractedData(selectedRecord)}
                   record={selectedRecord}
                 />
@@ -596,56 +572,25 @@ export function PackageWorkflow() {
 interface DataPanelProps {
   onRevert: () => void;
   record: ApplicationPackageRecord;
-  onChange: (field: CanonicalLabelField, value: string) => void;
 }
 
-function DataPanel({ onRevert, record, onChange }: DataPanelProps) {
+type FieldDecision = "fail" | "review" | "pass";
+
+function DataPanel({ onRevert, record }: DataPanelProps) {
   const extractedData = record.reviewed_extracted_data ?? emptyExtractedData();
   const fieldResults = new Map(sortedResults(record.comparison_result).map((result) => [result.field, result]));
-  const hoverTimerRef = useRef<number | null>(null);
-  const [hoveredField, setHoveredField] = useState<CanonicalLabelField | null>(null);
-  const [pinnedFields, setPinnedFields] = useState<Set<CanonicalLabelField>>(() => new Set());
-
-  useEffect(
-    () => () => {
-      if (hoverTimerRef.current !== null) {
-        window.clearTimeout(hoverTimerRef.current);
-      }
-    },
-    []
+  const [fieldDecisions, setFieldDecisions] = useState<Partial<Record<CanonicalLabelField, FieldDecision>>>(
+    {}
   );
 
-  function scheduleFieldHover(field: CanonicalLabelField) {
-    if (pinnedFields.has(field)) {
-      return;
+  function fieldDecision(fieldResult: FieldResult | undefined): FieldDecision {
+    if (!fieldResult) {
+      return "review";
     }
-    if (hoverTimerRef.current !== null) {
-      window.clearTimeout(hoverTimerRef.current);
+    if (fieldResult.status === "PASS") {
+      return "pass";
     }
-    hoverTimerRef.current = window.setTimeout(() => setHoveredField(field), 1000);
-  }
-
-  function clearFieldHover(field: CanonicalLabelField) {
-    if (hoverTimerRef.current !== null) {
-      window.clearTimeout(hoverTimerRef.current);
-      hoverTimerRef.current = null;
-    }
-    if (!pinnedFields.has(field) && hoveredField === field) {
-      setHoveredField(null);
-    }
-  }
-
-  function togglePinnedField(field: CanonicalLabelField) {
-    setPinnedFields((current) => {
-      const next = new Set(current);
-      if (next.has(field)) {
-        next.delete(field);
-      } else {
-        next.add(field);
-      }
-      return next;
-    });
-    setHoveredField(null);
+    return record.status === "Fail" ? "fail" : "review";
   }
 
   return (
@@ -662,31 +607,41 @@ function DataPanel({ onRevert, record, onChange }: DataPanelProps) {
           const extractedId = `extracted-${field.name}`;
           const fieldResult = fieldResults.get(field.name);
           const extractedValue = extractedData[field.name] ?? "";
-          const statusLabel = fieldResult
-            ? fieldResult.status === "PASS"
-              ? "PASS"
-              : record.status === "Fail"
-                ? "FAIL"
-                : "Needs Review"
-            : "Pending Check";
-          const isExpanded = pinnedFields.has(field.name) || hoveredField === field.name;
+          const selectedDecision = fieldDecisions[field.name] ?? fieldDecision(fieldResult);
 
           return (
             <div
-              className={`data-row data-row--${fieldResult?.status.toLowerCase() ?? "pending"} ${isExpanded ? "data-row--expanded" : ""}`}
+              className={`data-row data-row--${fieldResult?.status.toLowerCase() ?? "pending"}`}
               key={field.name}
-              onClick={(event) => {
-                if ((event.target as HTMLElement).closest("input, textarea, button")) {
-                  return;
-                }
-                togglePinnedField(field.name);
-              }}
-              onMouseEnter={() => scheduleFieldHover(field.name)}
-              onMouseLeave={() => clearFieldHover(field.name)}
             >
               <div className="data-row__heading">
                 <h4>{field.label}</h4>
-                <span className="field-status">{statusLabel}</span>
+                <div className="field-decision-buttons" aria-label={`${field.label} review status`}>
+                  <FieldDecisionButton
+                    decision="fail"
+                    fieldLabel={field.label}
+                    isActive={selectedDecision === "fail"}
+                    onClick={() =>
+                      setFieldDecisions((current) => ({ ...current, [field.name]: "fail" }))
+                    }
+                  />
+                  <FieldDecisionButton
+                    decision="review"
+                    fieldLabel={field.label}
+                    isActive={selectedDecision === "review"}
+                    onClick={() =>
+                      setFieldDecisions((current) => ({ ...current, [field.name]: "review" }))
+                    }
+                  />
+                  <FieldDecisionButton
+                    decision="pass"
+                    fieldLabel={field.label}
+                    isActive={selectedDecision === "pass"}
+                    onClick={() =>
+                      setFieldDecisions((current) => ({ ...current, [field.name]: "pass" }))
+                    }
+                  />
+                </div>
               </div>
               <div className="data-pair">
                 <div className="data-value-group">
@@ -700,15 +655,14 @@ function DataPanel({ onRevert, record, onChange }: DataPanelProps) {
                   </p>
                 </div>
                 <div className="data-value-group">
-                  <label htmlFor={extractedId}>Actual:</label>
-                  <input
+                  <span className="data-value-label">AI Detected:</span>
+                  <p
                     aria-label={`Extracted Value ${field.label}`}
+                    className="ai-detected-value-text"
                     id={extractedId}
-                    name={field.name}
-                    onChange={(event) => onChange(field.name, event.target.value)}
-                    type="text"
-                    value={extractedValue}
-                  />
+                  >
+                    {extractedValue || "Not detected"}
+                  </p>
                 </div>
               </div>
               {fieldResult && <p className="data-row__message">{fieldResult.message}</p>}
@@ -717,6 +671,54 @@ function DataPanel({ onRevert, record, onChange }: DataPanelProps) {
         })}
       </div>
     </section>
+  );
+}
+
+interface FieldDecisionButtonProps {
+  decision: FieldDecision;
+  fieldLabel: string;
+  isActive: boolean;
+  onClick: () => void;
+}
+
+function FieldDecisionButton({ decision, fieldLabel, isActive, onClick }: FieldDecisionButtonProps) {
+  const label = decision === "fail" ? "Fail" : decision === "review" ? "Needs review" : "Pass";
+
+  return (
+    <button
+      aria-label={`${label} ${fieldLabel}`}
+      aria-pressed={isActive}
+      className={`field-icon-button field-icon-button--${decision}`}
+      onClick={onClick}
+      title={label}
+      type="button"
+    >
+      <DecisionIcon decision={decision} />
+    </button>
+  );
+}
+
+function DecisionIcon({ decision }: { decision: FieldDecision }) {
+  if (decision === "review") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24">
+        <path d="M5 21V4h10l.4 2H20v10h-6l-.4-2H7v7H5Z" />
+      </svg>
+    );
+  }
+
+  if (decision === "pass") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24">
+        <path d="M8.5 21H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3.5v11Zm2 0V10.8L14.8 3l1.6.6c1.2.5 1.8 1.8 1.4 3l-.9 2.4H20a2 2 0 0 1 2 2.3l-1 7.8A2.2 2.2 0 0 1 18.8 21h-8.3Z" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24">
+      <path d="M15.5 3H19a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3.5V3Zm-2 0v10.2L9.2 21l-1.6-.6a2.3 2.3 0 0 1-1.4-3l.9-2.4H4a2 2 0 0 1-2-2.3l1-7.8A2.2 2.2 0 0 1 5.2 3h8.3Z" />
+    </svg>
   );
 }
 

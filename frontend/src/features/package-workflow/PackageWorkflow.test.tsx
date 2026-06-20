@@ -451,7 +451,7 @@ describe("PackageWorkflow", () => {
     expect(firstCard).toContain("Passed");
   });
 
-  it("opens detail view with brand header, image, read-only application fields, and editable extracted fields", async () => {
+  it("opens detail view with brand header, image, read-only values, and field decision icons", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -472,76 +472,19 @@ describe("PackageWorkflow", () => {
     expect(container.textContent).toContain("Data");
     expect(container.textContent).toContain("Application #");
     expect(container.textContent).toContain("Application:");
-    expect(container.textContent).toContain("Actual:");
+    expect(container.textContent).toContain("AI Detected:");
     expect(container.textContent).not.toContain("Backend Results");
     expect(container.textContent).not.toContain("label.png");
 
     const applicationBrand = container.querySelector('[aria-label="Application Value Brand Name"]');
     const extractedBrand = container.querySelector('[aria-label="Extracted Value Brand Name"]');
     expect(applicationBrand).toBeInstanceOf(HTMLParagraphElement);
-    expect(extractedBrand).toBeInstanceOf(HTMLInputElement);
-    expect((extractedBrand as HTMLInputElement).readOnly).toBe(false);
-    expect((extractedBrand as HTMLInputElement).value).toBe("Old Tom Distillery");
-
-    await changeField("Extracted Value Brand Name", "Corrected Brand");
-
-    expect((extractedBrand as HTMLInputElement).value).toBe("Corrected Brand");
-  });
-
-  it("editing extracted values calls /compare and updates backend result status", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => verificationResult()
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () =>
-            verificationResult({
-              overall_verdict: "NEEDS_REVIEW",
-              results: [
-                {
-                  field: "brand_name",
-                  match_type: "fuzzy",
-                  expected: "OLD TOM DISTILLERY",
-                  found: "Corrected Brand",
-                  status: "FAIL",
-                  message: "Values do not match after fuzzy normalization."
-                }
-              ]
-            })
-        })
-    );
-
-    await renderPackageWorkflow();
-    await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
-    await act(async () => {
-      firstPackageButton().click();
-    });
-    vi.useFakeTimers();
-    await changeField("Extracted Value Brand Name", "Corrected Brand");
-    await act(async () => {
-      vi.advanceTimersByTime(350);
-      await Promise.resolve();
-    });
-    await waitForAsyncUpdates();
-
-    expect(fetch).toHaveBeenLastCalledWith("http://127.0.0.1:8000/compare", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: expect.any(String)
-    });
-    const body = JSON.parse((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[1][1].body);
-    expect(body.application_data).toEqual(canonicalApplicationData);
-    expect(body.extracted_data.brand_name).toBe("Corrected Brand");
-    expect(container.textContent).toContain("Needs Review");
-    expect(
-      (container.querySelector('[aria-label="Extracted Value Brand Name"]') as HTMLInputElement)
-        .value
-    ).toBe("Corrected Brand");
+    expect(extractedBrand).toBeInstanceOf(HTMLParagraphElement);
+    expect(extractedBrand?.textContent).toBe("Old Tom Distillery");
+    expect(buttonWithText("X")).toBeInstanceOf(HTMLButtonElement);
+    expect(container.querySelector('[aria-label="Fail Brand Name"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Needs review Brand Name"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Pass Brand Name"]')).not.toBeNull();
   });
 
   it("uses backend field results to enable review decision buttons", async () => {
@@ -628,17 +571,14 @@ describe("PackageWorkflow", () => {
     await act(async () => {
       firstPackageButton().click();
     });
-    await changeField("Extracted Value Brand Name", "Corrected Brand");
-    expect(
-      (container.querySelector('[aria-label="Extracted Value Brand Name"]') as HTMLInputElement)
-        .value
-    ).toBe("Corrected Brand");
+    expect(container.querySelector('[aria-label="Extracted Value Brand Name"]')?.textContent).toBe(
+      "Old Tom Distillery"
+    );
 
     await clickButton("Revert back to AI extracted values");
-    expect(
-      (container.querySelector('[aria-label="Extracted Value Brand Name"]') as HTMLInputElement)
-        .value
-    ).toBe("Old Tom Distillery");
+    expect(container.querySelector('[aria-label="Extracted Value Brand Name"]')?.textContent).toBe(
+      "Old Tom Distillery"
+    );
   });
 
   it("exports reviewed results JSON with reviewed extracted data", async () => {
@@ -652,10 +592,6 @@ describe("PackageWorkflow", () => {
 
     await renderPackageWorkflow();
     await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
-    await act(async () => {
-      firstPackageButton().click();
-    });
-    await changeField("Extracted Value Brand Name", "Corrected Brand");
     await clickButton("Submit");
 
     expect(createdBlobs).toHaveLength(1);
@@ -674,7 +610,7 @@ describe("PackageWorkflow", () => {
       image_filename: "label.png",
       application_data: canonicalApplicationData,
       reviewed_extracted_data: {
-        brand_name: "Corrected Brand"
+        brand_name: "Old Tom Distillery"
       },
       overall_verdict: "APPROVED",
       errors: []
