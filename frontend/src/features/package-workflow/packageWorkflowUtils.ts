@@ -2,12 +2,12 @@ import type {
   ApplicationData,
   CanonicalLabelField,
   ExtractedData,
+  FieldReviewDecision,
   VerificationResult
 } from "../../types/api";
 import { ACCEPTED_IMAGE_TYPES, FIELD_CONFIGS } from "../labelFields";
 
 export type VisibleStatus = "Pending Check" | "Passed" | "Needs Review" | "Fail";
-
 export interface PackageValidationError {
   code:
     | "invalid_json"
@@ -33,6 +33,7 @@ export interface ApplicationPackageRecord {
   original_extracted_data: ExtractedData | null;
   reviewed_extracted_data: ExtractedData | null;
   comparison_result: VerificationResult | null;
+  field_decisions: Partial<Record<CanonicalLabelField, FieldReviewDecision>>;
   status: VisibleStatus;
   validation_errors: PackageValidationError[];
   item_error: string | null;
@@ -154,8 +155,13 @@ export function buildReviewedResultsExport(
       status: record.status,
       application_data: record.application_data,
       reviewed_extracted_data: record.reviewed_extracted_data,
-      field_results: record.comparison_result?.results ?? [],
-      overall_verdict: record.comparison_result?.overall_verdict ?? null,
+      field_results: reviewedFieldResults(record),
+      overall_verdict:
+        record.comparison_result || Object.keys(record.field_decisions).length > 0
+          ? record.status === "Passed"
+            ? "APPROVED"
+            : "NEEDS_REVIEW"
+          : null,
       errors: [
         ...record.validation_errors.map((error) => ({
           code: error.code,
@@ -165,6 +171,32 @@ export function buildReviewedResultsExport(
       ]
     }))
   };
+}
+
+function reviewedFieldResults(record: ApplicationPackageRecord): VerificationResult["results"] {
+  return (record.comparison_result?.results ?? []).map((fieldResult) => {
+    const decision = record.field_decisions[fieldResult.field];
+    if (!decision) {
+      return fieldResult;
+    }
+
+    if (decision === "pass") {
+      return {
+        ...fieldResult,
+        status: "PASS",
+        message: "Reviewer marked this field as pass."
+      };
+    }
+
+    return {
+      ...fieldResult,
+      status: "FAIL",
+      message:
+        decision === "fail"
+          ? "Reviewer marked this field as fail."
+          : "Reviewer marked this field as needs review."
+    };
+  });
 }
 
 export async function parseApplicationPackages(files: File[]): Promise<{
@@ -263,6 +295,7 @@ export async function parseApplicationPackages(files: File[]): Promise<{
         original_extracted_data: null,
         reviewed_extracted_data: null,
         comparison_result: null,
+        field_decisions: {},
         status: "Pending Check" as VisibleStatus,
         validation_errors: [],
         item_error: null

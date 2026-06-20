@@ -4,6 +4,7 @@ import type {
   BatchResult,
   BatchVerificationRequestItem,
   ExtractedData,
+  FieldDecisionOverrides,
   VerificationResult
 } from "../types/api";
 
@@ -18,6 +19,8 @@ export class VerificationApiError extends Error {
     this.details = details;
   }
 }
+
+const REQUEST_TIMEOUT_MS = 60000;
 
 function getApiBaseUrl(): string {
   const configuredUrl = import.meta.env.VITE_API_BASE_URL;
@@ -78,17 +81,31 @@ async function readSuccess<T>(response: Response): Promise<T> {
 
 async function requestVerification<T>(path: string, init: RequestInit): Promise<T> {
   let response: Response;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    response = await fetch(`${getApiBaseUrl()}${path}`, init);
+    response = await fetch(`${getApiBaseUrl()}${path}`, {
+      ...init,
+      signal: controller.signal
+    });
   } catch (error) {
     if (error instanceof VerificationApiError) {
       throw error;
+    }
+
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new VerificationApiError(
+        "The verification service took too long to respond. Please try again.",
+        "request_timeout"
+      );
     }
 
     throw new VerificationApiError(
       "Could not reach the verification service. Please check the connection and try again.",
       "network_error"
     );
+  } finally {
+    window.clearTimeout(timeout);
   }
 
   if (!response.ok) {
@@ -127,7 +144,8 @@ export async function verifyBatch(items: BatchVerificationRequestItem[]): Promis
 
 export async function compareExtractedData(
   applicationData: ApplicationData,
-  extractedData: ExtractedData
+  extractedData: ExtractedData,
+  fieldDecisions?: FieldDecisionOverrides
 ): Promise<VerificationResult> {
   return requestVerification<VerificationResult>("/compare", {
     method: "POST",
@@ -136,7 +154,8 @@ export async function compareExtractedData(
     },
     body: JSON.stringify({
       application_data: applicationData,
-      extracted_data: extractedData
+      extracted_data: extractedData,
+      ...(fieldDecisions ? { field_decisions: fieldDecisions } : {})
     })
   });
 }

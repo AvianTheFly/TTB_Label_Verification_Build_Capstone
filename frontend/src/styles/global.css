@@ -877,7 +877,7 @@ p {
 
 .data-value-group label,
 .data-value-label {
-  color: #374151;
+  color: #36505c;
   font-size: 0.95rem;
   font-weight: 900;
 }
@@ -886,14 +886,16 @@ p {
   margin: 0;
   color: #4b5563;
   font-weight: 800;
+  line-height: 1.45;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
 .ai-detected-value-text {
   margin: 0;
-  color: #111827;
+  color: #0f172a;
   font-weight: 850;
+  line-height: 1.45;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -902,8 +904,8 @@ p {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 46px;
+  height: 46px;
   border: 2px solid transparent;
   border-radius: 8px;
   color: #ffffff;
@@ -912,8 +914,8 @@ p {
 }
 
 .field-icon-button svg {
-  width: 20px;
-  height: 20px;
+  width: 27px;
+  height: 27px;
   fill: currentColor;
 }
 
@@ -941,8 +943,12 @@ p {
 
 .data-row__message {
   margin: 0;
-  color: #36505c;
+  color: #1f2937;
   font-weight: 800;
+}
+
+.data-row__message strong {
+  color: #36505c;
 }
 
 .package-fieldset {

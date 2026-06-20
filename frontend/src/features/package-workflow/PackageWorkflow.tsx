@@ -8,6 +8,7 @@ import {
 } from "../../api/verification";
 import type {
   CanonicalLabelField,
+  FieldReviewDecision,
   FieldResult,
   VerificationResult
 } from "../../types/api";
@@ -16,11 +17,9 @@ import {
   ApplicationPackageRecord,
   PackageValidationError,
   VisibleStatus,
-  allFieldsPass,
   buildReviewedResultsExport,
   emptyExtractedData,
   extractedDataFromResult,
-  hasFailingFields,
   parseApplicationPackages,
   statusSortRank,
   statusFromResult
@@ -57,15 +56,12 @@ export function PackageWorkflow() {
   const detailHeadingRef = useRef<HTMLHeadingElement>(null);
   const recordsRef = useRef<ApplicationPackageRecord[]>([]);
   const uploadedFilesRef = useRef<File[]>([]);
-  const compareTimerRef = useRef<number | null>(null);
   const [records, setRecords] = useState<ApplicationPackageRecord[]>([]);
   const [validationErrors, setValidationErrors] = useState<PackageValidationError[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
-  const [isRechecking, setIsRechecking] = useState(false);
   const [checkError, setCheckError] = useState<string | null>(null);
-  const [recheckError, setRecheckError] = useState<string | null>(null);
 
   const selectedRecord = records.find((record) => record.package_id === selectedPackageId) ?? null;
   const sortedRecords = useMemo(
@@ -79,8 +75,8 @@ export function PackageWorkflow() {
         ),
     [records]
   );
-  const selectedCanFail = selectedRecord ? hasFailingFields(selectedRecord) : false;
-  const selectedCanPass = selectedRecord ? allFieldsPass(selectedRecord) : false;
+  const selectedCanFail = selectedRecord ? canMarkApplicationFail(selectedRecord) : false;
+  const selectedCanPass = selectedRecord ? canMarkApplicationPass(selectedRecord) : false;
 
   useEffect(() => {
     recordsRef.current = records;
@@ -88,9 +84,6 @@ export function PackageWorkflow() {
 
   useEffect(
     () => () => {
-      if (compareTimerRef.current !== null) {
-        window.clearTimeout(compareTimerRef.current);
-      }
       for (const record of recordsRef.current) {
         revokePreviewUrl(record.image_preview_url);
       }
@@ -138,7 +131,6 @@ export function PackageWorkflow() {
       current && nextRecords.some((record) => record.package_id === current) ? current : null
     );
     setCheckError(null);
-    setRecheckError(null);
 
     void checkApplications(recordsToCheck);
   }
@@ -173,7 +165,6 @@ export function PackageWorkflow() {
 
     setIsChecking(true);
     setCheckError(null);
-    setRecheckError(null);
 
     try {
       if (validRecords.length === 1) {
@@ -211,6 +202,7 @@ export function PackageWorkflow() {
               original_extracted_data: extractedData,
               reviewed_extracted_data: extractedData,
               comparison_result: item.result,
+              field_decisions: {},
               status: statusFromResult(item.result),
               item_error: null
             };
@@ -241,6 +233,7 @@ export function PackageWorkflow() {
               original_extracted_data: record.original_extracted_data ?? extractedData,
               reviewed_extracted_data: extractedData,
               comparison_result: result,
+              field_decisions: {},
               status: statusFromResult(result),
               item_error: null
             }
@@ -258,49 +251,6 @@ export function PackageWorkflow() {
     setSelectedPackageId(null);
   }
 
-  function scheduleCompare(
-    packageId: string,
-    applicationData: ApplicationPackageRecord["application_data"],
-    extractedData: ApplicationPackageRecord["reviewed_extracted_data"]
-  ) {
-    if (compareTimerRef.current !== null) {
-      window.clearTimeout(compareTimerRef.current);
-    }
-
-    compareTimerRef.current = window.setTimeout(() => {
-      void recheckExtractedText(packageId, applicationData, extractedData ?? emptyExtractedData());
-    }, 350);
-  }
-
-  async function recheckExtractedText(
-    packageId: string,
-    applicationData: ApplicationPackageRecord["application_data"],
-    extractedData: ApplicationPackageRecord["reviewed_extracted_data"]
-  ) {
-    setIsRechecking(true);
-    setRecheckError(null);
-    try {
-      const result = await compareExtractedData(applicationData, extractedData ?? emptyExtractedData());
-      setRecords((current) =>
-        current.map((record) =>
-          record.package_id === packageId
-            ? {
-                ...record,
-                reviewed_extracted_data: extractedData ?? emptyExtractedData(),
-                comparison_result: result,
-                status: statusFromResult(result),
-                item_error: null
-              }
-            : record
-        )
-      );
-    } catch (error) {
-      setRecheckError(errorMessageFor(error));
-    } finally {
-      setIsRechecking(false);
-    }
-  }
-
   function setRecordStatus(packageId: string, status: VisibleStatus) {
     setRecords((current) =>
       current.map((record) => (record.package_id === packageId ? { ...record, status } : record))
@@ -308,19 +258,64 @@ export function PackageWorkflow() {
     closeDetail();
   }
 
-  function revertExtractedData(record: ApplicationPackageRecord) {
-    const revertedData = record.original_extracted_data ?? emptyExtractedData();
-    setRecords((current) =>
-      current.map((candidate) =>
-        candidate.package_id === record.package_id
-          ? {
-              ...candidate,
-              reviewed_extracted_data: revertedData
-            }
-          : candidate
-      )
-    );
-    scheduleCompare(record.package_id, record.application_data, revertedData);
+  async function setFieldDecision(
+    packageId: string,
+    field: CanonicalLabelField,
+    decision: FieldReviewDecision
+  ) {
+    const record = recordsRef.current.find((candidate) => candidate.package_id === packageId);
+    if (!record) {
+      return;
+    }
+
+    const fieldDecisions = {
+      ...record.field_decisions,
+      [field]: decision
+    };
+    await applyBackendFieldDecisions(record, fieldDecisions);
+  }
+
+  async function applyBackendFieldDecisions(
+    record: ApplicationPackageRecord,
+    fieldDecisions: ApplicationPackageRecord["field_decisions"]
+  ) {
+    setCheckError(null);
+    try {
+      const result = await compareExtractedData(
+        record.application_data,
+        record.reviewed_extracted_data ?? emptyExtractedData(),
+        fieldDecisions
+      );
+      setRecords((current) =>
+        current.map((candidate) =>
+          candidate.package_id === record.package_id
+            ? {
+                ...candidate,
+                field_decisions: fieldDecisions,
+                comparison_result: result,
+                status: statusFromFieldDecisions(
+                  { ...candidate, comparison_result: result },
+                  fieldDecisions
+                ),
+                item_error: null
+              }
+            : candidate
+        )
+      );
+    } catch (error) {
+      setCheckError(errorMessageFor(error));
+    }
+  }
+
+  async function markApplicationFailed(packageId: string) {
+    const record = recordsRef.current.find((candidate) => candidate.package_id === packageId);
+    if (!record) {
+      return;
+    }
+
+    const fieldDecisions = promoteReviewFieldsToFail(record);
+    await applyBackendFieldDecisions(record, fieldDecisions);
+    closeDetail();
   }
 
   function downloadReviewedResults() {
@@ -483,32 +478,6 @@ export function PackageWorkflow() {
               </span>
             </div>
 
-            <div className="review-actions review-actions--top" aria-label="Review decision">
-              <button
-                className="decision-button decision-button--fail"
-                disabled={!selectedCanFail}
-                onClick={() => setRecordStatus(selectedRecord.package_id, "Fail")}
-                type="button"
-              >
-                FAIL
-              </button>
-              <button
-                className="decision-button decision-button--review"
-                onClick={() => setRecordStatus(selectedRecord.package_id, "Needs Review")}
-                type="button"
-              >
-                NEEDS REVIEW
-              </button>
-              <button
-                className="decision-button decision-button--pass"
-                disabled={!selectedCanPass}
-                onClick={() => setRecordStatus(selectedRecord.package_id, "Passed")}
-                type="button"
-              >
-                PASS
-              </button>
-            </div>
-
             <div className="detail-layout">
               <div className="detail-image-frame">
                 {selectedRecord.image_preview_url && (
@@ -521,26 +490,17 @@ export function PackageWorkflow() {
 
               <div className="detail-fields">
                 <DataPanel
-                  onRevert={() => revertExtractedData(selectedRecord)}
+                  onFieldDecision={setFieldDecision}
                   record={selectedRecord}
                 />
               </div>
             </div>
 
-            {recheckError && (
-              <div className="error-panel" role="alert">
-                <strong>Could not recheck extracted text.</strong>
-                <p>{recheckError}</p>
-              </div>
-            )}
-
-            {isRechecking && <p className="loading-message">Rechecking extracted text...</p>}
-
             <div className="review-actions" aria-label="Review decision">
               <button
                 className="decision-button decision-button--fail"
                 disabled={!selectedCanFail}
-                onClick={() => setRecordStatus(selectedRecord.package_id, "Fail")}
+                onClick={() => markApplicationFailed(selectedRecord.package_id)}
                 type="button"
               >
                 FAIL
@@ -570,36 +530,22 @@ export function PackageWorkflow() {
 }
 
 interface DataPanelProps {
-  onRevert: () => void;
+  onFieldDecision: (
+    packageId: string,
+    field: CanonicalLabelField,
+    decision: FieldReviewDecision
+  ) => void;
   record: ApplicationPackageRecord;
 }
 
-type FieldDecision = "fail" | "review" | "pass";
-
-function DataPanel({ onRevert, record }: DataPanelProps) {
+function DataPanel({ onFieldDecision, record }: DataPanelProps) {
   const extractedData = record.reviewed_extracted_data ?? emptyExtractedData();
   const fieldResults = new Map(sortedResults(record.comparison_result).map((result) => [result.field, result]));
-  const [fieldDecisions, setFieldDecisions] = useState<Partial<Record<CanonicalLabelField, FieldDecision>>>(
-    {}
-  );
-
-  function fieldDecision(fieldResult: FieldResult | undefined): FieldDecision {
-    if (!fieldResult) {
-      return "review";
-    }
-    if (fieldResult.status === "PASS") {
-      return "pass";
-    }
-    return record.status === "Fail" ? "fail" : "review";
-  }
 
   return (
     <section className="data-panel" aria-labelledby="data-title">
       <div className="data-panel__header">
         <h3 id="data-title">Data</h3>
-        <button className="secondary-button" onClick={onRevert} type="button">
-          Revert back to AI extracted values
-        </button>
       </div>
       <div className="data-grid">
         {FIELD_CONFIGS.map((field) => {
@@ -607,7 +553,7 @@ function DataPanel({ onRevert, record }: DataPanelProps) {
           const extractedId = `extracted-${field.name}`;
           const fieldResult = fieldResults.get(field.name);
           const extractedValue = extractedData[field.name] ?? "";
-          const selectedDecision = fieldDecisions[field.name] ?? fieldDecision(fieldResult);
+          const selectedDecision = record.field_decisions[field.name] ?? defaultFieldDecision(record, fieldResult);
 
           return (
             <div
@@ -621,25 +567,19 @@ function DataPanel({ onRevert, record }: DataPanelProps) {
                     decision="fail"
                     fieldLabel={field.label}
                     isActive={selectedDecision === "fail"}
-                    onClick={() =>
-                      setFieldDecisions((current) => ({ ...current, [field.name]: "fail" }))
-                    }
+                    onClick={() => onFieldDecision(record.package_id, field.name, "fail")}
                   />
                   <FieldDecisionButton
                     decision="review"
                     fieldLabel={field.label}
                     isActive={selectedDecision === "review"}
-                    onClick={() =>
-                      setFieldDecisions((current) => ({ ...current, [field.name]: "review" }))
-                    }
+                    onClick={() => onFieldDecision(record.package_id, field.name, "review")}
                   />
                   <FieldDecisionButton
                     decision="pass"
                     fieldLabel={field.label}
                     isActive={selectedDecision === "pass"}
-                    onClick={() =>
-                      setFieldDecisions((current) => ({ ...current, [field.name]: "pass" }))
-                    }
+                    onClick={() => onFieldDecision(record.package_id, field.name, "pass")}
                   />
                 </div>
               </div>
@@ -665,7 +605,11 @@ function DataPanel({ onRevert, record }: DataPanelProps) {
                   </p>
                 </div>
               </div>
-              {fieldResult && <p className="data-row__message">{fieldResult.message}</p>}
+              {fieldResult && (
+                <p className="data-row__message">
+                  <strong>AI Reasoning:</strong> {fieldResult.message}
+                </p>
+              )}
             </div>
           );
         })}
@@ -675,7 +619,7 @@ function DataPanel({ onRevert, record }: DataPanelProps) {
 }
 
 interface FieldDecisionButtonProps {
-  decision: FieldDecision;
+  decision: FieldReviewDecision;
   fieldLabel: string;
   isActive: boolean;
   onClick: () => void;
@@ -698,7 +642,7 @@ function FieldDecisionButton({ decision, fieldLabel, isActive, onClick }: FieldD
   );
 }
 
-function DecisionIcon({ decision }: { decision: FieldDecision }) {
+function DecisionIcon({ decision }: { decision: FieldReviewDecision }) {
   if (decision === "review") {
     return (
       <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -750,4 +694,67 @@ function cardStatusClass(status: VisibleStatus): string {
 
 function applicationNumber(packageId: string): string {
   return packageId.replace(/^application-/, "");
+}
+
+function defaultFieldDecision(
+  record: ApplicationPackageRecord,
+  fieldResult: FieldResult | undefined
+): FieldReviewDecision {
+  if (!fieldResult) {
+    return "review";
+  }
+  if (fieldResult.status === "PASS") {
+    return "pass";
+  }
+  return record.status === "Fail" ? "fail" : "review";
+}
+
+function resolvedFieldDecisions(
+  record: ApplicationPackageRecord,
+  overrides = record.field_decisions
+): Record<CanonicalLabelField, FieldReviewDecision> {
+  const fieldResults = new Map(record.comparison_result?.results.map((result) => [result.field, result]) ?? []);
+  return FIELD_CONFIGS.reduce(
+    (decisions, field) => {
+      decisions[field.name] = overrides[field.name] ?? defaultFieldDecision(record, fieldResults.get(field.name));
+      return decisions;
+    },
+    {} as Record<CanonicalLabelField, FieldReviewDecision>
+  );
+}
+
+function statusFromFieldDecisions(
+  record: ApplicationPackageRecord,
+  overrides = record.field_decisions
+): VisibleStatus {
+  const decisions = Object.values(resolvedFieldDecisions(record, overrides));
+  if (decisions.some((decision) => decision === "review")) {
+    return "Needs Review";
+  }
+  if (decisions.some((decision) => decision === "fail")) {
+    return "Fail";
+  }
+  return "Passed";
+}
+
+function promoteReviewFieldsToFail(
+  record: ApplicationPackageRecord
+): Partial<Record<CanonicalLabelField, FieldReviewDecision>> {
+  const resolved = resolvedFieldDecisions(record);
+  return FIELD_CONFIGS.reduce(
+    (decisions, field) => {
+      decisions[field.name] = resolved[field.name] === "review" ? "fail" : resolved[field.name];
+      return decisions;
+    },
+    {} as Partial<Record<CanonicalLabelField, FieldReviewDecision>>
+  );
+}
+
+function canMarkApplicationFail(record: ApplicationPackageRecord): boolean {
+  const decisions = Object.values(resolvedFieldDecisions(record));
+  return decisions.some((decision) => decision === "fail" || decision === "review");
+}
+
+function canMarkApplicationPass(record: ApplicationPackageRecord): boolean {
+  return Object.values(resolvedFieldDecisions(record)).every((decision) => decision === "pass");
 }

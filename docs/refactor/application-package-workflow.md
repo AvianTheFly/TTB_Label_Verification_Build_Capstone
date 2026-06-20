@@ -227,6 +227,8 @@ The export/download file should contain enough information for a reviewer to aud
 
 Exported files must not include raw image data, local absolute paths, API keys, provider internals, or stack traces. Pending applications must use `status` of `Pending Check`, `reviewed_extracted_data` of `null`, empty `field_results`, and `overall_verdict` of `null`.
 
+Reviewer field decisions are sent to the backend `/compare` endpoint as optional `field_decisions` values. Supported decisions are `pass`, `review`, and `fail`. The backend applies those decisions after running comparison and returns the updated `VerificationResult`; the frontend must use that backend response for displayed field status and exported field results.
+
 ## Visible Statuses
 
 Application records use only these visible statuses:

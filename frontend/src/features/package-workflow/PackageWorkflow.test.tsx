@@ -133,6 +133,14 @@ function buttonWithText(text: string): HTMLButtonElement {
   return button;
 }
 
+function buttonWithLabel(label: string): HTMLButtonElement {
+  const button = container.querySelector(`[aria-label="${label}"]`);
+  if (!(button instanceof HTMLButtonElement)) {
+    throw new Error(`Missing button: ${label}`);
+  }
+  return button;
+}
+
 async function chooseFiles(files: File[]) {
   await act(async () => {
     Object.defineProperty(fileInput(), "files", {
@@ -147,6 +155,13 @@ async function chooseFiles(files: File[]) {
 async function clickButton(text: string) {
   await act(async () => {
     buttonWithText(text).click();
+  });
+  await waitForAsyncUpdates();
+}
+
+async function clickButtonLabel(label: string) {
+  await act(async () => {
+    buttonWithLabel(label).click();
   });
   await waitForAsyncUpdates();
 }
@@ -381,7 +396,8 @@ describe("PackageWorkflow", () => {
 
     expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:8000/verify", {
       method: "POST",
-      body: expect.any(FormData)
+      body: expect.any(FormData),
+      signal: expect.any(AbortSignal)
     });
     expect((readFormDataBody().get("image") as File).name).toBe("label.png");
     expect(JSON.parse(String(readFormDataBody().get("application_data")))).toEqual(
@@ -438,7 +454,8 @@ describe("PackageWorkflow", () => {
 
     expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:8000/verify/batch", {
       method: "POST",
-      body: expect.any(FormData)
+      body: expect.any(FormData),
+      signal: expect.any(AbortSignal)
     });
     const formData = readFormDataBody();
     expect((formData.getAll("images")[0] as File).name).toBe("first.png");
@@ -551,7 +568,7 @@ describe("PackageWorkflow", () => {
     expect(container.textContent).not.toContain("Data");
   });
 
-  it("reverts reviewed values back to AI extracted values", async () => {
+  it("field decision icons override the application status", async () => {
     vi.stubGlobal(
       "fetch",
       vi
@@ -560,9 +577,41 @@ describe("PackageWorkflow", () => {
           ok: true,
           json: async () => verificationResult()
         })
-        .mockResolvedValue({
+        .mockResolvedValueOnce({
           ok: true,
-          json: async () => verificationResult()
+          json: async () =>
+            verificationResult({
+              overall_verdict: "NEEDS_REVIEW",
+              results: [
+                {
+                  field: "brand_name",
+                  match_type: "fuzzy",
+                  expected: "OLD TOM DISTILLERY",
+                  found: "Old Tom Distillery",
+                  status: "FAIL",
+                  message: "Reviewer marked this field as needs review."
+                },
+                ...verificationResult().results.slice(1)
+              ]
+            })
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () =>
+            verificationResult({
+              overall_verdict: "NEEDS_REVIEW",
+              results: [
+                {
+                  field: "brand_name",
+                  match_type: "fuzzy",
+                  expected: "OLD TOM DISTILLERY",
+                  found: "Old Tom Distillery",
+                  status: "FAIL",
+                  message: "Reviewer marked this field as fail."
+                },
+                ...verificationResult().results.slice(1)
+              ]
+            })
         })
     );
 
@@ -571,14 +620,23 @@ describe("PackageWorkflow", () => {
     await act(async () => {
       firstPackageButton().click();
     });
-    expect(container.querySelector('[aria-label="Extracted Value Brand Name"]')?.textContent).toBe(
-      "Old Tom Distillery"
-    );
 
-    await clickButton("Revert back to AI extracted values");
-    expect(container.querySelector('[aria-label="Extracted Value Brand Name"]')?.textContent).toBe(
-      "Old Tom Distillery"
-    );
+    await clickButtonLabel("Needs review Brand Name");
+    expect(fetch).toHaveBeenLastCalledWith("http://127.0.0.1:8000/compare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: expect.any(String),
+      signal: expect.any(AbortSignal)
+    });
+    expect(JSON.parse((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[1][1].body)).toMatchObject({
+      field_decisions: { brand_name: "review" }
+    });
+    expect(container.textContent).toContain("Needs Review");
+    await clickButtonLabel("Fail Brand Name");
+    expect(JSON.parse((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[2][1].body)).toMatchObject({
+      field_decisions: { brand_name: "fail" }
+    });
+    expect(container.textContent).toContain("Fail");
   });
 
   it("exports reviewed results JSON with reviewed extracted data", async () => {
@@ -630,6 +688,7 @@ describe("PackageWorkflow", () => {
         original_extracted_data: null,
         reviewed_extracted_data: null,
         comparison_result: null,
+        field_decisions: {},
         status: "Pending Check",
         validation_errors: [],
         item_error: null
@@ -667,6 +726,7 @@ describe("PackageWorkflow", () => {
           original_extracted_data: null,
           reviewed_extracted_data: null,
           comparison_result: null,
+          field_decisions: {},
           status: "Needs Review",
           validation_errors: [],
           item_error: "This application could not be checked."

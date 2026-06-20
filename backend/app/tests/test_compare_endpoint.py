@@ -54,12 +54,15 @@ def post_compare(
     *,
     application_data: dict[str, Any] | None = None,
     extracted_data: dict[str, Any] | None = None,
+    field_decisions: dict[str, Any] | None = None,
 ):
     payload: dict[str, Any] = {}
     if application_data is not None:
         payload["application_data"] = application_data
     if extracted_data is not None:
         payload["extracted_data"] = extracted_data
+    if field_decisions is not None:
+        payload["field_decisions"] = field_decisions
     return client.post("/compare", json=payload)
 
 
@@ -180,6 +183,60 @@ def test_compare_allows_null_extracted_fields_and_returns_needs_review() -> None
     assert all(result["found"] is None for result in body["results"])
 
 
+def test_compare_field_decision_pass_overrides_backend_failure() -> None:
+    client = make_client(fail_if_vision_called=True)
+
+    response = post_compare(
+        client,
+        application_data=make_application_data(brand_name="OLD TOM DISTILLERY"),
+        extracted_data=make_extracted_data(brand_name="WRONG BRAND"),
+        field_decisions={"brand_name": "pass"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["overall_verdict"] == "APPROVED"
+    by_field = {result["field"]: result for result in body["results"]}
+    assert by_field["brand_name"]["status"] == "PASS"
+    assert by_field["brand_name"]["message"] == "Reviewer marked this field as pass."
+
+
+def test_compare_field_decision_review_overrides_backend_pass() -> None:
+    client = make_client(fail_if_vision_called=True)
+
+    response = post_compare(
+        client,
+        application_data=make_application_data(),
+        extracted_data=make_extracted_data(),
+        field_decisions={"brand_name": "review"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["overall_verdict"] == "NEEDS_REVIEW"
+    by_field = {result["field"]: result for result in body["results"]}
+    assert by_field["brand_name"]["status"] == "FAIL"
+    assert by_field["brand_name"]["message"] == "Reviewer marked this field as needs review."
+
+
+def test_compare_field_decision_fail_overrides_backend_pass() -> None:
+    client = make_client(fail_if_vision_called=True)
+
+    response = post_compare(
+        client,
+        application_data=make_application_data(),
+        extracted_data=make_extracted_data(),
+        field_decisions={"brand_name": "fail"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["overall_verdict"] == "NEEDS_REVIEW"
+    by_field = {result["field"]: result for result in body["results"]}
+    assert by_field["brand_name"]["status"] == "FAIL"
+    assert by_field["brand_name"]["message"] == "Reviewer marked this field as fail."
+
+
 def test_compare_rejects_missing_request_body_with_error_envelope() -> None:
     client = make_client()
 
@@ -266,3 +323,39 @@ def test_compare_rejects_extra_application_fields() -> None:
         "message": "Extra inputs are not permitted",
         "type": "extra_forbidden",
     } in field_errors
+
+
+def test_compare_rejects_extra_field_decision_fields() -> None:
+    client = make_client()
+
+    response = post_compare(
+        client,
+        application_data=make_application_data(),
+        extracted_data=make_extracted_data(),
+        field_decisions={"alcohol_content": "pass"},
+    )
+
+    assert response.status_code == 422
+    assert_error_envelope(response, "validation_error")
+    field_errors = response.json()["error"]["details"]["field_errors"]
+    assert {
+        "field": "field_decisions.alcohol_content",
+        "message": "Extra inputs are not permitted",
+        "type": "extra_forbidden",
+    } in field_errors
+
+
+def test_compare_rejects_unknown_field_decision_values() -> None:
+    client = make_client()
+
+    response = post_compare(
+        client,
+        application_data=make_application_data(),
+        extracted_data=make_extracted_data(),
+        field_decisions={"brand_name": "approve"},
+    )
+
+    assert response.status_code == 422
+    assert_error_envelope(response, "validation_error")
+    field_errors = response.json()["error"]["details"]["field_errors"]
+    assert any(error["field"] == "field_decisions.brand_name" for error in field_errors)

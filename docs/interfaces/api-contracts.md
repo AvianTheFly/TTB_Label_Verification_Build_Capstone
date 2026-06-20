@@ -75,6 +75,7 @@ Request: `application/json`
 
 - `application_data`: JSON object containing the seven canonical application fields.
 - `extracted_data`: JSON object containing the seven canonical extracted fields. Values may be strings or `null`; missing fields and extra fields are invalid.
+- `field_decisions`: optional JSON object containing reviewer overrides by canonical field. Values must be `pass`, `review`, or `fail`.
 
 Request body:
 
@@ -97,6 +98,10 @@ Request body:
     "producer": "OLD TOM DISTILLERY, LOUISVILLE KY",
     "country_of_origin": "USA",
     "government_warning": "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems."
+  },
+  "field_decisions": {
+    "brand_name": "pass",
+    "government_warning": "review"
   }
 }
 ```
@@ -126,6 +131,8 @@ Rules:
 - `/compare` exists for reviewer-edited extracted values after initial vision extraction.
 - The backend remains the sole owner of comparison logic. The frontend must not reimplement PASS/FAIL, normalization, fuzzy comparison, ABV parsing, net contents parsing, country synonyms, exact government warning comparison, or verdict rules.
 - `extracted_data` must use exactly the seven canonical fields. Provider metadata such as `raw_text` or confidence scores is not accepted by this endpoint.
+- `field_decisions` is optional and may include any subset of the seven canonical fields. Extra fields and unknown decision values are invalid.
+- Reviewer decisions are applied after backend comparison. `pass` forces that field result to `PASS`; `review` and `fail` force that field result to `FAIL` with a reviewer-decision message.
 - `overall_verdict` is `APPROVED` only when all fields pass.
 - Any field failure returns `NEEDS_REVIEW`.
 - Government warning failures must include the submitted extracted warning text in `found`; if the reviewer submits `null`, `found` is `null`.
