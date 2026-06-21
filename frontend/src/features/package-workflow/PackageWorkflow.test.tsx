@@ -633,10 +633,12 @@ describe("PackageWorkflow", () => {
       canonicalApplicationData
     );
     expect(readFormDataBody().get("use_real_vision")).toBe("false");
+    expect(readFormDataBody().get("openai_api_key")).toBeNull();
+    expect(readFormDataBody().get("openai_model")).toBeNull();
     expect(container.textContent).toContain("Passed");
   });
 
-  it("sends the real vision flag when OpenAI key mode is enabled", async () => {
+  it("sends temporary OpenAI settings when OpenAI key mode is enabled", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -668,7 +670,49 @@ describe("PackageWorkflow", () => {
     await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
 
     expect(readFormDataBody().get("use_real_vision")).toBe("true");
+    expect(readFormDataBody().get("openai_api_key")).toBe("sk-test");
+    expect(readFormDataBody().get("openai_model")).toBe("gpt-4.1-mini");
     expect(container.textContent).toContain("Real AI vision ready: gpt-4.1-mini");
+  });
+
+  it("rechecks existing applications with temporary OpenAI settings after enabling real vision", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => verificationResult()
+      })
+    );
+
+    await renderPackageWorkflow();
+    await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
+    expect(readFormDataBody(0).get("use_real_vision")).toBe("false");
+
+    await act(async () => {
+      const checkbox = container.querySelector('input[type="checkbox"]');
+      if (!(checkbox instanceof HTMLInputElement)) {
+        throw new Error("Missing OpenAI checkbox");
+      }
+      checkbox.click();
+    });
+    await act(async () => {
+      const apiKeyInput = Array.from(container.querySelectorAll("label")).find((label) =>
+        label.textContent?.includes("API Key")
+      )?.querySelector("input");
+      if (!(apiKeyInput instanceof HTMLInputElement)) {
+        throw new Error("Missing API key input");
+      }
+      const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      valueSetter?.call(apiKeyInput, "sk-later-test");
+      apiKeyInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await clickButton("Proceed");
+    await waitForAsyncUpdates();
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(readFormDataBody(1).get("use_real_vision")).toBe("true");
+    expect(readFormDataBody(1).get("openai_api_key")).toBe("sk-later-test");
+    expect(readFormDataBody(1).get("openai_model")).toBe("gpt-4.1-mini");
   });
 
   it("calls /verify/batch automatically for multiple applications and maps index results by record", async () => {
@@ -726,6 +770,8 @@ describe("PackageWorkflow", () => {
     expect((formData.getAll("images")[0] as File).name).toBe("first.png");
     expect((formData.getAll("images")[1] as File).name).toBe("second.png");
     expect(formData.get("use_real_vision")).toBe("false");
+    expect(formData.get("openai_api_key")).toBeNull();
+    expect(formData.get("openai_model")).toBeNull();
 
     const firstCard = container.textContent ?? "";
     expect(firstCard).toContain("FIRST BRAND");

@@ -6,7 +6,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from pydantic import ValidationError
 
-from app.api.dependencies import get_vision_service
+from app.api.dependencies import get_submitted_openai_vision_service, get_vision_service
 from app.core.config import get_settings
 from app.core.errors import ApiError
 from app.domain.models import ApplicationData, VerificationResult
@@ -24,6 +24,8 @@ async def verify_label(
     image: Annotated[UploadFile | None, File()] = None,
     application_data: Annotated[str | None, Form()] = None,
     use_real_vision: Annotated[bool, Form()] = False,
+    openai_api_key: Annotated[str | None, Form()] = None,
+    openai_model: Annotated[str | None, Form()] = None,
     vision_service: Annotated[VisionService, Depends(get_vision_service)] = None,
 ) -> VerificationResult:
     start = perf_counter()
@@ -36,7 +38,12 @@ async def verify_label(
             image_bytes=image_bytes,
             content_type=image.content_type or "",
             filename=image.filename,
-            vision_service=vision_service if use_real_vision else DemoVisionService(),
+            vision_service=_request_vision_service(
+                use_real_vision=use_real_vision,
+                openai_api_key=openai_api_key,
+                openai_model=openai_model,
+                configured_vision_service=vision_service,
+            ),
             settings=settings,
         )
         logger.info(
@@ -166,6 +173,23 @@ def _safe_model_errors(errors: list[dict[str, Any]]) -> list[dict[str, str]]:
             }
         )
     return safe_errors
+
+
+def _request_vision_service(
+    *,
+    use_real_vision: bool,
+    openai_api_key: str | None,
+    openai_model: str | None,
+    configured_vision_service: VisionService,
+) -> VisionService:
+    if not use_real_vision:
+        return DemoVisionService()
+
+    submitted_service = get_submitted_openai_vision_service(
+        openai_api_key=openai_api_key,
+        openai_model=openai_model,
+    )
+    return submitted_service or configured_vision_service
 
 
 def _image_preprocess_api_error(exc: ImagePreprocessError) -> ApiError:

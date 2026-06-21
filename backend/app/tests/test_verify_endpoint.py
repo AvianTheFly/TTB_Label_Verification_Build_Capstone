@@ -69,8 +69,14 @@ def post_verify(
     filename: str = "label.png",
     content_type: str = "image/png",
     use_real_vision: bool = True,
+    openai_api_key: str | None = None,
+    openai_model: str | None = None,
 ):
     data = {"use_real_vision": str(use_real_vision).lower()}
+    if openai_api_key is not None:
+        data["openai_api_key"] = openai_api_key
+    if openai_model is not None:
+        data["openai_model"] = openai_model
     if application_data is not None:
         data["application_data"] = (
             application_data if isinstance(application_data, str) else json.dumps(application_data)
@@ -359,6 +365,38 @@ def test_tests_use_fake_vision_service_without_api_key_or_network(monkeypatch) -
 
     assert response.status_code == 200
     assert len(fake_service.calls) == 1
+
+
+def test_submitted_openai_key_uses_request_scoped_real_vision_service(monkeypatch) -> None:
+    configured_service = FakeVisionService(
+        result=make_extracted_label(brand_name="SHOULD NOT BE USED")
+    )
+    submitted_service = FakeVisionService(result=make_extracted_label())
+    captured: dict[str, str | None] = {}
+
+    def fake_openai_service(*, api_key: str | None = None, model: str | None = None, **kwargs):
+        _ = kwargs
+        captured["api_key"] = api_key
+        captured["model"] = model
+        return submitted_service
+
+    monkeypatch.setattr("app.api.dependencies.OpenAIVisionService", fake_openai_service)
+    client, _ = make_client(configured_service)
+
+    response = post_verify(
+        client,
+        application_data=make_application_data(),
+        image_bytes=make_image_bytes(),
+        use_real_vision=True,
+        openai_api_key="sk-submitted-test-key",
+        openai_model="gpt-test-vision",
+    )
+
+    assert response.status_code == 200
+    assert response.json()["overall_verdict"] == "APPROVED"
+    assert captured == {"api_key": "sk-submitted-test-key", "model": "gpt-test-vision"}
+    assert configured_service.calls == []
+    assert len(submitted_service.calls) == 1
 
 
 def test_demo_mode_uses_filename_keyed_pretend_extraction() -> None:

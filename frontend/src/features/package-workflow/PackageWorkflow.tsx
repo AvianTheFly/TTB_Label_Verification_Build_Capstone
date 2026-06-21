@@ -7,6 +7,7 @@ import {
   verifyBatch,
   verifyLabel
 } from "../../api/verification";
+import type { RealVisionSettings } from "../../api/verification";
 import type {
   CanonicalLabelField,
   FieldReviewDecision,
@@ -66,7 +67,7 @@ interface ReviewOverrideWarning {
 }
 
 interface OpenAiSettings {
-  hasApiKey: boolean;
+  apiKey: string;
   model: string;
 }
 
@@ -403,7 +404,10 @@ export function PackageWorkflow() {
     void importFiles(event.dataTransfer.files);
   }
 
-  async function checkApplications(recordsToCheck: ApplicationPackageRecord[]) {
+  async function checkApplications(
+    recordsToCheck: ApplicationPackageRecord[],
+    submittedRealVisionSettings?: RealVisionSettings
+  ) {
     const validRecords = recordsToCheck.filter((record) => record.validation_errors.length === 0);
     if (validRecords.length === 0) {
       return;
@@ -415,7 +419,11 @@ export function PackageWorkflow() {
     try {
       if (validRecords.length === 1) {
         const record = validRecords[0];
-        const result = await verifyLabel(record.image_file, record.application_data, useOpenAiKey);
+        const result = await verifyLabel(
+          record.image_file,
+          record.application_data,
+          submittedRealVisionSettings ?? realVisionSettings()
+        );
         updateRecordWithResult(record.package_id, result);
         return;
       }
@@ -425,7 +433,7 @@ export function PackageWorkflow() {
           image: record.image_file,
           application_data: record.application_data
         })),
-        useOpenAiKey
+        submittedRealVisionSettings ?? realVisionSettings()
       );
 
       setRecords((current) =>
@@ -549,16 +557,29 @@ export function PackageWorkflow() {
       return;
     }
 
-    setOpenAiSettings({ hasApiKey: true, model });
+    const nextSettings = { apiKey, model };
+    setOpenAiSettings(nextSettings);
     setOpenAiDraft({ apiKey: "", model });
     setUseOpenAiKey(true);
     setIsOpenAiDialogOpen(false);
     setOpenAiDialogError(null);
+    void checkApplications(recordsRef.current, nextSettings);
   }
 
   function cancelOpenAiSettings() {
     setIsOpenAiDialogOpen(false);
     setOpenAiDialogError(null);
+  }
+
+  function realVisionSettings(): RealVisionSettings | undefined {
+    if (!useOpenAiKey || !openAiSettings) {
+      return undefined;
+    }
+
+    return {
+      apiKey: openAiSettings.apiKey,
+      model: openAiSettings.model
+    };
   }
 
   function setRecordStatus(packageId: string, status: VisibleStatus) {

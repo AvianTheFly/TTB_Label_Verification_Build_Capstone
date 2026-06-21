@@ -109,6 +109,9 @@ Returns service status:
 - Parts:
   - `image`: JPG, PNG, or WEBP label image
   - `application_data`: JSON string containing the seven canonical fields
+  - `use_real_vision`: optional boolean string
+  - `openai_api_key` and `openai_model`: optional temporary real-vision settings used only for
+    that request when `use_real_vision=true`
 - Response: `VerificationResult` with `results`, `overall_verdict`, and `latency_ms`
 
 `POST /verify/batch`
@@ -117,6 +120,9 @@ Returns service status:
 - Parts:
   - repeated `images`
   - repeated `application_data`
+  - `use_real_vision`: optional boolean string
+  - `openai_api_key` and `openai_model`: optional temporary real-vision settings used only for
+    that batch request when `use_real_vision=true`
 - Response: batch `items` plus `summary` with `passed`, `needs_review`, and `total`
 
 `POST /compare`
@@ -198,9 +204,11 @@ Frontend variable:
 VITE_API_BASE_URL=http://127.0.0.1:8000
 ```
 
-For real provider extraction, set `VISION_PROVIDER=openai`, configure an approved model name in
-`VISION_MODEL` if needed, and set `OPENAI_API_KEY` in the deployment provider settings. Keep the
-key out of git and out of terminal output.
+For real provider extraction, either configure the backend with `VISION_PROVIDER=openai`,
+`VISION_MODEL`, and `OPENAI_API_KEY` in the deployment provider settings, or use the frontend's
+temporary real-vision key entry for a single browser session. A key entered in the frontend is kept
+only in page memory and sent to the backend only in verification request bodies; it is not stored in
+local storage, committed to git, or logged by the app.
 
 ## Run Locally
 
@@ -471,7 +479,10 @@ Limitations:
 - Uploaded images are processed for the current request only.
 - Extracted label data and application data are not persisted by the app.
 - No database is used for the MVP.
-- API keys and secrets belong only in environment variables or provider settings.
+- Deployment-owned API keys and secrets belong only in environment variables or provider settings.
+- If a reviewer uses the temporary frontend OpenAI key field, the key is kept only in browser memory
+  for the current page session and in the HTTPS request body for verification. Refreshing the page
+  clears it.
 - `.env`, `backend/.env`, and `frontend/.env` are ignored and were not tracked during the final
   audit.
 - Public API errors must not expose stack traces, provider internals, API keys, local paths, raw

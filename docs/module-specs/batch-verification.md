@@ -19,6 +19,7 @@ Inputs:
 - `multipart/form-data` with repeated `images` file parts.
 - Repeated `application_data` JSON string parts.
 - Optional `use_real_vision` boolean string; false or omitted uses deterministic demo extraction fixtures, true uses the configured vision provider.
+- Optional multipart `openai_api_key` and `openai_model`; when `use_real_vision` is true and a key is provided, the key/model are used only for that batch request and are not persisted or logged.
 - Items are paired by the order of provided multipart parts: first image with first application-data object, second image with second application-data object, and so on.
 - The frontend should submit only complete rows.
 

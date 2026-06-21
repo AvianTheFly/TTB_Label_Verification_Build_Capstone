@@ -39,6 +39,8 @@ Request: `multipart/form-data`
 - `image`: label image file.
 - `application_data`: JSON string containing the canonical fields.
 - `use_real_vision`: optional boolean string. `false` or omitted uses deterministic demo extraction fixtures; `true` uses the configured vision provider.
+- `openai_api_key`: optional string. When `use_real_vision` is `true`, a submitted key is used for that request instead of the backend environment key. The backend must not persist or log it.
+- `openai_model`: optional string. Used only with a submitted `openai_api_key`; blank or omitted falls back to the backend provider default.
 
 Success response:
 
@@ -147,6 +149,8 @@ Request: `multipart/form-data`
 - `images`: repeated label image file parts.
 - `application_data`: repeated JSON string parts containing the canonical fields.
 - `use_real_vision`: optional boolean string. `false` or omitted uses deterministic demo extraction fixtures; `true` uses the configured vision provider.
+- `openai_api_key`: optional string. When `use_real_vision` is `true`, a submitted key is used for that batch request instead of the backend environment key. The backend must not persist or log it.
+- `openai_model`: optional string. Used only with a submitted `openai_api_key`; blank or omitted falls back to the backend provider default.
 
 Pairing rule:
 
