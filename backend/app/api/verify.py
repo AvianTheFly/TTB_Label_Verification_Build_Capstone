@@ -223,6 +223,16 @@ def _vision_api_error(exc: VisionServiceError) -> ApiError:
             message="The label reader timed out. Please try again.",
             details={},
         )
+    if exc.category == "provider_quota_exceeded":
+        return ApiError(
+            status_code=429,
+            code="vision_quota_exceeded",
+            message=(
+                "This API call exceeds your current quota. "
+                "Please check your OpenAI plan and billing details."
+            ),
+            details={},
+        )
     if exc.category in {"provider_unavailable", "provider_not_configured"}:
         return ApiError(
             status_code=503,

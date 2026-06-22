@@ -260,6 +260,18 @@ async def test_openai_provider_timeout_is_categorized() -> None:
 
 
 @pytest.mark.asyncio
+async def test_openai_provider_insufficient_quota_is_categorized() -> None:
+    image = preprocess_image(make_image_bytes(), "image/png")
+    service = OpenAIVisionService(client=InsufficientQuotaOpenAIClient())
+
+    with pytest.raises(VisionServiceError) as exc_info:
+        await service.extract_label(image)
+
+    assert exc_info.value.category == "provider_quota_exceeded"
+    assert "quota" in exc_info.value.message
+
+
+@pytest.mark.asyncio
 async def test_openai_provider_malformed_output_is_categorized() -> None:
     image = preprocess_image(make_image_bytes(), "image/png")
     service = OpenAIVisionService(client=FakeOpenAIClient(output_text="not-json"))
@@ -292,3 +304,18 @@ class TimeoutResponses:
 
 class TimeoutOpenAIClient:
     responses = TimeoutResponses()
+
+
+class FakeRateLimitError(Exception):
+    code = "insufficient_quota"
+    message = "You exceeded your current quota, please check your plan and billing details."
+
+
+class InsufficientQuotaResponses:
+    async def create(self, **kwargs: Any) -> Any:
+        _ = kwargs
+        raise FakeRateLimitError(FakeRateLimitError.message)
+
+
+class InsufficientQuotaOpenAIClient:
+    responses = InsufficientQuotaResponses()

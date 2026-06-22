@@ -8,7 +8,7 @@ from app.domain.models import ExtractedLabel
 from app.services.image_preprocess import PreprocessedImage
 
 DEFAULT_OPENAI_VISION_MODEL = "gpt-5.5"
-DEFAULT_OPENAI_TIMEOUT_SECONDS = 4.5
+DEFAULT_OPENAI_TIMEOUT_SECONDS = 20.0
 DEFAULT_OPENAI_IMAGE_DETAIL = "high"
 
 CANONICAL_EXTRACTION_FIELDS = (
@@ -29,6 +29,7 @@ VisionIssueCategory = Literal[
     "partial_extraction",
     "malformed_provider_output",
     "provider_timeout",
+    "provider_quota_exceeded",
     "provider_unavailable",
     "provider_not_configured",
     "extraction_failed",
@@ -240,12 +241,21 @@ def _extract_response_payload(response: Any) -> object:
 
 def _category_for_provider_exception(exc: Exception) -> VisionIssueCategory:
     exception_name = exc.__class__.__name__.lower()
+    code = str(getattr(exc, "code", "")).lower()
+    message = str(getattr(exc, "message", exc)).lower()
     if "timeout" in exception_name:
         return "provider_timeout"
+    if (
+        "ratelimit" in exception_name
+        and ("insufficient_quota" in code or "insufficient_quota" in message)
+    ) or "exceeded your current quota" in message:
+        return "provider_quota_exceeded"
     return "provider_unavailable"
 
 
 def _safe_provider_message(category: VisionIssueCategory) -> str:
     if category == "provider_timeout":
         return "The vision provider timed out while reading the label."
+    if category == "provider_quota_exceeded":
+        return "This API call exceeds your current quota. Please check your OpenAI plan and billing details."
     return "The vision provider is unavailable."

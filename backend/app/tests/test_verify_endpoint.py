@@ -333,6 +333,32 @@ def test_vision_service_timeout_maps_to_safe_readable_error() -> None:
     assert len(fake_service.calls) == 1
 
 
+def test_vision_quota_error_maps_to_frontend_readable_message() -> None:
+    client, fake_service = make_client(
+        FakeVisionService(
+            error=VisionServiceError(
+                "provider_quota_exceeded",
+                "secret provider quota payload",
+            )
+        )
+    )
+
+    response = post_verify(
+        client,
+        application_data=make_application_data(),
+        image_bytes=make_image_bytes(),
+    )
+
+    assert response.status_code == 429
+    assert_error_envelope(response, "vision_quota_exceeded")
+    assert response.json()["error"]["message"] == (
+        "This API call exceeds your current quota. "
+        "Please check your OpenAI plan and billing details."
+    )
+    assert "secret provider quota payload" not in response.text
+    assert len(fake_service.calls) == 1
+
+
 def test_non_label_extraction_failure_maps_to_safe_readable_error() -> None:
     client, fake_service = make_client(
         FakeVisionService(

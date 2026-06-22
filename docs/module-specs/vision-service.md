@@ -65,6 +65,7 @@ Safe categories include:
 - `partial_extraction`
 - `malformed_provider_output`
 - `provider_timeout`
+- `provider_quota_exceeded`
 - `provider_unavailable`
 - `provider_not_configured`
 - `extraction_failed`

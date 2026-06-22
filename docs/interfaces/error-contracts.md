@@ -26,6 +26,7 @@ All public API errors use the same envelope.
 - `unsupported_file_type`
 - `file_too_large`
 - `vision_timeout`
+- `vision_quota_exceeded`
 - `vision_unavailable`
 - `extraction_failed`
 - `internal_error`

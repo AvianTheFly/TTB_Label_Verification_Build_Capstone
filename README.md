@@ -1,4 +1,5 @@
 # TTB Label Verification
+Free-tier cloud link (Please give it a minute to cold start the backend service): https://fed-stack-capstone.vercel.app/
 
 Free-tier cloud link (Please give it a minute to cold start the backend service): https://fed-stack-capstone.vercel.app/
 
