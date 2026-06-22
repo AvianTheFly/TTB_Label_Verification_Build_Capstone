@@ -1,5 +1,7 @@
 # TTB Label Verification
 
+Free-tier cloud link (Please give it a minute to cold start the backend service): https://fed-stack-capstone.vercel.app/
+
 AI-assisted proof-of-concept for checking alcohol beverage label images against structured
 application data. The app lets a reviewer upload application packages made of JSON files and label
 images, review extracted label text, recheck edited extracted text through the backend comparison
