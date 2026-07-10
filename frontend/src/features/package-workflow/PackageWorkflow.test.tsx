@@ -387,32 +387,24 @@ describe("PackageWorkflow", () => {
     expect(container.querySelector('[data-testid="package-upload-area"]')).not.toBeNull();
     expect(container.textContent).toContain("Choose Files");
     expect(container.textContent).toContain("Download Demo Data");
-    expect(container.textContent).toContain("Use OPENAI KEY");
     expect(container.textContent).toContain("Submit");
     expect(container.textContent).toContain("Applications");
     expect(container.textContent).toContain("Incomplete Applications");
     expect(container.textContent).toContain("No Incomplete Applications");
+    expect(container.textContent).not.toContain("Use OPENAI KEY");
+    expect(container.textContent).not.toContain("API Key");
     expect(container.textContent).not.toContain("Check Applications");
     expect(container.textContent).not.toContain("Single Label");
     expect(container.textContent).not.toContain("Batch Upload");
   });
 
-  it("shows OpenAI key warning inputs when enabled", async () => {
+  it("does not render OpenAI key controls", async () => {
     await renderPackageWorkflow();
 
-    await act(async () => {
-      const checkbox = container.querySelector('input[type="checkbox"]');
-      if (!(checkbox instanceof HTMLInputElement)) {
-        throw new Error("Missing OpenAI checkbox");
-      }
-      checkbox.click();
-    });
-
-    expect(container.textContent).toContain("WARNING: THIS USES REAL API CALLS");
-    expect(container.textContent).toContain("API Key");
-    expect(container.textContent).toContain("Model");
-    await clickButton("Cancel");
     expect(container.textContent).not.toContain("WARNING: THIS USES REAL API CALLS");
+    expect(container.textContent).not.toContain("Use Real AI Vision");
+    expect(container.textContent).not.toContain("Use OPENAI KEY");
+    expect(container.querySelector('input[type="password"]')).toBeNull();
   });
 
   it("downloads demo inputs as one archive", async () => {
@@ -632,87 +624,10 @@ describe("PackageWorkflow", () => {
     expect(JSON.parse(String(readFormDataBody().get("application_data")))).toEqual(
       canonicalApplicationData
     );
-    expect(readFormDataBody().get("use_real_vision")).toBe("false");
+    expect(readFormDataBody().get("use_real_vision")).toBeNull();
     expect(readFormDataBody().get("openai_api_key")).toBeNull();
     expect(readFormDataBody().get("openai_model")).toBeNull();
     expect(container.textContent).toContain("Passed");
-  });
-
-  it("sends temporary OpenAI settings when OpenAI key mode is enabled", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => verificationResult()
-      })
-    );
-
-    await renderPackageWorkflow();
-    await act(async () => {
-      const checkbox = container.querySelector('input[type="checkbox"]');
-      if (!(checkbox instanceof HTMLInputElement)) {
-        throw new Error("Missing OpenAI checkbox");
-      }
-      checkbox.click();
-    });
-    await act(async () => {
-      const apiKeyInput = Array.from(container.querySelectorAll("label")).find((label) =>
-        label.textContent?.includes("API Key")
-      )?.querySelector("input");
-      if (!(apiKeyInput instanceof HTMLInputElement)) {
-        throw new Error("Missing API key input");
-      }
-      const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-      valueSetter?.call(apiKeyInput, "sk-test");
-      apiKeyInput.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await clickButton("Proceed");
-    await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
-
-    expect(readFormDataBody().get("use_real_vision")).toBe("true");
-    expect(readFormDataBody().get("openai_api_key")).toBe("sk-test");
-    expect(readFormDataBody().get("openai_model")).toBe("gpt-4.1-mini");
-    expect(container.textContent).toContain("Real AI vision ready: gpt-4.1-mini");
-  });
-
-  it("rechecks existing applications with temporary OpenAI settings after enabling real vision", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => verificationResult()
-      })
-    );
-
-    await renderPackageWorkflow();
-    await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
-    expect(readFormDataBody(0).get("use_real_vision")).toBe("false");
-
-    await act(async () => {
-      const checkbox = container.querySelector('input[type="checkbox"]');
-      if (!(checkbox instanceof HTMLInputElement)) {
-        throw new Error("Missing OpenAI checkbox");
-      }
-      checkbox.click();
-    });
-    await act(async () => {
-      const apiKeyInput = Array.from(container.querySelectorAll("label")).find((label) =>
-        label.textContent?.includes("API Key")
-      )?.querySelector("input");
-      if (!(apiKeyInput instanceof HTMLInputElement)) {
-        throw new Error("Missing API key input");
-      }
-      const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-      valueSetter?.call(apiKeyInput, "sk-later-test");
-      apiKeyInput.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await clickButton("Proceed");
-    await waitForAsyncUpdates();
-
-    expect(fetch).toHaveBeenCalledTimes(2);
-    expect(readFormDataBody(1).get("use_real_vision")).toBe("true");
-    expect(readFormDataBody(1).get("openai_api_key")).toBe("sk-later-test");
-    expect(readFormDataBody(1).get("openai_model")).toBe("gpt-4.1-mini");
   });
 
   it("calls /verify/batch automatically for multiple applications and maps index results by record", async () => {
@@ -769,7 +684,7 @@ describe("PackageWorkflow", () => {
     const formData = readFormDataBody();
     expect((formData.getAll("images")[0] as File).name).toBe("first.png");
     expect((formData.getAll("images")[1] as File).name).toBe("second.png");
-    expect(formData.get("use_real_vision")).toBe("false");
+    expect(formData.get("use_real_vision")).toBeNull();
     expect(formData.get("openai_api_key")).toBeNull();
     expect(formData.get("openai_model")).toBeNull();
 

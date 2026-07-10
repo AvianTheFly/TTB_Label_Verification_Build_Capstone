@@ -18,8 +18,9 @@ Inputs:
 
 - Multipart `image`.
 - Multipart `application_data` JSON string using canonical fields.
-- Optional multipart `use_real_vision` boolean string; false or omitted uses deterministic demo extraction fixtures, true uses the configured vision provider.
-- Optional multipart `openai_api_key` and `openai_model`; when `use_real_vision` is true and a key is provided, the key/model are used only for that request and are not persisted or logged.
+- Environment-configured `VisionService`; tests inject a mock service.
+
+Provider credentials and model names must not be accepted from request fields. The frontend must never submit OpenAI API keys or provider-selection flags.
 
 Outputs:
 

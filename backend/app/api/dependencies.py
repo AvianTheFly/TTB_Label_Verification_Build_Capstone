@@ -19,16 +19,3 @@ def get_vision_service() -> VisionService:
         message="The label reader is not available right now.",
         details={},
     )
-
-
-def get_submitted_openai_vision_service(
-    *,
-    openai_api_key: str | None,
-    openai_model: str | None,
-) -> VisionService | None:
-    api_key = openai_api_key.strip() if openai_api_key else ""
-    if not api_key:
-        return None
-
-    model = openai_model.strip() if openai_model else None
-    return OpenAIVisionService(api_key=api_key, model=model or None)
