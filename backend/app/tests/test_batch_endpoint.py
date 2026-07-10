@@ -63,9 +63,7 @@ def post_batch(
     *,
     application_items: list[dict[str, Any] | str | None],
     image_items: list[tuple[bytes, str, str] | None],
-    use_real_vision: bool = True,
-    openai_api_key: str | None = None,
-    openai_model: str | None = None,
+    extra_fields: dict[str, str] | None = None,
 ):
     files: list[tuple[str, tuple[str | None, bytes | str, str] | tuple[str, bytes, str]]] = []
     for image in image_items:
@@ -79,11 +77,8 @@ def post_batch(
             continue
         value = application if isinstance(application, str) else json.dumps(application)
         files.append(("application_data", (None, value, "text/plain")))
-    files.append(("use_real_vision", (None, str(use_real_vision).lower(), "text/plain")))
-    if openai_api_key is not None:
-        files.append(("openai_api_key", (None, openai_api_key, "text/plain")))
-    if openai_model is not None:
-        files.append(("openai_model", (None, openai_model, "text/plain")))
+    for name, value in (extra_fields or {}).items():
+        files.append((name, (None, value, "text/plain")))
 
     return client.post("/verify/batch", files=files)
 
@@ -332,20 +327,17 @@ def test_batch_preserves_exact_canonical_field_names() -> None:
     assert result_fields == set(make_application_data())
 
 
-def test_batch_submitted_openai_key_uses_request_scoped_real_vision_service(monkeypatch) -> None:
+def test_batch_submitted_openai_fields_do_not_override_configured_vision_service(monkeypatch) -> None:
     configured_service = FakeVisionService(
-        result=make_extracted_label(brand_name="SHOULD NOT BE USED")
+        results=[make_extracted_label(), make_extracted_label()]
     )
-    submitted_service = FakeVisionService(results=[make_extracted_label(), make_extracted_label()])
-    captured: dict[str, str | None] = {}
 
-    def fake_openai_service(*, api_key: str | None = None, model: str | None = None, **kwargs):
+    def fail_if_constructed(*args, **kwargs):
+        _ = args
         _ = kwargs
-        captured["api_key"] = api_key
-        captured["model"] = model
-        return submitted_service
+        raise AssertionError("Submitted OpenAI fields must not construct a request-scoped service")
 
-    monkeypatch.setattr("app.api.dependencies.OpenAIVisionService", fake_openai_service)
+    monkeypatch.setattr("app.api.dependencies.OpenAIVisionService", fail_if_constructed)
     client = make_client(configured_service)
 
     response = post_batch(
@@ -355,64 +347,13 @@ def test_batch_submitted_openai_key_uses_request_scoped_real_vision_service(monk
             (make_image_bytes(), "label-0.png", "image/png"),
             (make_image_bytes(), "label-1.png", "image/png"),
         ],
-        use_real_vision=True,
-        openai_api_key="sk-submitted-test-key",
-        openai_model="gpt-test-vision",
+        extra_fields={
+            "use_real_vision": "true",
+            "openai_api_key": "sk-submitted-test-key",
+            "openai_model": "gpt-test-vision",
+        },
     )
 
     assert response.status_code == 200
     assert response.json()["summary"] == {"passed": 2, "needs_review": 0, "total": 2}
-    assert captured == {"api_key": "sk-submitted-test-key", "model": "gpt-test-vision"}
-    assert configured_service.calls == []
-    assert len(submitted_service.calls) == 2
-
-
-def test_demo_mode_batch_uses_filename_keyed_extractions_in_item_order() -> None:
-    service = FakeVisionService(result=make_extracted_label(brand_name="SHOULD NOT BE USED"))
-    client = make_client(service)
-
-    response = post_batch(
-        client,
-        application_items=[
-            {
-                "brand_name": "EVERGREEN AMBER BOURBON",
-                "class_type": "Kentucky Straight Bourbon Whiskey",
-                "abv": "45% Alc./Vol. (90 Proof)",
-                "net_contents": "750 mL",
-                "producer": "Evergreen Spirits LLC, Louisville, KY",
-                "country_of_origin": "United States",
-                "government_warning": CANONICAL_GOVERNMENT_WARNING,
-            },
-            {
-                "brand_name": "COASTAL PEAR CIDER",
-                "class_type": "Hard Cider",
-                "abv": "6.8% Alc./Vol.",
-                "net_contents": "12 fl oz",
-                "producer": "Coastal Orchard Works, Portland, OR",
-                "country_of_origin": "United States",
-                "government_warning": CANONICAL_GOVERNMENT_WARNING.replace(
-                    "GOVERNMENT WARNING:", "Government Warning:"
-                ),
-            },
-        ],
-        image_items=[
-            (make_image_bytes(), "evergreen-amber-bourbon.png", "image/png"),
-            (make_image_bytes(), "coastal-pear-cider.png", "image/png"),
-        ],
-        use_real_vision=False,
-    )
-
-    assert response.status_code == 200
-    body = response.json()
-    assert [item["index"] for item in body["items"]] == [0, 1]
-    first_brand = next(
-        result
-        for result in body["items"][0]["result"]["results"]
-        if result["field"] == "brand_name"
-    )
-    second_abv = next(
-        result for result in body["items"][1]["result"]["results"] if result["field"] == "abv"
-    )
-    assert first_brand["found"] == "EVERGREEN AMBER BOURBON"
-    assert second_abv["found"] == "6.2% Alc./Vol."
-    assert service.calls == []
+    assert len(configured_service.calls) == 2

@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, File, Form, UploadFile
 from app.api.dependencies import get_vision_service
 from app.api.error_mapping import image_preprocess_api_error, vision_api_error
 from app.api.request_parsing import parse_application_data, read_image_upload
-from app.api.vision_selection import select_request_vision_service
 from app.core.config import get_settings
 from app.core.errors import ApiError
 from app.domain.models import VerificationResult
@@ -24,9 +23,6 @@ router = APIRouter(tags=["verification"])
 async def verify_label(
     image: Annotated[UploadFile | None, File()] = None,
     application_data: Annotated[str | None, Form()] = None,
-    use_real_vision: Annotated[bool, Form()] = False,
-    openai_api_key: Annotated[str | None, Form()] = None,
-    openai_model: Annotated[str | None, Form()] = None,
     vision_service: Annotated[VisionService, Depends(get_vision_service)] = None,
 ) -> VerificationResult:
     start = perf_counter()
@@ -39,12 +35,7 @@ async def verify_label(
             image_bytes=image_bytes,
             content_type=image.content_type or "",
             filename=image.filename,
-            vision_service=select_request_vision_service(
-                use_real_vision=use_real_vision,
-                openai_api_key=openai_api_key,
-                openai_model=openai_model,
-                configured_vision_service=vision_service,
-            ),
+            vision_service=vision_service,
             settings=settings,
         )
         logger.info(
@@ -85,4 +76,3 @@ def _log_request_failure(
             "vision_category": vision_category,
         },
     )
-

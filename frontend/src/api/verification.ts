@@ -22,11 +22,6 @@ export class VerificationApiError extends Error {
 
 const REQUEST_TIMEOUT_MS = 60000;
 
-export interface RealVisionSettings {
-  apiKey: string;
-  model: string;
-}
-
 function getApiBaseUrl(): string {
   const configuredUrl = import.meta.env.VITE_API_BASE_URL;
   if (!configuredUrl) {
@@ -122,17 +117,11 @@ async function requestVerification<T>(path: string, init: RequestInit): Promise<
 
 export async function verifyLabel(
   image: File,
-  applicationData: ApplicationData,
-  realVisionSettings?: RealVisionSettings
+  applicationData: ApplicationData
 ): Promise<VerificationResult> {
   const formData = new FormData();
   formData.append("image", image);
   formData.append("application_data", JSON.stringify(applicationData));
-  formData.append("use_real_vision", String(Boolean(realVisionSettings)));
-  if (realVisionSettings) {
-    formData.append("openai_api_key", realVisionSettings.apiKey);
-    formData.append("openai_model", realVisionSettings.model);
-  }
 
   return requestVerification<VerificationResult>("/verify", {
       method: "POST",
@@ -141,18 +130,12 @@ export async function verifyLabel(
 }
 
 export async function verifyBatch(
-  items: BatchVerificationRequestItem[],
-  realVisionSettings?: RealVisionSettings
+  items: BatchVerificationRequestItem[]
 ): Promise<BatchResult> {
   const formData = new FormData();
   for (const item of items) {
     formData.append("images", item.image);
     formData.append("application_data", JSON.stringify(item.application_data));
-  }
-  formData.append("use_real_vision", String(Boolean(realVisionSettings)));
-  if (realVisionSettings) {
-    formData.append("openai_api_key", realVisionSettings.apiKey);
-    formData.append("openai_model", realVisionSettings.model);
   }
 
   return requestVerification<BatchResult>("/verify/batch", {

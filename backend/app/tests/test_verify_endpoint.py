@@ -68,15 +68,9 @@ def post_verify(
     image_bytes: bytes | None = None,
     filename: str = "label.png",
     content_type: str = "image/png",
-    use_real_vision: bool = True,
-    openai_api_key: str | None = None,
-    openai_model: str | None = None,
+    extra_data: dict[str, str] | None = None,
 ):
-    data = {"use_real_vision": str(use_real_vision).lower()}
-    if openai_api_key is not None:
-        data["openai_api_key"] = openai_api_key
-    if openai_model is not None:
-        data["openai_model"] = openai_model
+    data = dict(extra_data or {})
     if application_data is not None:
         data["application_data"] = (
             application_data if isinstance(application_data, str) else json.dumps(application_data)
@@ -393,64 +387,33 @@ def test_tests_use_fake_vision_service_without_api_key_or_network(monkeypatch) -
     assert len(fake_service.calls) == 1
 
 
-def test_submitted_openai_key_uses_request_scoped_real_vision_service(monkeypatch) -> None:
+def test_submitted_openai_fields_do_not_override_configured_vision_service(monkeypatch) -> None:
     configured_service = FakeVisionService(
-        result=make_extracted_label(brand_name="SHOULD NOT BE USED")
+        result=make_extracted_label(brand_name="Old Tom Distillery")
     )
-    submitted_service = FakeVisionService(result=make_extracted_label())
-    captured: dict[str, str | None] = {}
 
-    def fake_openai_service(*, api_key: str | None = None, model: str | None = None, **kwargs):
+    def fail_if_constructed(*args, **kwargs):
+        _ = args
         _ = kwargs
-        captured["api_key"] = api_key
-        captured["model"] = model
-        return submitted_service
+        raise AssertionError("Submitted OpenAI fields must not construct a request-scoped service")
 
-    monkeypatch.setattr("app.api.dependencies.OpenAIVisionService", fake_openai_service)
+    monkeypatch.setattr("app.api.dependencies.OpenAIVisionService", fail_if_constructed)
     client, _ = make_client(configured_service)
 
     response = post_verify(
         client,
         application_data=make_application_data(),
         image_bytes=make_image_bytes(),
-        use_real_vision=True,
-        openai_api_key="sk-submitted-test-key",
-        openai_model="gpt-test-vision",
-    )
-
-    assert response.status_code == 200
-    assert response.json()["overall_verdict"] == "APPROVED"
-    assert captured == {"api_key": "sk-submitted-test-key", "model": "gpt-test-vision"}
-    assert configured_service.calls == []
-    assert len(submitted_service.calls) == 1
-
-
-def test_demo_mode_uses_filename_keyed_pretend_extraction() -> None:
-    client, fake_service = make_client(
-        FakeVisionService(result=make_extracted_label(brand_name="SHOULD NOT BE USED"))
-    )
-
-    response = post_verify(
-        client,
-        application_data={
-            "brand_name": "EVERGREEN AMBER BOURBON",
-            "class_type": "Kentucky Straight Bourbon Whiskey",
-            "abv": "45% Alc./Vol. (90 Proof)",
-            "net_contents": "750 mL",
-            "producer": "Evergreen Spirits LLC, Louisville, KY",
-            "country_of_origin": "United States",
-            "government_warning": CANONICAL_GOVERNMENT_WARNING,
+        extra_data={
+            "use_real_vision": "true",
+            "openai_api_key": "sk-submitted-test-key",
+            "openai_model": "gpt-test-vision",
         },
-        image_bytes=make_image_bytes(),
-        filename="evergreen-amber-bourbon.png",
-        use_real_vision=False,
     )
 
     assert response.status_code == 200
     assert response.json()["overall_verdict"] == "APPROVED"
-    brand = next(result for result in response.json()["results"] if result["field"] == "brand_name")
-    assert brand["found"] == "EVERGREEN AMBER BOURBON"
-    assert fake_service.calls == []
+    assert len(configured_service.calls) == 1
 
 
 def test_verify_logs_request_timing_without_payload_contents(caplog) -> None:

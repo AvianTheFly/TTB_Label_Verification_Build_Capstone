@@ -101,35 +101,6 @@ select {
   font-size: 0.95rem;
 }
 
-.openai-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 0 12px;
-  border: 2px solid #1f2937;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #1f2937;
-  cursor: pointer;
-  font-weight: 900;
-}
-
-.openai-toggle input {
-  width: 18px;
-  height: 18px;
-}
-
-.openai-status {
-  padding: 8px 10px;
-  border: 2px solid #11724f;
-  border-radius: 8px;
-  background: #ecfdf5;
-  color: #0f5138;
-  font-size: 0.92rem;
-  font-weight: 900;
-}
-
 .phase-label {
   margin: 0 0 8px;
   color: #36505c;
@@ -768,23 +739,6 @@ p {
   opacity: 0.58;
 }
 
-.openai-key-panel {
-  display: grid;
-  gap: 14px;
-  width: min(460px, calc(100vw - 32px));
-  padding: 22px;
-  border: 3px solid #b42318;
-  border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 24px 80px rgba(17, 24, 39, 0.28);
-}
-
-.openai-key-panel strong {
-  color: #8a1f13;
-  font-size: 1.15rem;
-}
-
-.openai-key-panel h2,
 .warning-dialog h2 {
   margin: 0;
   color: #111827;
@@ -792,26 +746,11 @@ p {
   line-height: 1.14;
 }
 
-.openai-key-panel p,
 .warning-dialog p {
   margin: 0;
   color: #36505c;
   font-weight: 800;
   line-height: 1.35;
-}
-
-.openai-key-panel label {
-  display: grid;
-  gap: 6px;
-  color: #1f2937;
-  font-weight: 900;
-}
-
-.openai-key-panel input {
-  min-height: 48px;
-  padding: 10px 12px;
-  border: 2px solid #52616b;
-  border-radius: 8px;
 }
 
 .modal-scrim {
@@ -1854,8 +1793,7 @@ p {
     width: 100%;
   }
 
-  .top-actions .secondary-button,
-  .openai-toggle {
+  .top-actions .secondary-button {
     justify-content: center;
     width: 100%;
   }

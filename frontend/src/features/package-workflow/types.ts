@@ -16,16 +16,6 @@ export interface ReviewOverrideWarning {
   title: string;
 }
 
-export interface OpenAiSettings {
-  apiKey: string;
-  model: string;
-}
-
-export interface OpenAiDraft {
-  apiKey: string;
-  model: string;
-}
-
 export interface AdvancedSearchFilters {
   abvOperator: AbvOperator;
   abvValue: string;
@@ -62,4 +52,3 @@ export type PackageCollections = {
   incompleteRecords: IncompleteApplicationRecord[];
   records: ApplicationPackageRecord[];
 };
-

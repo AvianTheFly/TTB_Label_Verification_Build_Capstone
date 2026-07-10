@@ -104,10 +104,8 @@ Returns service status:
 - Parts:
   - `image`: JPG, PNG, or WEBP label image
   - `application_data`: JSON string containing the seven canonical fields
-  - `use_real_vision`: optional boolean string
-  - `openai_api_key` and `openai_model`: optional temporary real-vision settings used only for
-    that request when `use_real_vision=true`
 - Response: `VerificationResult` with `results`, `overall_verdict`, and `latency_ms`
+- Vision provider selection and provider credentials are backend configuration only.
 
 `POST /verify/batch`
 
@@ -115,10 +113,8 @@ Returns service status:
 - Parts:
   - repeated `images`
   - repeated `application_data`
-  - `use_real_vision`: optional boolean string
-  - `openai_api_key` and `openai_model`: optional temporary real-vision settings used only for
-    that batch request when `use_real_vision=true`
 - Response: batch `items` plus `summary` with `passed`, `needs_review`, and `total`
+- Vision provider selection and provider credentials are backend configuration only.
 
 `POST /compare`
 
@@ -199,11 +195,9 @@ Frontend variable:
 VITE_API_BASE_URL=http://127.0.0.1:8000
 ```
 
-For real provider extraction, either configure the backend with `VISION_PROVIDER=openai`,
-`VISION_MODEL`, and `OPENAI_API_KEY` in the deployment provider settings, or use the frontend's
-temporary real-vision key entry for a single browser session. A key entered in the frontend is kept
-only in page memory and sent to the backend only in verification request bodies; it is not stored in
-local storage, committed to git, or logged by the app.
+For real provider extraction, configure only the backend with `VISION_PROVIDER=openai`,
+`VISION_MODEL`, and `OPENAI_API_KEY` in the deployment provider settings. The frontend never accepts
+or sends provider API keys.
 
 ## Run Locally
 

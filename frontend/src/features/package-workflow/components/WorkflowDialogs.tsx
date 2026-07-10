@@ -1,5 +1,4 @@
-import { DEFAULT_OPENAI_MODEL } from "../constants";
-import type { OpenAiDraft, ReviewOverrideWarning } from "../types";
+import type { ReviewOverrideWarning } from "../types";
 
 interface ReviewOverrideDialogProps {
   onCancel: () => void;
@@ -94,67 +93,6 @@ export function SubmitWarningDialog({
               Proceed With Download
             </button>
           </div>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-interface OpenAiSettingsDialogProps {
-  draft: OpenAiDraft;
-  error: string | null;
-  onCancel: () => void;
-  onDraftChange: (draft: OpenAiDraft) => void;
-  onProceed: () => void;
-}
-
-export function OpenAiSettingsDialog({
-  draft,
-  error,
-  onCancel,
-  onDraftChange,
-  onProceed
-}: OpenAiSettingsDialogProps) {
-  return (
-    <div className="modal-scrim" role="presentation">
-      <section
-        aria-labelledby="openai-dialog-title"
-        aria-modal="true"
-        className="openai-key-panel"
-        role="dialog"
-      >
-        <strong>WARNING: THIS USES REAL API CALLS</strong>
-        <h2 id="openai-dialog-title">Use Real AI Vision</h2>
-        <p>
-          Enter the session settings for real vision mode. The backend confirms authentication
-          when the first real vision request is sent.
-        </p>
-        <label>
-          API Key
-          <input
-            autoComplete="off"
-            onChange={(event) => onDraftChange({ ...draft, apiKey: event.target.value })}
-            type="password"
-            value={draft.apiKey}
-          />
-        </label>
-        <label>
-          Model
-          <input
-            onChange={(event) => onDraftChange({ ...draft, model: event.target.value })}
-            placeholder={DEFAULT_OPENAI_MODEL}
-            type="text"
-            value={draft.model}
-          />
-        </label>
-        {error && <p className="dialog-error">{error}</p>}
-        <div className="dialog-actions">
-          <button className="secondary-button" onClick={onCancel} type="button">
-            Cancel
-          </button>
-          <button className="decision-button decision-button--review" onClick={onProceed} type="button">
-            Proceed
-          </button>
         </div>
       </section>
     </div>

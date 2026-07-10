@@ -6,24 +6,19 @@ import {
   verifyBatch,
   verifyLabel
 } from "../../api/verification";
-import type { RealVisionSettings } from "../../api/verification";
 import type {
   CanonicalLabelField,
   FieldReviewDecision,
   VerificationResult
 } from "../../types/api";
-import { DEFAULT_OPENAI_MODEL, DEMO_DATA_ARCHIVE_FILENAME, VISIBLE_STATUSES } from "./constants";
+import { DEMO_DATA_ARCHIVE_FILENAME, VISIBLE_STATUSES } from "./constants";
 import { ApplicationDetailDialog } from "./components/ApplicationDetailDialog";
 import { ApplicationsSection } from "./components/ApplicationsSection";
 import { IncompleteApplicationsSection } from "./components/IncompleteApplicationsSection";
 import { SearchPanel } from "./components/SearchPanel";
 import { UploadDropSurface } from "./components/UploadDropSurface";
 import { WorkflowHeader } from "./components/WorkflowHeader";
-import {
-  OpenAiSettingsDialog,
-  ReviewOverrideDialog,
-  SubmitWarningDialog
-} from "./components/WorkflowDialogs";
+import { ReviewOverrideDialog, SubmitWarningDialog } from "./components/WorkflowDialogs";
 import { createPreviewUrl, mergeFilesByName, revokePreviewUrl } from "./filePreviews";
 import {
   ApplicationPackageRecord,
@@ -57,8 +52,6 @@ import {
 import type {
   AdvancedSearchFilters,
   IncompleteFilter,
-  OpenAiDraft,
-  OpenAiSettings,
   ReviewOverrideWarning
 } from "./types";
 
@@ -84,14 +77,6 @@ export function PackageWorkflow() {
   const [isDragging, setIsDragging] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const [checkError, setCheckError] = useState<string | null>(null);
-  const [useOpenAiKey, setUseOpenAiKey] = useState(false);
-  const [isOpenAiDialogOpen, setIsOpenAiDialogOpen] = useState(false);
-  const [openAiDraft, setOpenAiDraft] = useState<OpenAiDraft>({
-    apiKey: "",
-    model: DEFAULT_OPENAI_MODEL
-  });
-  const [openAiSettings, setOpenAiSettings] = useState<OpenAiSettings | null>(null);
-  const [openAiDialogError, setOpenAiDialogError] = useState<string | null>(null);
   const [reviewOverrideWarning, setReviewOverrideWarning] = useState<ReviewOverrideWarning | null>(null);
   const [isSubmitWarningOpen, setIsSubmitWarningOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -256,10 +241,7 @@ export function PackageWorkflow() {
     void importFiles(event.dataTransfer.files);
   }
 
-  async function checkApplications(
-    recordsToCheck: ApplicationPackageRecord[],
-    submittedRealVisionSettings?: RealVisionSettings
-  ) {
+  async function checkApplications(recordsToCheck: ApplicationPackageRecord[]) {
     const validRecords = recordsToCheck.filter((record) => record.validation_errors.length === 0);
     if (validRecords.length === 0) {
       return;
@@ -271,11 +253,7 @@ export function PackageWorkflow() {
     try {
       if (validRecords.length === 1) {
         const record = validRecords[0];
-        const result = await verifyLabel(
-          record.image_file,
-          record.application_data,
-          submittedRealVisionSettings ?? realVisionSettings()
-        );
+        const result = await verifyLabel(record.image_file, record.application_data);
         updateRecordWithResult(record.package_id, result);
         return;
       }
@@ -284,8 +262,7 @@ export function PackageWorkflow() {
         validRecords.map((record) => ({
           image: record.image_file,
           application_data: record.application_data
-        })),
-        submittedRealVisionSettings ?? realVisionSettings()
+        }))
       );
 
       setRecords((current) =>
@@ -386,52 +363,6 @@ export function PackageWorkflow() {
       setRecordStatus(reviewOverrideWarning.packageId, "Fail");
     }
     setReviewOverrideWarning(null);
-  }
-
-  function handleOpenAiToggleChange(checked: boolean) {
-    if (checked) {
-      setOpenAiDialogError(null);
-      setIsOpenAiDialogOpen(true);
-      return;
-    }
-
-    setUseOpenAiKey(false);
-    setOpenAiSettings(null);
-    setOpenAiDialogError(null);
-  }
-
-  function proceedWithOpenAiSettings() {
-    const apiKey = openAiDraft.apiKey.trim();
-    const model = openAiDraft.model.trim() || DEFAULT_OPENAI_MODEL;
-
-    if (!apiKey) {
-      setOpenAiDialogError("Enter an OpenAI API key before using the real AI vision service.");
-      return;
-    }
-
-    const nextSettings = { apiKey, model };
-    setOpenAiSettings(nextSettings);
-    setOpenAiDraft({ apiKey: "", model });
-    setUseOpenAiKey(true);
-    setIsOpenAiDialogOpen(false);
-    setOpenAiDialogError(null);
-    void checkApplications(recordsRef.current, nextSettings);
-  }
-
-  function cancelOpenAiSettings() {
-    setIsOpenAiDialogOpen(false);
-    setOpenAiDialogError(null);
-  }
-
-  function realVisionSettings(): RealVisionSettings | undefined {
-    if (!useOpenAiKey || !openAiSettings) {
-      return undefined;
-    }
-
-    return {
-      apiKey: openAiSettings.apiKey,
-      model: openAiSettings.model
-    };
   }
 
   function setRecordStatus(packageId: string, status: VisibleStatus) {
@@ -596,11 +527,8 @@ export function PackageWorkflow() {
           incompleteCount={incompleteRecords.length}
           isChecking={isChecking}
           onDownloadDemoData={downloadDemoData}
-          onOpenAiToggleChange={handleOpenAiToggleChange}
           onSubmitClick={() => setIsSubmitWarningOpen(true)}
-          openAiSettings={openAiSettings}
           recordCount={records.length}
-          useOpenAiKey={useOpenAiKey}
         />
 
         <UploadDropSurface
@@ -672,15 +600,6 @@ export function PackageWorkflow() {
           />
         )}
 
-        {isOpenAiDialogOpen && (
-          <OpenAiSettingsDialog
-            draft={openAiDraft}
-            error={openAiDialogError}
-            onCancel={cancelOpenAiSettings}
-            onDraftChange={setOpenAiDraft}
-            onProceed={proceedWithOpenAiSettings}
-          />
-        )}
       </section>
     </main>
   );
