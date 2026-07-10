@@ -6,8 +6,8 @@ from typing import Any
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from app.api.batch import _read_item_image
 from app.api.dependencies import get_vision_service
+from app.api.request_parsing import read_batch_item_image
 from app.core.config import get_settings
 from app.domain.comparison import CANONICAL_GOVERNMENT_WARNING
 from app.domain.models import ExtractedLabel
@@ -271,7 +271,7 @@ async def test_unreadable_batch_upload_becomes_item_error() -> None:
             _ = size
             raise OSError("stream closed")
 
-    item = await _read_item_image(3, BrokenUpload(), max_upload_mb=10)
+    item = await read_batch_item_image(3, BrokenUpload(), max_upload_mb=10)
 
     assert item.index == 3
     assert item.error is not None
