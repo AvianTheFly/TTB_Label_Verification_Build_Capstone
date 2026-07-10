@@ -8,8 +8,7 @@ import pytest
 from PIL import Image
 
 from app.domain.comparison import compare_label
-from app.domain.models import ApplicationData
-from app.domain.models import ExtractedLabel
+from app.domain.models import ApplicationData, ExtractedLabel
 from app.services.fake_vision import DemoVisionService, FakeVisionService
 from app.services.image_preprocess import ImagePreprocessError, preprocess_image
 from app.services.vision import (
@@ -57,7 +56,11 @@ async def test_fake_vision_service_can_raise_categorized_error() -> None:
 
 @pytest.mark.asyncio
 async def test_demo_vision_service_uses_filename_keyed_extraction() -> None:
-    image = preprocess_image(make_image_bytes(), "image/png", filename="evergreen-amber-bourbon.png")
+    image = preprocess_image(
+        make_image_bytes(),
+        "image/png",
+        filename="evergreen-amber-bourbon.png",
+    )
     service = DemoVisionService()
 
     result = await service.extract_label(image)
@@ -90,14 +93,27 @@ def test_demo_application_inputs_match_intended_scenarios() -> None:
     for stem, (verdict, failed_fields) in cases.items():
         root_application_path = project_root / "demo-data" / "inputs" / f"{stem}.application.json"
         public_application_path = (
-            project_root / "frontend" / "public" / "demo-data" / "inputs" / f"{stem}.application.json"
+            project_root
+            / "frontend"
+            / "public"
+            / "demo-data"
+            / "inputs"
+            / f"{stem}.application.json"
         )
         assert json.loads(root_application_path.read_text()) == json.loads(
             public_application_path.read_text()
         )
         application_payload = json.loads(root_application_path.read_text())["application_data"]
+        extraction_path = (
+            project_root
+            / "backend"
+            / "app"
+            / "services"
+            / "demo_extractions"
+            / f"{stem}.json"
+        )
         extraction_payload = json.loads(
-            (project_root / "backend" / "app" / "services" / "demo_extractions" / f"{stem}.json").read_text()
+            extraction_path.read_text()
         )
 
         result = compare_label(

@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from app.api.dependencies import get_vision_service
-from app.api.verify import _read_image_upload
+from app.api.request_parsing import read_image_upload
 from app.core.config import get_settings
 from app.core.errors import ApiError
 from app.domain.comparison import CANONICAL_GOVERNMENT_WARNING
@@ -304,7 +304,7 @@ async def test_unreadable_upload_returns_readable_bad_request() -> None:
             raise OSError("stream closed")
 
     try:
-        await _read_image_upload(BrokenUpload())
+        await read_image_upload(BrokenUpload(), max_upload_mb=10)
     except ApiError as exc:
         assert exc.status_code == 400
         assert exc.code == "bad_request"
@@ -472,7 +472,7 @@ def test_verify_logs_request_timing_without_payload_contents(caplog) -> None:
 
 def test_verify_logs_timing_breakdown_without_payload_contents(caplog) -> None:
     client, _ = make_client()
-    caplog.set_level("INFO", logger="app.services.verification")
+    caplog.set_level("INFO", logger="app.use_cases.verification")
 
     response = post_verify(
         client,

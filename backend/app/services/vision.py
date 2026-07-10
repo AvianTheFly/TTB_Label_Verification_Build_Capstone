@@ -257,5 +257,8 @@ def _safe_provider_message(category: VisionIssueCategory) -> str:
     if category == "provider_timeout":
         return "The vision provider timed out while reading the label."
     if category == "provider_quota_exceeded":
-        return "This API call exceeds your current quota. Please check your OpenAI plan and billing details."
+        return (
+            "This API call exceeds your current quota. "
+            "Please check your OpenAI plan and billing details."
+        )
     return "The vision provider is unavailable."
