@@ -31,6 +31,30 @@ npm run test
 npm run build
 ```
 
-## Phase Notes
+## App Structure
 
-The current frontend implements the Phase 4 single-label verification flow as the primary screen.
+```text
+src/
+  api/        Backend API clients and API error handling
+  app/        Top-level app composition
+  components/ Shared app-wide components when needed
+  features/   Feature-owned UI, workflow state, and utilities
+  styles/     Global CSS
+  types/      TypeScript types that mirror backend API contracts
+```
+
+Package workflow feature:
+
+```text
+features/package-workflow/
+  PackageWorkflow.tsx       Workflow coordinator and state owner
+  components/               Screen sections and reusable workflow UI
+  constants.ts              Feature constants
+  filePreviews.ts           Browser object URL helpers
+  packageWorkflowUtils.ts   Package parsing and export utilities
+  recordStatus.ts           Review status, summaries, and decision helpers
+  searchFilters.ts          Search and advanced-filter logic
+  types.ts                  Feature-local TypeScript types
+```
+
+Keep API payload keys snake_case and aligned with `src/types/api.ts`.
