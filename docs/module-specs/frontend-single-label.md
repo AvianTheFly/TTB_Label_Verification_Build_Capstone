@@ -17,7 +17,7 @@ Frontend application, API client, components, and styles.
 Inputs:
 
 - User-selected label image.
-- Preview confirmation before the image becomes an application record.
+- Uploaded image becomes an application record immediately.
 - Seven canonical application fields.
 
 Outputs:
@@ -59,7 +59,7 @@ At minimum:
 
 - Typecheck passes.
 - Form requires the seven fields and an image.
-- Image selection opens a preview before adding the application.
+- Image selection adds the application immediately.
 - API error renders readably.
 - Result view shows verdict and failing-field details.
 

@@ -19,8 +19,9 @@ class Settings(BaseSettings):
     max_batch_items: int = 25
     batch_concurrency_limit: int = 3
     single_label_timeout_seconds: float = 4.8
-    image_max_dimension: int = 768
+    image_max_dimension: int = 1600
     image_jpeg_quality: int = 60
+    image_reencode_threshold_bytes: int = 500_000
     vision_provider: str = "openai"
     vision_model: str = "gpt-5.4-nano"
     openai_timeout_seconds: float = 30.0
@@ -54,6 +55,13 @@ class Settings(BaseSettings):
     def validate_image_jpeg_quality(cls, value: int) -> int:
         if value < 40 or value > 95:
             raise ValueError("image_jpeg_quality must be between 40 and 95")
+        return value
+
+    @field_validator("image_reencode_threshold_bytes")
+    @classmethod
+    def validate_image_reencode_threshold_bytes(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("image_reencode_threshold_bytes must be at least 0")
         return value
 
     @field_validator("openai_timeout_seconds")

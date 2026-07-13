@@ -32,7 +32,7 @@ Outputs:
 
 - `POST /verify/batch`
 - Frontend batch upload view.
-- Batch image preview before selected images become application records.
+- Batch image uploads become application records immediately.
 - Batch API client function.
 - Batch item error shape: `{ code, message, details }`, not the top-level API error envelope.
 
@@ -70,7 +70,7 @@ Batch processing uses a bounded async concurrency limit, default `3`. Batch tota
 - Concurrency limit is enforced or directly testable.
 - Item-level errors do not use the top-level error envelope shape.
 - Frontend shows progress, summary, and drill-down.
-- Frontend shows selected image previews and supports removing images before acceptance.
+- Frontend adds selected images immediately and keeps uploaded records inspectable.
 
 ## 9. Exit Criteria
 

@@ -62,15 +62,15 @@ export function ApplicationDetailDialog({
             X
           </button>
           <div className="detail-title-group">
-            <div>
-              <p className="result-label">Application #</p>
-              <p className="detail-application-id">{applicationNumber(record.package_id)}</p>
-            </div>
-            <div>
-              <p className="result-label">Brand Name</p>
+            <div className="detail-title-copy">
+              <p className="detail-kicker">Application Review</p>
               <h2 id="detail-title" ref={detailHeadingRef} tabIndex={-1}>
                 {title}
               </h2>
+              <div className="detail-meta-strip" aria-label="Application metadata">
+                <span>Application #{applicationNumber(record.package_id)}</span>
+                <span>{record.image_filename}</span>
+              </div>
             </div>
           </div>
           <button
