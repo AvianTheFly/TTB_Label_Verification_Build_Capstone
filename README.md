@@ -15,8 +15,8 @@ database.
 
 - Public repository: https://github.com/AvianTheFly/TTB_Label_Verification_Build_Capstone
 - Live frontend: https://fed-stack-capstone.vercel.app/
-- Real OpenAI live verification: pending until `OPENAI_API_KEY` is available.
-- Measured deployed p50/p95 latency: pending until real-provider live verification is run.
+- Local real OpenAI live verification: passed on 2026-07-13 with backend `.env` credentials.
+- Measured deployed p50/p95 latency: pending until Render real-provider verification is run.
 
 ## Current Workflow
 
@@ -86,8 +86,8 @@ IMAGE_JPEG_QUALITY=85
 ```
 
 `gpt-4.1-mini` is the configured default model for the OpenAI vision provider. Public OpenAI model
-documentation was reviewed on 2026-07-13; final account-backed model availability and live
-extraction verification are pending until `OPENAI_API_KEY` is available.
+documentation was reviewed on 2026-07-13. Local account-backed extraction was verified on
+2026-07-13 with `VISION_PROVIDER=openai` and the API key stored only in `backend/.env`.
 
 Supported providers:
 
@@ -291,7 +291,7 @@ Expected output:
 Live checklist passed: overall_verdict=NEEDS_REVIEW latency_ms=1240 round_trip_ms=1500
 ```
 
-Latency measurement command for the later real-provider pass:
+Latency measurement command for the real-provider pass:
 
 ```bash
 cd backend
@@ -325,11 +325,15 @@ Live measurement status:
 
 | Metric | Value | How measured |
 | --- | --- | --- |
+| Local `/verify` p50 `latency_ms` | `2979` | `uv run python scripts/live_checklist.py --url http://127.0.0.1:8000 --runs 5` on 2026-07-13. |
+| Local `/verify` p95 `latency_ms` | `3907` | Same 5-run local live OpenAI script output. |
+| Local round-trip p50/p95 | `2984` / `3941` | Same 5-run local live OpenAI script output. |
 | Deployed `/verify` p50 `latency_ms` | Pending | Run `backend/scripts/live_checklist.py --runs 20` after `OPENAI_API_KEY` is configured. |
 | Deployed `/verify` p95 `latency_ms` | Pending | Same 20-run script output, warm deployed service preferred. |
 | Cold-start round trip | Pending | Record first `round_trip_ms` separately on free-tier deploys. |
 
-These values are intentionally pending because real OpenAI live verification has not been run yet.
+Deployed values remain pending until the Render backend is configured with the production
+environment and checked with the same script.
 
 ## Testing
 
@@ -414,9 +418,8 @@ GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink
 - Every verification request is self-contained and stateless.
 - Government warning text exactness is implemented; bold styling detection for the
   `GOVERNMENT WARNING:` lead-in is not claimed.
-- Real OpenAI extraction has not been verified live yet because production API keys are not
-  available.
-- Measured deployed p50/p95 latency remains pending until the real-provider live pass.
+- Real OpenAI extraction has been verified locally with backend environment credentials.
+- Measured deployed p50/p95 latency remains pending until the Render real-provider live pass.
 - Free-tier hosting may add cold-start latency outside request-scoped `latency_ms`.
 - Demo/fake providers are for local tests and demos only; they are not a substitute for production
   vision extraction.
@@ -437,6 +440,7 @@ GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink
 - Backend deployment URL verified through `/health`.
 - Live smoke check run against deployed `/verify`.
 - Batch flow verified from the deployed frontend.
-- Real-provider extraction verified after `OPENAI_API_KEY` is configured.
-- p50 and p95 single-label latency recorded in this README.
+- Local real-provider extraction verified after `OPENAI_API_KEY` was configured.
+- Local p50 and p95 single-label latency recorded in this README.
+- Deployed p50 and p95 single-label latency recorded in this README after Render verification.
 - Secret audit confirms no `.env` files or real keys are tracked.
