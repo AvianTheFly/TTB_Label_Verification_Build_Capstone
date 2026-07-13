@@ -17,6 +17,7 @@ def test_openai_is_selected_by_environment_configuration(monkeypatch) -> None:
             openai_api_key="test-key",
             vision_model="gpt-test-model",
             openai_timeout_seconds=4.5,
+            openai_image_detail="low",
         ),
     )
 

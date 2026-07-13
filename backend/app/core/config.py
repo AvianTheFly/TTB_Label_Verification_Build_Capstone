@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -18,11 +18,12 @@ class Settings(BaseSettings):
     max_upload_mb: int = 10
     max_batch_items: int = 25
     batch_concurrency_limit: int = 3
-    image_max_dimension: int = 1600
-    image_jpeg_quality: int = 85
+    image_max_dimension: int = 1024
+    image_jpeg_quality: int = 70
     vision_provider: str = "openai"
     vision_model: str = "gpt-4.1-mini"
-    openai_timeout_seconds: float = 4.5
+    openai_timeout_seconds: float = 4.2
+    openai_image_detail: Literal["low", "high", "auto"] = "low"
     openai_api_key: str = ""
 
     @field_validator("backend_cors_origins", mode="before")
