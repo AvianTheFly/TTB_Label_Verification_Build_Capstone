@@ -15,17 +15,13 @@ interface ApplicationDetailDialogProps {
     value: string
   ) => void;
   onClose: () => void;
-  onFailClick: (record: ApplicationPackageRecord) => void;
   onFieldDecision: (
     packageId: string,
     field: CanonicalLabelField,
     decision: FieldReviewDecision
   ) => void;
-  onPassClick: (record: ApplicationPackageRecord) => void;
   onVerify: (packageId: string) => void;
   record: ApplicationPackageRecord;
-  selectedCanFail: boolean;
-  selectedCanPass: boolean;
 }
 
 export function ApplicationDetailDialog({
@@ -33,13 +29,9 @@ export function ApplicationDetailDialog({
   isChecking,
   onApplicationDataChange,
   onClose,
-  onFailClick,
   onFieldDecision,
-  onPassClick,
   onVerify,
-  record,
-  selectedCanFail,
-  selectedCanPass
+  record
 }: ApplicationDetailDialogProps) {
   const title = record.application_data.brand_name.trim() || record.image_filename;
 
@@ -123,26 +115,6 @@ export function ApplicationDetailDialog({
             type="button"
           >
             {isChecking ? "VERIFYING..." : "VERIFY"}
-          </button>
-          <button
-            aria-disabled={!selectedCanFail}
-            className={`decision-button decision-button--fail ${
-              selectedCanFail ? "" : "decision-button--disabled"
-            }`}
-            onClick={() => onFailClick(record)}
-            type="button"
-          >
-            FAIL
-          </button>
-          <button
-            aria-disabled={!selectedCanPass}
-            className={`decision-button decision-button--pass ${
-              selectedCanPass ? "" : "decision-button--disabled"
-            }`}
-            onClick={() => onPassClick(record)}
-            type="button"
-          >
-            PASS
           </button>
         </div>
       </section>

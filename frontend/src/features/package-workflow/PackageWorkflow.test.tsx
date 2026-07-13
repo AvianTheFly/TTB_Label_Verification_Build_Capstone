@@ -519,7 +519,7 @@ describe("PackageWorkflow", () => {
     expect(readFormDataBody().get("use_real_vision")).toBeNull();
     expect(readFormDataBody().get("openai_api_key")).toBeNull();
     expect(readFormDataBody().get("openai_model")).toBeNull();
-    expect(container.textContent).toContain("Passed");
+    expect(container.textContent).toContain("Approved");
   });
 
   it("does not call /verify/batch automatically for multiple applications", async () => {
@@ -555,7 +555,7 @@ describe("PackageWorkflow", () => {
 
     const firstCard = container.textContent ?? "";
     expect(firstCard).toContain("FIRST BRAND");
-    expect(firstCard).toContain("Passed");
+    expect(firstCard).toContain("Approved");
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -611,7 +611,7 @@ describe("PackageWorkflow", () => {
     await uploadOpenFillAndVerify();
 
     expect(container.querySelector("#data-title")).not.toBeNull();
-    await clickButtonLabel("Close detail view. Current status: Passed");
+    await clickButtonLabel("Close detail view. Current status: Approved");
     expect(container.querySelector("#data-title")).toBeNull();
   });
 
@@ -856,7 +856,7 @@ describe("PackageWorkflow", () => {
     expect((labelImage as HTMLElement).style.transform).toMatch(/translate\(\d+(\.\d+)?px, 0px\) rotate\(5deg\)/);
   });
 
-  it("uses backend field results to enable review decision buttons", async () => {
+  it("shows needs review when any backend field result fails", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -881,71 +881,10 @@ describe("PackageWorkflow", () => {
     await renderPackageWorkflow();
     await uploadOpenFillAndVerify();
 
-    expect(buttonWithText("FAIL").getAttribute("aria-disabled")).toBe("false");
-    expect(buttonWithText("PASS").getAttribute("aria-disabled")).toBe("true");
-    await clickButton("FAIL");
-    expect(container.textContent).toContain("Fail");
-    expect(container.querySelector("#data-title")).toBeNull();
-  });
-
-  it("warns before overriding a grayed out pass decision", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () =>
-          verificationResult({
-            overall_verdict: "NEEDS_REVIEW",
-            results: [
-              {
-                field: "brand_name",
-                match_type: "fuzzy",
-                expected: "OLD TOM DISTILLERY",
-                found: "WRONG BRAND",
-                status: "FAIL",
-                message: "Values do not match after fuzzy normalization."
-              }
-            ]
-          })
-      })
-    );
-
-    await renderPackageWorkflow();
-    await uploadOpenFillAndVerify();
-
-    await clickButton("PASS");
-    expect(container.textContent).toContain("Pass this application anyway?");
-    expect(container.textContent).toContain("Fail");
-    expect(container.textContent).toContain("Brand Name");
-    await clickButton("Cancel");
-    expect(container.querySelector("#data-title")).not.toBeNull();
-
-    await clickButton("PASS");
-    await clickButton("Proceed With Pass");
-    expect(container.textContent).toContain("Passed");
-    expect(container.querySelector("#data-title")).toBeNull();
-  });
-
-  it("warns before overriding a grayed out fail decision", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => verificationResult()
-      })
-    );
-
-    await renderPackageWorkflow();
-    await uploadOpenFillAndVerify();
-
-    expect(buttonWithText("FAIL").getAttribute("aria-disabled")).toBe("true");
-    await clickButton("FAIL");
-    expect(container.textContent).toContain("Fail this application anyway?");
-    expect(container.textContent).toContain("Pass");
-    expect(container.textContent).toContain("Brand Name");
-    await clickButton("Proceed With Fail");
-    expect(container.textContent).toContain("Fail");
-    expect(container.querySelector("#data-title")).toBeNull();
+    expect(container.textContent).toContain("Needs Review");
+    expect(container.textContent).toContain("fail");
+    expect(() => buttonWithText("FAIL")).toThrow("Missing button: FAIL");
+    expect(() => buttonWithText("PASS")).toThrow("Missing button: PASS");
   });
 
   it("does not open detail from card hover and closes detail when clicking outside", async () => {
@@ -1019,7 +958,7 @@ describe("PackageWorkflow", () => {
     expect(JSON.parse((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[1][1].body)).toMatchObject({
       field_decisions: { brand_name: "fail" }
     });
-    expect(container.textContent).toContain("Fail");
+    expect(container.textContent).toContain("Needs Review");
   });
 
   it("exports pending items honestly", () => {
@@ -1042,7 +981,7 @@ describe("PackageWorkflow", () => {
     ]);
 
     expect(exportJson.summary).toEqual({
-      failed: 0,
+      needs_review: 0,
       passed: 0,
       pending: 1,
       total: 1
@@ -1072,7 +1011,7 @@ describe("PackageWorkflow", () => {
           reviewed_extracted_data: null,
           comparison_result: null,
           field_decisions: {},
-          status: "Fail",
+          status: "Needs Review",
           validation_errors: [],
           item_error: "This application could not be checked."
         }
@@ -1082,7 +1021,7 @@ describe("PackageWorkflow", () => {
 
     expect(exported.generated_at).toBe("2026-06-20T00:00:00.000Z");
     expect(exported.summary).toEqual({
-      failed: 1,
+      needs_review: 1,
       passed: 0,
       pending: 0,
       total: 1

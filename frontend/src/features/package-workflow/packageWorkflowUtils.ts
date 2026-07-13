@@ -7,7 +7,7 @@ import type {
 } from "../../types/api";
 import { ACCEPTED_IMAGE_TYPES, FIELD_CONFIGS, emptyApplicationData } from "../labelFields";
 
-export type VisibleStatus = "Pending Check" | "Passed" | "Fail";
+export type VisibleStatus = "Pending Check" | "Approved" | "Needs Review";
 export interface PackageValidationError {
   code:
     | "duplicate_image_filename"
@@ -36,7 +36,7 @@ export interface ReviewedResultsExport {
   schema_version: "application-package-review-v1";
   generated_at: string;
   summary: {
-    failed: number;
+    needs_review: number;
     passed: number;
     pending: number;
     total: number;
@@ -80,7 +80,7 @@ export function extractedDataFromResult(result: VerificationResult): ExtractedDa
 }
 
 export function statusFromResult(result: VerificationResult): VisibleStatus {
-  return result.overall_verdict === "APPROVED" ? "Passed" : "Fail";
+  return result.overall_verdict === "APPROVED" ? "Approved" : "Needs Review";
 }
 
 export function hasFailingFields(record: ApplicationPackageRecord): boolean {
@@ -96,9 +96,9 @@ export function allFieldsPass(record: ApplicationPackageRecord): boolean {
 
 export function statusSortRank(status: VisibleStatus): number {
   const ranks: Record<VisibleStatus, number> = {
-    Fail: 0,
+    "Needs Review": 0,
     "Pending Check": 1,
-    Passed: 2
+    Approved: 2
   };
 
   return ranks[status];
@@ -110,9 +110,9 @@ export function buildReviewedResultsExport(
 ): ReviewedResultsExport {
   const summary = records.reduce(
     (counts, record) => {
-      if (record.status === "Fail") {
-        counts.failed += 1;
-      } else if (record.status === "Passed") {
+      if (record.status === "Needs Review") {
+        counts.needs_review += 1;
+      } else if (record.status === "Approved") {
         counts.passed += 1;
       } else {
         counts.pending += 1;
@@ -120,7 +120,7 @@ export function buildReviewedResultsExport(
       counts.total += 1;
       return counts;
     },
-    { failed: 0, passed: 0, pending: 0, total: 0 }
+    { needs_review: 0, passed: 0, pending: 0, total: 0 }
   );
 
   return {
@@ -137,7 +137,7 @@ export function buildReviewedResultsExport(
       field_results: reviewedFieldResults(record),
       overall_verdict:
         record.comparison_result || Object.keys(record.field_decisions).length > 0
-          ? record.status === "Passed"
+          ? record.status === "Approved"
             ? "APPROVED"
             : "NEEDS_REVIEW"
           : null,

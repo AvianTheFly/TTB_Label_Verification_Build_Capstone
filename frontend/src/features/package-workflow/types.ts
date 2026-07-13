@@ -3,15 +3,6 @@ import type { ApplicationPackageRecord } from "./packageWorkflowUtils";
 
 export type IncompleteFilter = "json" | "image";
 export type AbvOperator = "any" | "lt" | "eq" | "gt";
-export type ReviewOverrideAction = "fail" | "pass";
-
-export interface ReviewOverrideWarning {
-  action: ReviewOverrideAction;
-  confirmLabel: string;
-  groups: Array<{ fields: string[]; label: string }>;
-  packageId: string;
-  title: string;
-}
 
 export interface AdvancedSearchFilters {
   abvOperator: AbvOperator;
@@ -33,7 +24,7 @@ export type PackageRecordKey = Pick<
 >;
 
 export interface ApplicationSummary {
-  fail: number;
+  needs_review: number;
   passed: number;
   total: number;
 }

@@ -44,8 +44,8 @@ export function normalizeSearchTerm(value: string): string {
 export function allStatusFilters(): Record<VisibleStatus, boolean> {
   return {
     "Pending Check": true,
-    Passed: true,
-    Fail: true
+    Approved: true,
+    "Needs Review": true
   };
 }
 

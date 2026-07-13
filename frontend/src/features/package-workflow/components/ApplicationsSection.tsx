@@ -37,16 +37,16 @@ export function ApplicationsSection({
               tone: "neutral"
             },
             {
-              active: statusFilters.Fail,
-              filterKey: "Fail",
-              label: "fail",
-              value: summary.fail,
+              active: statusFilters["Needs Review"],
+              filterKey: "Needs Review",
+              label: "needs review",
+              value: summary.needs_review,
               tone: "fail"
             },
             {
-              active: statusFilters.Passed,
-              filterKey: "Passed",
-              label: "passed",
+              active: statusFilters.Approved,
+              filterKey: "Approved",
+              label: "approved",
               value: summary.passed,
               tone: "passed"
             }

@@ -17,7 +17,6 @@ import { ApplicationsSection } from "./components/ApplicationsSection";
 import { SearchPanel } from "./components/SearchPanel";
 import { UploadDropSurface } from "./components/UploadDropSurface";
 import { WorkflowHeader } from "./components/WorkflowHeader";
-import { ReviewOverrideDialog } from "./components/WorkflowDialogs";
 import { createPreviewUrl, mergeFilesByName, revokePreviewUrl } from "./filePreviews";
 import {
   ApplicationPackageRecord,
@@ -34,18 +33,12 @@ import {
   matchesApplicationSearch
 } from "./searchFilters";
 import {
-  buildReviewOverrideWarning,
-  canMarkApplicationFail,
-  canMarkApplicationPass,
   recordKey,
   resolvedFieldDecisions,
   statusFromFieldDecisions,
   summarizeApplications
 } from "./recordStatus";
-import type {
-  AdvancedSearchFilters,
-  ReviewOverrideWarning
-} from "./types";
+import type { AdvancedSearchFilters } from "./types";
 
 function errorMessageFor(error: unknown): string {
   if (error instanceof VerificationApiError) {
@@ -67,13 +60,12 @@ export function PackageWorkflow() {
   const [isDragging, setIsDragging] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const [checkError, setCheckError] = useState<string | null>(null);
-  const [reviewOverrideWarning, setReviewOverrideWarning] = useState<ReviewOverrideWarning | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false);
   const [statusFilters, setStatusFilters] = useState<Record<VisibleStatus, boolean>>({
     "Pending Check": true,
-    Passed: true,
-    Fail: true
+    Approved: true,
+    "Needs Review": true
   });
   const [advancedFilters, setAdvancedFilters] = useState<AdvancedSearchFilters>({
     abvOperator: "any",
@@ -107,9 +99,6 @@ export function PackageWorkflow() {
         ),
     [filteredRecords]
   );
-  const selectedCanFail = selectedRecord ? canMarkApplicationFail(selectedRecord) : false;
-  const selectedCanPass = selectedRecord ? canMarkApplicationPass(selectedRecord) : false;
-
   useEffect(() => {
     recordsRef.current = records;
   }, [records]);
@@ -230,7 +219,7 @@ export function PackageWorkflow() {
       setRecords((current) =>
         current.map((candidate) =>
           candidate.package_id === packageId
-            ? { ...candidate, item_error: message, status: "Fail" }
+            ? { ...candidate, item_error: message, status: "Needs Review" }
             : candidate
         )
       );
@@ -292,44 +281,6 @@ export function PackageWorkflow() {
     setSelectedPackageId(null);
   }
 
-  function handlePassClick(record: ApplicationPackageRecord) {
-    if (canMarkApplicationPass(record)) {
-      setRecordStatus(record.package_id, "Passed");
-      return;
-    }
-
-    setReviewOverrideWarning(buildReviewOverrideWarning(record, "pass"));
-  }
-
-  function handleFailClick(record: ApplicationPackageRecord) {
-    if (canMarkApplicationFail(record)) {
-      void markApplicationFailed(record.package_id);
-      return;
-    }
-
-    setReviewOverrideWarning(buildReviewOverrideWarning(record, "fail"));
-  }
-
-  function confirmReviewOverride() {
-    if (!reviewOverrideWarning) {
-      return;
-    }
-
-    if (reviewOverrideWarning.action === "pass") {
-      setRecordStatus(reviewOverrideWarning.packageId, "Passed");
-    } else {
-      setRecordStatus(reviewOverrideWarning.packageId, "Fail");
-    }
-    setReviewOverrideWarning(null);
-  }
-
-  function setRecordStatus(packageId: string, status: VisibleStatus) {
-    setRecords((current) =>
-      current.map((record) => (record.package_id === packageId ? { ...record, status } : record))
-    );
-    closeDetail();
-  }
-
   async function setFieldDecision(
     packageId: string,
     field: CanonicalLabelField,
@@ -379,17 +330,6 @@ export function PackageWorkflow() {
     }
   }
 
-  async function markApplicationFailed(packageId: string) {
-    const record = recordsRef.current.find((candidate) => candidate.package_id === packageId);
-    if (!record) {
-      return;
-    }
-
-    const fieldDecisions = resolvedFieldDecisions(record);
-    await applyBackendFieldDecisions(record, fieldDecisions);
-    closeDetail();
-  }
-
   function downloadDemoData() {
     const link = document.createElement("a");
     link.href = `${import.meta.env.BASE_URL}demo-data/${DEMO_DATA_ARCHIVE_FILENAME}`;
@@ -403,16 +343,16 @@ export function PackageWorkflow() {
         const allActive = VISIBLE_STATUSES.every((candidate) => current[candidate]);
         return {
           "Pending Check": !allActive,
-          Passed: !allActive,
-          Fail: !allActive
+          Approved: !allActive,
+          "Needs Review": !allActive
         };
       }
 
       if (VISIBLE_STATUSES.every((candidate) => current[candidate])) {
         return {
           "Pending Check": status === "Pending Check",
-          Passed: status === "Passed",
-          Fail: status === "Fail"
+          Approved: status === "Approved",
+          "Needs Review": status === "Needs Review"
         };
       }
 
@@ -477,22 +417,10 @@ export function PackageWorkflow() {
             detailHeadingRef={detailHeadingRef}
             isChecking={isChecking}
             onClose={closeDetail}
-            onFailClick={handleFailClick}
             onApplicationDataChange={updateApplicationData}
             onFieldDecision={setFieldDecision}
-            onPassClick={handlePassClick}
             onVerify={verifyApplication}
             record={selectedRecord}
-            selectedCanFail={selectedCanFail}
-            selectedCanPass={selectedCanPass}
-          />
-        )}
-
-        {reviewOverrideWarning && (
-          <ReviewOverrideDialog
-            onCancel={() => setReviewOverrideWarning(null)}
-            onConfirm={confirmReviewOverride}
-            warning={reviewOverrideWarning}
           />
         )}
 

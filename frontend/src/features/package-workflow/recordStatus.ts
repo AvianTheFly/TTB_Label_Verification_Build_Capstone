@@ -8,9 +8,7 @@ import type {
 import type {
   ApplicationSummary,
   FieldDecisionMap,
-  PackageRecordKey,
-  ReviewOverrideAction,
-  ReviewOverrideWarning
+  PackageRecordKey
 } from "./types";
 
 export function sortedResults(result: VerificationResult | null): FieldResult[] {
@@ -22,11 +20,11 @@ export function recordKey(record: PackageRecordKey): string {
 }
 
 export function cardStatusClass(status: VisibleStatus): string {
-  if (status === "Passed") {
+  if (status === "Approved") {
     return "passed";
   }
-  if (status === "Fail") {
-    return "fail";
+  if (status === "Needs Review") {
+    return "review";
   }
   return "pending";
 }
@@ -39,14 +37,14 @@ export function summarizeApplications(records: ApplicationPackageRecord[]): Appl
   return records.reduce(
     (summary, record) => {
       summary.total += 1;
-      if (record.status === "Fail") {
-        summary.fail += 1;
-      } else if (record.status === "Passed") {
+      if (record.status === "Needs Review") {
+        summary.needs_review += 1;
+      } else if (record.status === "Approved") {
         summary.passed += 1;
       }
       return summary;
     },
-    { fail: 0, passed: 0, total: 0 }
+    { needs_review: 0, passed: 0, total: 0 }
   );
 }
 
@@ -103,48 +101,9 @@ export function statusFromFieldDecisions(
 ): VisibleStatus {
   const decisions = Object.values(resolvedFieldDecisions(record, overrides));
   if (decisions.some((decision) => decision === "fail")) {
-    return "Fail";
+    return "Needs Review";
   }
-  return "Passed";
-}
-
-export function canMarkApplicationFail(record: ApplicationPackageRecord): boolean {
-  const decisions = Object.values(resolvedFieldDecisions(record));
-  return decisions.some((decision) => decision === "fail");
-}
-
-export function canMarkApplicationPass(record: ApplicationPackageRecord): boolean {
-  return Object.values(resolvedFieldDecisions(record)).every((decision) => decision === "pass");
-}
-
-export function buildReviewOverrideWarning(
-  record: ApplicationPackageRecord,
-  action: ReviewOverrideAction
-): ReviewOverrideWarning {
-  const decisions = resolvedFieldDecisions(record);
-  const groupedFields = FIELD_CONFIGS.reduce(
-    (groups, field) => {
-      groups[decisions[field.name]].push(field.label);
-      return groups;
-    },
-    { fail: [] as string[], pass: [] as string[] }
-  );
-
-  const groups =
-    action === "pass"
-      ? [{ label: "Fail", fields: groupedFields.fail }].filter((group) => group.fields.length > 0)
-      : [{ label: "Pass", fields: groupedFields.pass }];
-
-  return {
-    action,
-    confirmLabel: action === "pass" ? "Proceed With Pass" : "Proceed With Fail",
-    groups,
-    packageId: record.package_id,
-    title:
-      action === "pass"
-        ? "Pass this application anyway?"
-        : "Fail this application anyway?"
-  };
+  return "Approved";
 }
 
 function defaultFieldDecision(
