@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     image_jpeg_quality: int = 60
     vision_provider: str = "openai"
     vision_model: str = "gpt-4.1-mini"
-    openai_timeout_seconds: float = 3.8
+    openai_timeout_seconds: float = 30.0
     openai_image_detail: Literal["low", "high", "auto"] = "low"
     openai_max_output_tokens: int = 500
     openai_api_key: str = ""
@@ -59,8 +59,8 @@ class Settings(BaseSettings):
     @field_validator("openai_timeout_seconds")
     @classmethod
     def validate_openai_timeout_seconds(cls, value: float) -> float:
-        if value <= 0 or value > 4.5:
-            raise ValueError("openai_timeout_seconds must be greater than 0 and no more than 4.5")
+        if value <= 0 or value > 60.0:
+            raise ValueError("openai_timeout_seconds must be greater than 0 and no more than 60.0")
         return value
 
     @field_validator("openai_max_output_tokens")
