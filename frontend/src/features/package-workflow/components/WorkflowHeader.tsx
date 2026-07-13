@@ -1,5 +1,4 @@
 interface WorkflowHeaderProps {
-  incompleteCount: number;
   isChecking: boolean;
   onDownloadDemoData: () => void;
   onSubmitClick: () => void;
@@ -7,7 +6,6 @@ interface WorkflowHeaderProps {
 }
 
 export function WorkflowHeader({
-  incompleteCount,
   isChecking,
   onDownloadDemoData,
   onSubmitClick,
@@ -22,7 +20,7 @@ export function WorkflowHeader({
       <div className="top-actions" aria-label="Application actions">
         {isChecking && (
           <p className="loading-message">
-            Checking uploaded applications...
+            Checking application...
           </p>
         )}
         <button className="secondary-button" onClick={onDownloadDemoData} type="button">
@@ -30,7 +28,7 @@ export function WorkflowHeader({
         </button>
         <button
           className="secondary-button"
-          disabled={recordCount === 0 && incompleteCount === 0}
+          disabled={recordCount === 0}
           onClick={onSubmitClick}
           type="button"
         >

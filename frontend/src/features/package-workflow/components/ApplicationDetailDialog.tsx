@@ -8,6 +8,12 @@ import { ZoomableLabelImage } from "./ZoomableLabelImage";
 
 interface ApplicationDetailDialogProps {
   detailHeadingRef: RefObject<HTMLHeadingElement>;
+  isChecking: boolean;
+  onApplicationDataChange: (
+    packageId: string,
+    field: CanonicalLabelField,
+    value: string
+  ) => void;
   onClose: () => void;
   onFailClick: (record: ApplicationPackageRecord) => void;
   onFieldDecision: (
@@ -17,6 +23,7 @@ interface ApplicationDetailDialogProps {
   ) => void;
   onPassClick: (record: ApplicationPackageRecord) => void;
   onSetRecordStatus: (packageId: string, status: VisibleStatus) => void;
+  onVerify: (packageId: string) => void;
   record: ApplicationPackageRecord;
   selectedCanFail: boolean;
   selectedCanPass: boolean;
@@ -24,15 +31,20 @@ interface ApplicationDetailDialogProps {
 
 export function ApplicationDetailDialog({
   detailHeadingRef,
+  isChecking,
+  onApplicationDataChange,
   onClose,
   onFailClick,
   onFieldDecision,
   onPassClick,
   onSetRecordStatus,
+  onVerify,
   record,
   selectedCanFail,
   selectedCanPass
 }: ApplicationDetailDialogProps) {
+  const title = record.application_data.brand_name.trim() || record.image_filename;
+
   return (
     <div
       className="detail-overlay"
@@ -67,7 +79,7 @@ export function ApplicationDetailDialog({
             <div>
               <p className="result-label">Brand Name</p>
               <h2 id="detail-title" ref={detailHeadingRef} tabIndex={-1}>
-                {record.application_data.brand_name}
+                {title}
               </h2>
             </div>
           </div>
@@ -84,17 +96,36 @@ export function ApplicationDetailDialog({
         <div className="detail-layout">
           {record.image_preview_url && (
             <ZoomableLabelImage
-              alt={`Label image for ${record.application_data.brand_name}`}
+              alt={`Label image for ${title}`}
               src={record.image_preview_url}
             />
           )}
 
           <div className="detail-fields">
-            <DataPanel onFieldDecision={onFieldDecision} record={record} />
+            <DataPanel
+              onApplicationDataChange={onApplicationDataChange}
+              onFieldDecision={onFieldDecision}
+              record={record}
+            />
           </div>
         </div>
 
+        {record.item_error && (
+          <div className="error-panel" role="alert">
+            <strong>This application needs attention.</strong>
+            <p>{record.item_error}</p>
+          </div>
+        )}
+
         <div className="review-actions" aria-label="Review decision">
+          <button
+            className="decision-button decision-button--review"
+            disabled={isChecking}
+            onClick={() => onVerify(record.package_id)}
+            type="button"
+          >
+            {isChecking ? "VERIFYING..." : "SUBMIT / VERIFY"}
+          </button>
           <button
             aria-disabled={!selectedCanFail}
             className={`decision-button decision-button--fail ${
@@ -127,4 +158,3 @@ export function ApplicationDetailDialog({
     </div>
   );
 }
-

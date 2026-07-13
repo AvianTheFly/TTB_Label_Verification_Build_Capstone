@@ -14,6 +14,11 @@ import {
 import { SectionStats } from "./SectionStats";
 
 interface DataPanelProps {
+  onApplicationDataChange: (
+    packageId: string,
+    field: CanonicalLabelField,
+    value: string
+  ) => void;
   onFieldDecision: (
     packageId: string,
     field: CanonicalLabelField,
@@ -22,7 +27,7 @@ interface DataPanelProps {
   record: ApplicationPackageRecord;
 }
 
-export function DataPanel({ onFieldDecision, record }: DataPanelProps) {
+export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: DataPanelProps) {
   const [fieldFilters, setFieldFilters] = useState<Record<FieldReviewDecision, boolean>>({
     fail: true,
     review: true,
@@ -152,14 +157,31 @@ export function DataPanel({ onFieldDecision, record }: DataPanelProps) {
               </div>
               <div className="data-pair">
                 <div className="data-value-group">
-                  <span className="data-value-label">Application</span>
-                  <p
-                    aria-label={`Application Value ${field.label}`}
-                    className="application-value-text"
-                    id={applicationId}
-                  >
-                    {record.application_data[field.name]}
-                  </p>
+                  <label className="data-value-label" htmlFor={applicationId}>
+                    Application
+                  </label>
+                  {field.multiline ? (
+                    <textarea
+                      aria-label={`Application Value ${field.label}`}
+                      className="application-value-input application-value-input--multiline"
+                      id={applicationId}
+                      onChange={(event) =>
+                        onApplicationDataChange(record.package_id, field.name, event.target.value)
+                      }
+                      value={record.application_data[field.name]}
+                    />
+                  ) : (
+                    <input
+                      aria-label={`Application Value ${field.label}`}
+                      className="application-value-input"
+                      id={applicationId}
+                      onChange={(event) =>
+                        onApplicationDataChange(record.package_id, field.name, event.target.value)
+                      }
+                      type="text"
+                      value={record.application_data[field.name]}
+                    />
+                  )}
                 </div>
                 <div className="data-value-group">
                   <span className="data-value-label">AI Detected</span>
@@ -227,4 +249,3 @@ function DecisionIcon({ decision }: { decision: FieldReviewDecision }) {
     </svg>
   );
 }
-

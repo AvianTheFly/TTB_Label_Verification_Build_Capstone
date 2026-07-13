@@ -3,7 +3,6 @@ import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "re
 import {
   VerificationApiError,
   compareExtractedData,
-  verifyBatch,
   verifyLabel
 } from "../../api/verification";
 import type {
@@ -12,9 +11,9 @@ import type {
   VerificationResult
 } from "../../types/api";
 import { DEMO_DATA_ARCHIVE_FILENAME, VISIBLE_STATUSES } from "./constants";
+import { FIELD_CONFIGS } from "../labelFields";
 import { ApplicationDetailDialog } from "./components/ApplicationDetailDialog";
 import { ApplicationsSection } from "./components/ApplicationsSection";
-import { IncompleteApplicationsSection } from "./components/IncompleteApplicationsSection";
 import { SearchPanel } from "./components/SearchPanel";
 import { UploadDropSurface } from "./components/UploadDropSurface";
 import { WorkflowHeader } from "./components/WorkflowHeader";
@@ -22,7 +21,6 @@ import { ReviewOverrideDialog, SubmitWarningDialog } from "./components/Workflow
 import { createPreviewUrl, mergeFilesByName, revokePreviewUrl } from "./filePreviews";
 import {
   ApplicationPackageRecord,
-  IncompleteApplicationRecord,
   PackageValidationError,
   VisibleStatus,
   buildPretendSubmissionZip,
@@ -33,11 +31,8 @@ import {
   statusFromResult
 } from "./packageWorkflowUtils";
 import {
-  allIncompleteFilters,
   allStatusFilters,
-  incompleteFilterKey,
-  matchesApplicationSearch,
-  matchesIncompleteSearch
+  matchesApplicationSearch
 } from "./searchFilters";
 import {
   buildReviewOverrideWarning,
@@ -46,12 +41,10 @@ import {
   promoteReviewFieldsToFail,
   recordKey,
   statusFromFieldDecisions,
-  summarizeApplications,
-  summarizeIncompleteApplications
+  summarizeApplications
 } from "./recordStatus";
 import type {
   AdvancedSearchFilters,
-  IncompleteFilter,
   ReviewOverrideWarning
 } from "./types";
 
@@ -67,11 +60,9 @@ export function PackageWorkflow() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const detailHeadingRef = useRef<HTMLHeadingElement>(null);
   const recordsRef = useRef<ApplicationPackageRecord[]>([]);
-  const incompleteRecordsRef = useRef<IncompleteApplicationRecord[]>([]);
   const uploadedFilesRef = useRef<File[]>([]);
   const dragDepthRef = useRef(0);
   const [records, setRecords] = useState<ApplicationPackageRecord[]>([]);
-  const [incompleteRecords, setIncompleteRecords] = useState<IncompleteApplicationRecord[]>([]);
   const [validationErrors, setValidationErrors] = useState<PackageValidationError[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -86,10 +77,6 @@ export function PackageWorkflow() {
     Passed: true,
     "Needs Review": true,
     Fail: true
-  });
-  const [incompleteFilters, setIncompleteFilters] = useState<Record<IncompleteFilter, boolean>>({
-    json: true,
-    image: true
   });
   const [advancedFilters, setAdvancedFilters] = useState<AdvancedSearchFilters>({
     abvOperator: "any",
@@ -107,20 +94,11 @@ export function PackageWorkflow() {
     () => records.filter((record) => matchesApplicationSearch(record, searchTerm, allStatusFilters(), advancedFilters)),
     [records, searchTerm, advancedFilters]
   );
-  const searchMatchedIncompleteRecords = useMemo(
-    () => incompleteRecords.filter((record) => matchesIncompleteSearch(record, searchTerm, allIncompleteFilters())),
-    [incompleteRecords, searchTerm]
-  );
   const filteredRecords = useMemo(
     () => searchMatchedRecords.filter((record) => statusFilters[record.status]),
     [searchMatchedRecords, statusFilters]
   );
-  const filteredIncompleteRecords = useMemo(
-    () => searchMatchedIncompleteRecords.filter((record) => incompleteFilters[incompleteFilterKey(record)]),
-    [searchMatchedIncompleteRecords, incompleteFilters]
-  );
   const applicationSummary = summarizeApplications(searchMatchedRecords);
-  const incompleteSummary = summarizeIncompleteApplications(searchMatchedIncompleteRecords);
   const sortedRecords = useMemo(
     () =>
       filteredRecords
@@ -139,16 +117,9 @@ export function PackageWorkflow() {
     recordsRef.current = records;
   }, [records]);
 
-  useEffect(() => {
-    incompleteRecordsRef.current = incompleteRecords;
-  }, [incompleteRecords]);
-
   useEffect(
     () => () => {
       for (const record of recordsRef.current) {
-        revokePreviewUrl(record.image_preview_url);
-      }
-      for (const record of incompleteRecordsRef.current) {
         revokePreviewUrl(record.image_preview_url);
       }
     },
@@ -161,16 +132,13 @@ export function PackageWorkflow() {
 
     const parsed = await parseApplicationPackages(files);
     const currentRecords = recordsRef.current;
-    const currentIncompleteRecords = incompleteRecordsRef.current;
     const currentByKey = new Map(currentRecords.map((record) => [recordKey(record), record]));
-    const recordsToCheck: ApplicationPackageRecord[] = [];
     const nextRecords = parsed.records.map((record) => {
       const existing = currentByKey.get(recordKey(record));
       if (existing) {
         return {
           ...existing,
           image_file: record.image_file,
-          application_data: record.application_data,
           json_filename: record.json_filename,
           image_filename: record.image_filename
         };
@@ -180,32 +148,21 @@ export function PackageWorkflow() {
         ...record,
         image_preview_url: createPreviewUrl(record.image_file)
       };
-      recordsToCheck.push(nextRecord);
       return nextRecord;
     });
-    const nextIncompleteRecords = parsed.incomplete_records.map((record) => ({
-      ...record,
-      image_preview_url: record.image_file ? createPreviewUrl(record.image_file) : ""
-    }));
 
     for (const record of currentRecords) {
       if (!nextRecords.some((nextRecord) => nextRecord.image_preview_url === record.image_preview_url)) {
         revokePreviewUrl(record.image_preview_url);
       }
     }
-    for (const record of currentIncompleteRecords) {
-      revokePreviewUrl(record.image_preview_url);
-    }
 
     setRecords(nextRecords);
-    setIncompleteRecords(nextIncompleteRecords);
     setValidationErrors(parsed.errors);
     setSelectedPackageId((current) =>
       current && nextRecords.some((record) => record.package_id === current) ? current : null
     );
     setCheckError(null);
-
-    void checkApplications(recordsToCheck);
   }
 
   function handleFileInputChange(event: ChangeEvent<HTMLInputElement>) {
@@ -241,9 +198,26 @@ export function PackageWorkflow() {
     void importFiles(event.dataTransfer.files);
   }
 
-  async function checkApplications(recordsToCheck: ApplicationPackageRecord[]) {
-    const validRecords = recordsToCheck.filter((record) => record.validation_errors.length === 0);
-    if (validRecords.length === 0) {
+  async function verifyApplication(packageId: string) {
+    const record = recordsRef.current.find((candidate) => candidate.package_id === packageId);
+    if (!record) {
+      return;
+    }
+
+    const missingFields = FIELD_CONFIGS.filter(
+      (field) => !record.application_data[field.name].trim()
+    );
+    if (missingFields.length > 0) {
+      setRecords((current) =>
+        current.map((candidate) =>
+          candidate.package_id === packageId
+            ? {
+                ...candidate,
+                item_error: `Enter ${missingFields.map((field) => field.label).join(", ")} before verifying.`
+              }
+            : candidate
+        )
+      );
       return;
     }
 
@@ -251,57 +225,18 @@ export function PackageWorkflow() {
     setCheckError(null);
 
     try {
-      if (validRecords.length === 1) {
-        const record = validRecords[0];
-        const result = await verifyLabel(record.image_file, record.application_data);
-        updateRecordWithResult(record.package_id, result);
-        return;
-      }
-
-      const batchResult = await verifyBatch(
-        validRecords.map((record) => ({
-          image: record.image_file,
-          application_data: record.application_data
-        }))
-      );
-
-      setRecords((current) =>
-        current.map((record) => {
-          const batchIndex = validRecords.findIndex(
-            (validRecord) => validRecord.package_id === record.package_id
-          );
-          if (batchIndex < 0) {
-            return record;
-          }
-
-          const item = batchResult.items.find((candidate) => candidate.index === batchIndex);
-          if (!item) {
-            return record;
-          }
-
-          if (item.result) {
-            const extractedData = extractedDataFromResult(item.result);
-            return {
-              ...record,
-              original_extracted_data: extractedData,
-              reviewed_extracted_data: extractedData,
-              comparison_result: item.result,
-              field_decisions: {},
-              status: statusFromResult(item.result),
-              item_error: null
-            };
-          }
-
-          return {
-            ...record,
-            comparison_result: null,
-            status: "Needs Review",
-            item_error: item.error?.message ?? "This application could not be checked."
-          };
-        })
-      );
+      const result = await verifyLabel(record.image_file, record.application_data);
+      updateRecordWithResult(record.package_id, result);
     } catch (error) {
-      setCheckError(errorMessageFor(error));
+      const message = errorMessageFor(error);
+      setCheckError(message);
+      setRecords((current) =>
+        current.map((candidate) =>
+          candidate.package_id === packageId
+            ? { ...candidate, item_error: message, status: "Needs Review" }
+            : candidate
+        )
+      );
     } finally {
       setIsChecking(false);
     }
@@ -319,6 +254,32 @@ export function PackageWorkflow() {
               comparison_result: result,
               field_decisions: {},
               status: statusFromResult(result),
+              item_error: null
+            }
+          : record
+      )
+    );
+  }
+
+  function updateApplicationData(
+    packageId: string,
+    field: CanonicalLabelField,
+    value: string
+  ) {
+    setRecords((current) =>
+      current.map((record) =>
+        record.package_id === packageId
+          ? {
+              ...record,
+              application_data: {
+                ...record.application_data,
+                [field]: value
+              },
+              original_extracted_data: null,
+              reviewed_extracted_data: null,
+              comparison_result: null,
+              field_decisions: {},
+              status: "Pending Check",
               item_error: null
             }
           : record
@@ -433,7 +394,7 @@ export function PackageWorkflow() {
   }
 
   async function downloadPretendSubmission() {
-    const archive = await buildPretendSubmissionZip(records, incompleteRecords);
+    const archive = await buildPretendSubmissionZip(records, []);
     const url = URL.createObjectURL(archive);
     const link = document.createElement("a");
     link.href = url;
@@ -486,30 +447,6 @@ export function PackageWorkflow() {
     });
   }
 
-  function toggleIncompleteFilter(filter: IncompleteFilter | "total") {
-    setIncompleteFilters((current) => {
-      if (filter === "total") {
-        const allActive = current.json && current.image;
-        return {
-          image: !allActive,
-          json: !allActive
-        };
-      }
-
-      if (current.json && current.image) {
-        return {
-          image: filter === "image",
-          json: filter === "json"
-        };
-      }
-
-      return {
-        ...current,
-        [filter]: !current[filter]
-      };
-    });
-  }
-
   function updateAdvancedFilter<Key extends keyof AdvancedSearchFilters>(
     key: Key,
     value: AdvancedSearchFilters[Key]
@@ -524,7 +461,6 @@ export function PackageWorkflow() {
     <main className="app-shell">
       <section className="tool-layout package-workflow" aria-labelledby="package-title">
         <WorkflowHeader
-          incompleteCount={incompleteRecords.length}
           isChecking={isChecking}
           onDownloadDemoData={downloadDemoData}
           onSubmitClick={() => setIsSubmitWarningOpen(true)}
@@ -560,24 +496,19 @@ export function PackageWorkflow() {
             statusFilters={statusFilters}
             summary={applicationSummary}
           />
-
-          <IncompleteApplicationsSection
-            allRecordCount={incompleteRecords.length}
-            filteredRecords={filteredIncompleteRecords}
-            filters={incompleteFilters}
-            onToggleFilter={toggleIncompleteFilter}
-            summary={incompleteSummary}
-          />
         </UploadDropSurface>
 
         {selectedRecord && (
           <ApplicationDetailDialog
             detailHeadingRef={detailHeadingRef}
+            isChecking={isChecking}
             onClose={closeDetail}
             onFailClick={handleFailClick}
+            onApplicationDataChange={updateApplicationData}
             onFieldDecision={setFieldDecision}
             onPassClick={handlePassClick}
             onSetRecordStatus={setRecordStatus}
+            onVerify={verifyApplication}
             record={selectedRecord}
             selectedCanFail={selectedCanFail}
             selectedCanPass={selectedCanPass}
