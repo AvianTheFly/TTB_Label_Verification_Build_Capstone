@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 from app.domain.models import ExtractedLabel
 from app.services.image_preprocess import PreprocessedImage
 
-DEFAULT_OPENAI_VISION_MODEL = "gpt-5.5"
+DEFAULT_OPENAI_VISION_MODEL = "gpt-4.1-mini"
 DEFAULT_OPENAI_TIMEOUT_SECONDS = 20.0
 DEFAULT_OPENAI_IMAGE_DETAIL = "high"
 

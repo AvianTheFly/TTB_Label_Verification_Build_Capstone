@@ -75,3 +75,12 @@ def test_live_checklist_rejects_invalid_field_status_literal() -> None:
         assert "invalid field status" in str(exc)
     else:
         raise AssertionError("Expected invalid field status assertion")
+
+
+def test_live_checklist_percentile_uses_nearest_rank() -> None:
+    live_checklist = load_live_checklist()
+
+    values = [500, 100, 300, 200, 400]
+
+    assert live_checklist._percentile(values, 50) == 300
+    assert live_checklist._percentile(values, 95) == 500

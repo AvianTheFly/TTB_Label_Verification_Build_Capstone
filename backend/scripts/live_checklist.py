@@ -4,6 +4,7 @@ import mimetypes
 import sys
 import time
 import uuid
+from math import ceil
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
@@ -35,7 +36,17 @@ def main() -> int:
     parser.add_argument("--application-data", type=Path, default=_default_application_data_path())
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--max-latency-ms", type=int, default=5000)
+    parser.add_argument(
+        "--runs",
+        type=int,
+        default=1,
+        help="Number of verification requests to run for latency measurement.",
+    )
     args = parser.parse_args()
+
+    if args.runs < 1:
+        print("--runs must be at least 1", file=sys.stderr)
+        return 2
 
     endpoint = _verify_endpoint(args.url)
     image_path = args.image.resolve()
@@ -50,21 +61,40 @@ def main() -> int:
 
     try:
         application_data = _load_application_data(application_data_path)
-        body, content_type = _multipart_body(image_path, application_data)
-        started = time.perf_counter()
-        response_body = _post(endpoint, body, content_type, timeout=args.timeout)
-        elapsed_ms = round((time.perf_counter() - started) * 1000)
-        result = json.loads(response_body)
-        _assert_verification_result(result, max_latency_ms=args.max_latency_ms)
+        results = []
+        round_trip_ms = []
+        for _ in range(args.runs):
+            body, content_type = _multipart_body(image_path, application_data)
+            started = time.perf_counter()
+            response_body = _post(endpoint, body, content_type, timeout=args.timeout)
+            elapsed_ms = round((time.perf_counter() - started) * 1000)
+            result = json.loads(response_body)
+            _assert_verification_result(result, max_latency_ms=args.max_latency_ms)
+            results.append(result)
+            round_trip_ms.append(elapsed_ms)
     except (ValueError, AssertionError, OSError, URLError, HTTPError) as exc:
         print(f"Live checklist failed: {exc}", file=sys.stderr)
         return 1
 
+    latest = results[-1]
+    if args.runs == 1:
+        print(
+            "Live checklist passed: "
+            f"overall_verdict={latest['overall_verdict']} "
+            f"latency_ms={latest['latency_ms']} "
+            f"round_trip_ms={round_trip_ms[-1]}"
+        )
+        return 0
+
+    latency_values = [result["latency_ms"] for result in results]
     print(
         "Live checklist passed: "
-        f"overall_verdict={result['overall_verdict']} "
-        f"latency_ms={result['latency_ms']} "
-        f"round_trip_ms={elapsed_ms}"
+        f"runs={args.runs} "
+        f"latest_overall_verdict={latest['overall_verdict']} "
+        f"latency_p50_ms={_percentile(latency_values, 50)} "
+        f"latency_p95_ms={_percentile(latency_values, 95)} "
+        f"round_trip_p50_ms={_percentile(round_trip_ms, 50)} "
+        f"round_trip_p95_ms={_percentile(round_trip_ms, 95)}"
     )
     return 0
 
@@ -156,6 +186,14 @@ def _assert_verification_result(result: object, max_latency_ms: int) -> None:
         assert {"field", "match_type", "expected", "found", "status", "message"} <= set(item), (
             "field result is missing required keys"
         )
+
+
+def _percentile(values: list[int], percentile: int) -> int:
+    if not values:
+        raise ValueError("values must not be empty")
+    sorted_values = sorted(values)
+    index = ceil((percentile / 100) * len(sorted_values)) - 1
+    return sorted_values[max(0, min(index, len(sorted_values) - 1))]
 
 
 if __name__ == "__main__":
