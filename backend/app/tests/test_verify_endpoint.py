@@ -130,7 +130,7 @@ def test_valid_verify_submission_returns_full_verification_result() -> None:
         assert result["expected"] is not None
         assert result["found"] is not None
     assert len(fake_service.calls) == 1
-    assert fake_service.calls[0].content_type == "image/jpeg"
+    assert fake_service.calls[0].content_type == "image/png"
 
 
 def test_response_includes_expected_found_for_failures_and_needs_review() -> None:

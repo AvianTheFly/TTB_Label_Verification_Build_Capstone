@@ -144,6 +144,14 @@ class OpenAIVisionService:
             ),
         )
 
+    @property
+    def model(self) -> str:
+        return self._model
+
+    def warm_client(self) -> None:
+        if self._client is None:
+            self._build_client()
+
     async def extract_label(self, image: PreprocessedImage) -> ExtractedLabel:
         client_build_start = perf_counter()
         client = self._client or self._build_client()

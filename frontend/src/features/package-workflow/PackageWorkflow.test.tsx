@@ -140,8 +140,7 @@ function buttonWithLabel(label: string): HTMLButtonElement {
   return button;
 }
 
-async function chooseFiles(files: File[], options: { acceptPreview?: boolean } = {}) {
-  const { acceptPreview = true } = options;
+async function chooseFiles(files: File[]) {
   await act(async () => {
     Object.defineProperty(fileInput(), "files", {
       configurable: true,
@@ -150,9 +149,6 @@ async function chooseFiles(files: File[], options: { acceptPreview?: boolean } =
     fileInput().dispatchEvent(new Event("change", { bubbles: true }));
   });
   await waitForAsyncUpdates();
-  if (acceptPreview && container.textContent?.includes("Review Images")) {
-    await clickButton("Use Images");
-  }
 }
 
 async function clickButton(text: string) {
@@ -385,75 +381,17 @@ describe("PackageWorkflow", () => {
     expect(anchors[0].href).toContain("/demo-data/demo-inputs.zip");
   });
 
-  it("previews selected images before adding applications", async () => {
+  it("adds selected images as applications immediately", async () => {
     vi.stubGlobal("fetch", vi.fn());
 
     await renderPackageWorkflow();
-    await chooseFiles([imageFile("first.png"), imageFile("second.png")], {
-      acceptPreview: false
-    });
-
-    expect(container.textContent).toContain("Review Images");
-    expect(container.textContent).toContain("2 images selected");
-    expect(container.querySelectorAll(".package-card")).toHaveLength(0);
-
-    await clickButton("Use Images");
+    await chooseFiles([imageFile("first.png"), imageFile("second.png")]);
 
     expect(container.textContent).not.toContain("Review Images");
     expect(container.textContent).toContain("first.png");
     expect(container.textContent).toContain("second.png");
     expect(container.querySelectorAll(".package-card")).toHaveLength(2);
     expect(fetch).not.toHaveBeenCalled();
-  });
-
-  it("removes a single image from the preview before accepting", async () => {
-    vi.stubGlobal("fetch", vi.fn());
-
-    await renderPackageWorkflow();
-    await chooseFiles([imageFile("first.png"), imageFile("second.png")], {
-      acceptPreview: false
-    });
-
-    await clickButtonLabel("Remove first.png");
-    await clickButton("Use Images");
-
-    expect(container.textContent).not.toContain("first.png");
-    expect(container.textContent).toContain("second.png");
-    expect(container.querySelectorAll(".package-card")).toHaveLength(1);
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  it("cancels selected images before they become applications", async () => {
-    vi.stubGlobal("fetch", vi.fn());
-
-    await renderPackageWorkflow();
-    await chooseFiles([imageFile("cancelled.png")], {
-      acceptPreview: false
-    });
-
-    await clickButton("Cancel");
-
-    expect(container.textContent).not.toContain("Review Images");
-    expect(container.textContent).not.toContain("cancelled.png");
-    expect(container.querySelectorAll(".package-card")).toHaveLength(0);
-    expect(fetch).not.toHaveBeenCalled();
-  });
-
-  it("opens a larger image preview from a thumbnail", async () => {
-    await renderPackageWorkflow();
-    await chooseFiles([imageFile("first.png"), imageFile("second.png")], {
-      acceptPreview: false
-    });
-
-    const firstPreview = container.querySelector('img[alt="Large preview of first.png"]');
-    expect(firstPreview).toBeInstanceOf(HTMLImageElement);
-    expect((firstPreview as HTMLImageElement).src).toContain("blob:first.png");
-
-    await clickButtonLabel("Open larger preview for second.png");
-
-    const secondPreview = container.querySelector('img[alt="Large preview of second.png"]');
-    expect(secondPreview).toBeInstanceOf(HTMLImageElement);
-    expect((secondPreview as HTMLImageElement).src).toContain("blob:second.png");
   });
 
   it("adds later uploads to the current batch instead of replacing them", async () => {

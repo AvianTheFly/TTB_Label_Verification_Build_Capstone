@@ -1,5 +1,7 @@
 import logging
 import sys
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -8,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.batch import router as batch_router
 from app.api.compare import router as compare_router
+from app.api.dependencies import warm_vision_service
 from app.api.health import router as health_router
 from app.api.verify import router as verify_router
 from app.core.config import get_settings
@@ -28,10 +31,17 @@ def configure_app_logging() -> None:
     app_logger.addHandler(handler)
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    _ = app
+    warm_vision_service()
+    yield
+
+
 def create_app() -> FastAPI:
     configure_app_logging()
     settings = get_settings()
-    app = FastAPI(title=settings.app_name, version=settings.app_version)
+    app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
 
     app.add_middleware(
         CORSMiddleware,
