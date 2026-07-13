@@ -299,6 +299,27 @@ async def test_openai_provider_uses_strict_structured_output_and_prompt_rules() 
 
 
 @pytest.mark.asyncio
+async def test_openai_provider_logs_timing_metadata_without_payload_contents(caplog) -> None:
+    caplog.set_level("INFO", logger="app.services.vision")
+    image = preprocess_image(make_image_bytes(), "image/png")
+    payload = {field: None for field in CANONICAL_EXTRACTION_FIELDS}
+    payload["brand_name"] = "OLD TOM DISTILLERY"
+    client = FakeOpenAIClient(output_text=json.dumps(payload))
+    service = OpenAIVisionService(client=client, model="test-model")
+
+    await service.extract_label(image)
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("openai_vision_timing image_encode_ms=" in message for message in messages)
+    assert any("provider_call_ms=" in message for message in messages)
+    assert any("payload_extract_ms=" in message for message in messages)
+    assert any("payload_parse_ms=" in message for message in messages)
+    assert any("processed_size_bytes=" in message for message in messages)
+    assert any("model=test-model" in message for message in messages)
+    assert all("OLD TOM DISTILLERY" not in message for message in messages)
+
+
+@pytest.mark.asyncio
 async def test_openai_provider_timeout_is_categorized() -> None:
     image = preprocess_image(make_image_bytes(), "image/png")
     service = OpenAIVisionService(client=TimeoutOpenAIClient())

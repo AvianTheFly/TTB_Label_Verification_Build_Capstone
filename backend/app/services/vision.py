@@ -1,15 +1,20 @@
 import base64
 import json
+import logging
+from time import perf_counter
 from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
 from app.domain.models import ExtractedLabel
 from app.services.image_preprocess import PreprocessedImage
+from app.use_cases.timing import elapsed_ms
 
 DEFAULT_OPENAI_VISION_MODEL = "gpt-4.1-mini"
 DEFAULT_OPENAI_TIMEOUT_SECONDS = 4.5
 DEFAULT_OPENAI_IMAGE_DETAIL = "high"
+
+logger = logging.getLogger(__name__)
 
 CANONICAL_EXTRACTION_FIELDS = (
     "brand_name",
@@ -131,9 +136,12 @@ class OpenAIVisionService:
 
     async def extract_label(self, image: PreprocessedImage) -> ExtractedLabel:
         client = self._client or self._build_client()
+        encode_start = perf_counter()
         image_data_url = _image_data_url(image)
+        image_encode_ms = elapsed_ms(encode_start)
 
         try:
+            provider_start = perf_counter()
             response = await client.responses.create(
                 model=self._model,
                 input=[
@@ -159,6 +167,7 @@ class OpenAIVisionService:
                 },
                 store=False,
             )
+            provider_call_ms = elapsed_ms(provider_start)
         except TimeoutError as exc:
             raise VisionServiceError(
                 "provider_timeout",
@@ -168,8 +177,51 @@ class OpenAIVisionService:
             category = _category_for_provider_exception(exc)
             raise VisionServiceError(category, _safe_provider_message(category)) from exc
 
+        payload_start = perf_counter()
         payload = _extract_response_payload(response)
-        return parse_structured_label_payload(payload)
+        payload_extract_ms = elapsed_ms(payload_start)
+
+        parse_start = perf_counter()
+        extracted_label = parse_structured_label_payload(payload)
+        payload_parse_ms = elapsed_ms(parse_start)
+        total_provider_ms = image_encode_ms + provider_call_ms + payload_extract_ms + payload_parse_ms
+        logger.info(
+            (
+                "openai_vision_timing image_encode_ms=%s provider_call_ms=%s "
+                "payload_extract_ms=%s payload_parse_ms=%s total_provider_ms=%s "
+                "original_size_bytes=%s processed_size_bytes=%s original_pixels=%sx%s "
+                "processed_pixels=%sx%s model=%s image_detail=%s"
+            ),
+            image_encode_ms,
+            provider_call_ms,
+            payload_extract_ms,
+            payload_parse_ms,
+            total_provider_ms,
+            image.original_size_bytes,
+            image.processed_size_bytes,
+            image.original_width,
+            image.original_height,
+            image.processed_width,
+            image.processed_height,
+            self._model,
+            self._image_detail,
+            extra={
+                "image_encode_ms": image_encode_ms,
+                "provider_call_ms": provider_call_ms,
+                "payload_extract_ms": payload_extract_ms,
+                "payload_parse_ms": payload_parse_ms,
+                "total_provider_ms": total_provider_ms,
+                "original_size_bytes": image.original_size_bytes,
+                "processed_size_bytes": image.processed_size_bytes,
+                "original_width": image.original_width,
+                "original_height": image.original_height,
+                "processed_width": image.processed_width,
+                "processed_height": image.processed_height,
+                "model": self._model,
+                "image_detail": self._image_detail,
+            },
+        )
+        return extracted_label
 
     def _build_client(self) -> Any:
         if not self._api_key:
