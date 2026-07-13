@@ -79,14 +79,16 @@ def preprocess_image(
 
             image = ImageOps.exif_transpose(opened)
             original_width, original_height = image.size
-            if image.mode in {"RGBA", "LA"} or (
+            requires_composite = image.mode in {"RGBA", "LA"} or (
                 image.mode == "P" and "transparency" in image.info
-            ):
+            )
+            if requires_composite:
                 image = _composite_on_white(image)
             else:
                 image = image.convert("RGB")
 
-            if max(image.size) > max_dimension_px:
+            resized = max(image.size) > max_dimension_px
+            if resized:
                 image.thumbnail(
                     (max_dimension_px, max_dimension_px),
                     Image.Resampling.LANCZOS,
@@ -95,6 +97,16 @@ def preprocess_image(
             output = BytesIO()
             image.save(output, format="JPEG", quality=jpeg_quality, optimize=True)
             processed = output.getvalue()
+            processed_content_type = OUTPUT_CONTENT_TYPE
+
+            if (
+                not resized
+                and not requires_composite
+                and normalized_content_type in SUPPORTED_INPUT_CONTENT_TYPES
+                and len(image_bytes) <= len(processed)
+            ):
+                processed = image_bytes
+                processed_content_type = normalized_content_type
     except ImagePreprocessError:
         raise
     except (Image.DecompressionBombError, OSError, UnidentifiedImageError, ValueError) as exc:
@@ -105,7 +117,7 @@ def preprocess_image(
 
     return PreprocessedImage(
         content=processed,
-        content_type=OUTPUT_CONTENT_TYPE,
+        content_type=processed_content_type,
         original_content_type=normalized_content_type,
         original_size_bytes=len(image_bytes),
         processed_size_bytes=len(processed),

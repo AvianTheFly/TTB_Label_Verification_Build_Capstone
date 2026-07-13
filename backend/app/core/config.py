@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     max_batch_items: int = 25
     batch_concurrency_limit: int = 3
     single_label_timeout_seconds: float = 4.8
-    image_max_dimension: int = 768
+    image_max_dimension: int = 1600
     image_jpeg_quality: int = 60
     vision_provider: str = "openai"
     vision_model: str = "gpt-5.4-nano"

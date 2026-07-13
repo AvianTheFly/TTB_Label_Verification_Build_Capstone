@@ -168,6 +168,16 @@ def test_preprocess_downscales_and_reencodes_oversized_images() -> None:
     assert processed.processed_size_bytes > 0
 
 
+def test_preprocess_keeps_smaller_original_when_resize_is_not_needed() -> None:
+    original = make_image_bytes(size=(900, 1300), image_format="PNG")
+
+    processed = preprocess_image(original, "image/png")
+
+    assert processed.content_type == "image/png"
+    assert processed.content == original
+    assert processed.processed_size_bytes == len(original)
+
+
 def test_openai_provider_reads_model_and_timeout_from_settings() -> None:
     settings = Settings(
         _env_file=None,
@@ -184,6 +194,17 @@ def test_openai_provider_reads_model_and_timeout_from_settings() -> None:
     assert service._timeout_seconds == 3.25
     assert service._image_detail == "high"
     assert service._max_output_tokens == 650
+
+
+def test_openai_provider_warm_client_reuses_built_client() -> None:
+    client = FakeOpenAIClient(
+        output_text=json.dumps({field: None for field in CANONICAL_EXTRACTION_FIELDS})
+    )
+    service = OpenAIVisionService(client=client, model="test-model")
+
+    service.warm_client()
+
+    assert service._client is client
 
 
 def test_openai_provider_defaults_are_current_and_budgeted() -> None:

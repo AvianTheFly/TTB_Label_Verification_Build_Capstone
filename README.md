@@ -81,7 +81,7 @@ Production defaults:
 VISION_PROVIDER=openai
 VISION_MODEL=gpt-5.4-nano
 OPENAI_TIMEOUT_SECONDS=30
-IMAGE_MAX_DIMENSION=768
+IMAGE_MAX_DIMENSION=1600
 IMAGE_JPEG_QUALITY=60
 ```
 
@@ -112,7 +112,7 @@ commit real keys and do not add real keys to documentation.
 | `MAX_UPLOAD_MB` | No | `10` | Maximum uploaded image size per file. |
 | `MAX_BATCH_ITEMS` | No | `25` | Maximum labels accepted in one batch request. |
 | `BATCH_CONCURRENCY_LIMIT` | No | `3` | Maximum concurrent batch verification tasks. |
-| `IMAGE_MAX_DIMENSION` | No | `768` | Maximum image dimension after preprocessing. |
+| `IMAGE_MAX_DIMENSION` | No | `1600` | Maximum image dimension after preprocessing. |
 | `IMAGE_JPEG_QUALITY` | No | `60` | JPEG quality used for preprocessed images. |
 | `VISION_PROVIDER` | Yes in deploy | `openai` | Vision provider selector. Use `openai` for production. |
 | `VISION_MODEL` | Yes for real extraction | `gpt-5.4-nano` | OpenAI model used by the real vision provider. |

@@ -40,7 +40,7 @@ def test_production_safe_defaults_use_real_provider() -> None:
     assert settings.openai_timeout_seconds == 30.0
     assert settings.openai_image_detail == "low"
     assert settings.openai_max_output_tokens == 500
-    assert settings.image_max_dimension == 768
+    assert settings.image_max_dimension == 1600
     assert settings.image_jpeg_quality == 60
 
 
