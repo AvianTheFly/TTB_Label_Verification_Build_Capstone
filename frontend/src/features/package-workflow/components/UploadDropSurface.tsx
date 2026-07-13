@@ -40,12 +40,15 @@ export function UploadDropSurface({
         className={`package-dropzone ${isDragging ? "package-dropzone--active" : ""}`}
         data-testid="package-upload-area"
       >
-        <div>
-          <h2>Drop Label Images</h2>
-          <p>JPG, PNG, or WEBP label images</p>
+        <div className="package-dropzone__copy">
+          <span className="package-dropzone__icon" aria-hidden="true" />
+          <div>
+            <h2>Upload Labels</h2>
+            <p>JPG, PNG, or WEBP</p>
+          </div>
         </div>
         <button className="secondary-button" onClick={() => fileInputRef.current?.click()} type="button">
-          Choose Files
+          Choose Images
         </button>
         <input
           accept="image/*"

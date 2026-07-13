@@ -61,14 +61,6 @@ export function ApplicationDetailDialog({
         role="dialog"
       >
         <div className="detail-panel__header">
-          <button
-            aria-label="Close detail view"
-            className="detail-close-button"
-            onClick={onClose}
-            type="button"
-          >
-            X
-          </button>
           <div className="detail-title-group">
             <div className="detail-title-copy">
               <p className="detail-kicker">Application Review</p>
@@ -87,14 +79,22 @@ export function ApplicationDetailDialog({
               </div>
             </div>
           </div>
-          <button
-            aria-label={`Close detail view. Current status: ${record.status}`}
-            className={`status-chip status-chip--large status-chip--button status-chip--${cardStatusClass(record.status)}`}
-            onClick={onClose}
-            type="button"
-          >
-            {record.status}
-          </button>
+          <div className="detail-panel__status-area">
+            <span
+              aria-label={`Current status: ${record.status}`}
+              className={`status-chip status-chip--large status-chip--${cardStatusClass(record.status)}`}
+            >
+              {record.status}
+            </span>
+            <button
+              aria-label="Close detail view"
+              className="detail-close-button"
+              onClick={onClose}
+              type="button"
+            >
+              Close
+            </button>
+          </div>
         </div>
 
         <div className="detail-layout">
@@ -122,6 +122,13 @@ export function ApplicationDetailDialog({
         )}
 
         <div className="decision-actions" aria-label="Application decision">
+          <button
+            className="decision-button decision-button--secondary"
+            onClick={onClose}
+            type="button"
+          >
+            Done
+          </button>
           <button
             className="decision-button decision-button--verify"
             disabled={isChecking}

@@ -23,10 +23,10 @@ export function SearchPanel({
   return (
     <section className="search-panel" aria-label="Search applications">
       <label className="search-panel__field">
-        <span>Search</span>
+        <span>Find Application</span>
         <input
           onChange={(event) => onSearchTermChange(event.target.value)}
-          placeholder="Brand, application value, filename, or message"
+          placeholder="Brand, field value, filename, or message"
           type="search"
           value={searchTerm}
         />
@@ -37,7 +37,7 @@ export function SearchPanel({
         onClick={onToggleAdvancedSearch}
         type="button"
       >
-        Advanced Search
+        Filters
       </button>
       {isAdvancedSearchOpen && (
         <div className="advanced-search-panel">
@@ -117,4 +117,3 @@ export function SearchPanel({
     </section>
   );
 }
-
