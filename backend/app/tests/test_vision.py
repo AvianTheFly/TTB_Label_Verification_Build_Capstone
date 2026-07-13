@@ -187,7 +187,7 @@ def test_openai_provider_defaults_are_current_and_budgeted() -> None:
     service = OpenAIVisionService()
 
     assert service._model == DEFAULT_OPENAI_VISION_MODEL
-    assert DEFAULT_OPENAI_VISION_MODEL == "gpt-5.6-luna"
+    assert DEFAULT_OPENAI_VISION_MODEL == "gpt-4.1-mini"
     assert service._timeout_seconds == DEFAULT_OPENAI_TIMEOUT_SECONDS
     assert DEFAULT_OPENAI_TIMEOUT_SECONDS == 4.5
 

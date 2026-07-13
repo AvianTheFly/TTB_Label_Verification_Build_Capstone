@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     image_max_dimension: int = 1600
     image_jpeg_quality: int = 85
     vision_provider: str = "openai"
-    vision_model: str = "gpt-5.6-luna"
+    vision_model: str = "gpt-4.1-mini"
     openai_timeout_seconds: float = 4.5
     openai_api_key: str = ""
 

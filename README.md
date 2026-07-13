@@ -70,15 +70,13 @@ Production defaults:
 
 ```text
 VISION_PROVIDER=openai
-VISION_MODEL=gpt-5.6-luna
+VISION_MODEL=gpt-4.1-mini
 OPENAI_TIMEOUT_SECONDS=4.5
 IMAGE_MAX_DIMENSION=1600
 IMAGE_JPEG_QUALITY=85
 ```
 
-`gpt-5.6-luna` is the configured default model. It was checked against OpenAI's published model
-documentation on July 13, 2026; the docs list the GPT-5.6 family and state that the latest models
-support image input and vision through the Responses API.
+`gpt-4.1-mini` is the configured default model for the OpenAI vision provider.
 
 Supported providers:
 
@@ -110,7 +108,7 @@ BATCH_CONCURRENCY_LIMIT=3
 IMAGE_MAX_DIMENSION=1600
 IMAGE_JPEG_QUALITY=85
 VISION_PROVIDER=openai
-VISION_MODEL=gpt-5.6-luna
+VISION_MODEL=gpt-4.1-mini
 OPENAI_TIMEOUT_SECONDS=4.5
 OPENAI_API_KEY=
 ```

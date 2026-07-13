@@ -29,7 +29,7 @@ services:
       - key: VISION_PROVIDER
         value: openai
       - key: VISION_MODEL
-        value: gpt-5.6-luna
+        value: gpt-4.1-mini
       - key: OPENAI_TIMEOUT_SECONDS
         value: "4.5"
       - key: OPENAI_API_KEY
