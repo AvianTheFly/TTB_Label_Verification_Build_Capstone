@@ -16,7 +16,6 @@ import { ApplicationDetailDialog } from "./components/ApplicationDetailDialog";
 import { ApplicationsSection } from "./components/ApplicationsSection";
 import { SearchPanel } from "./components/SearchPanel";
 import { UploadDropSurface } from "./components/UploadDropSurface";
-import { UploadPreviewDialog } from "./components/UploadPreviewDialog";
 import { WorkflowHeader } from "./components/WorkflowHeader";
 import { createPreviewUrl, mergeFilesByName, revokePreviewUrl } from "./filePreviews";
 import {
@@ -25,7 +24,6 @@ import {
   VisibleStatus,
   emptyExtractedData,
   extractedDataFromResult,
-  isSupportedImageFile,
   parseApplicationPackages,
   statusSortRank,
   statusFromResult
@@ -72,7 +70,6 @@ export function PackageWorkflow() {
   const [isDragging, setIsDragging] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const [checkError, setCheckError] = useState<string | null>(null);
-  const [pendingPreviewFiles, setPendingPreviewFiles] = useState<File[] | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false);
   const [statusFilters, setStatusFilters] = useState<Record<VisibleStatus, boolean>>({
@@ -163,35 +160,16 @@ export function PackageWorkflow() {
     setCheckError(null);
   }
 
-  function stageFilesForPreview(fileList: FileList | File[]) {
+  function addUploadedFiles(fileList: FileList | File[]) {
     const incomingFiles = Array.from(fileList);
     const files = mergeFilesByName(uploadedFilesRef.current, incomingFiles);
-
-    if (incomingFiles.some(isSupportedImageFile)) {
-      setPendingPreviewFiles(files);
-      setCheckError(null);
-      return;
-    }
-
+    setCheckError(null);
     void applyUploadedFiles(files);
-  }
-
-  function acceptPreviewFiles(files: File[]) {
-    setPendingPreviewFiles(null);
-    void applyUploadedFiles(files);
-  }
-
-  function cancelPreviewFiles() {
-    setPendingPreviewFiles(null);
-  }
-
-  function removePreviewFile(filename: string) {
-    setPendingPreviewFiles((current) => current?.filter((file) => file.name !== filename) ?? null);
   }
 
   function handleFileInputChange(event: ChangeEvent<HTMLInputElement>) {
     if (event.target.files) {
-      stageFilesForPreview(event.target.files);
+      addUploadedFiles(event.target.files);
       event.target.value = "";
     }
   }
@@ -219,7 +197,7 @@ export function PackageWorkflow() {
     event.preventDefault();
     dragDepthRef.current = 0;
     setIsDragging(false);
-    stageFilesForPreview(event.dataTransfer.files);
+    addUploadedFiles(event.dataTransfer.files);
   }
 
   async function verifyApplication(packageId: string) {
@@ -478,15 +456,6 @@ export function PackageWorkflow() {
             onFieldDecision={setFieldDecision}
             onVerify={verifyApplication}
             record={selectedRecord}
-          />
-        )}
-
-        {pendingPreviewFiles && (
-          <UploadPreviewDialog
-            files={pendingPreviewFiles}
-            onAccept={acceptPreviewFiles}
-            onCancel={cancelPreviewFiles}
-            onRemoveFile={removePreviewFile}
           />
         )}
 
