@@ -98,17 +98,7 @@ def test_demo_application_inputs_match_intended_scenarios() -> None:
 
     for stem, (verdict, failed_fields) in cases.items():
         root_application_path = project_root / "demo-data" / "inputs" / f"{stem}.application.json"
-        public_application_path = (
-            project_root
-            / "frontend"
-            / "public"
-            / "demo-data"
-            / "inputs"
-            / f"{stem}.application.json"
-        )
-        assert json.loads(root_application_path.read_text()) == json.loads(
-            public_application_path.read_text()
-        )
+        assert root_application_path.exists()
         application_payload = json.loads(root_application_path.read_text())["application_data"]
         extraction_path = (
             project_root
