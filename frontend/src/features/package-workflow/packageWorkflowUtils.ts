@@ -222,6 +222,6 @@ export async function parseApplicationPackages(files: File[]): Promise<{
   return { records, incomplete_records: [], errors };
 }
 
-function isSupportedImageFile(file: File): boolean {
+export function isSupportedImageFile(file: File): boolean {
   return ACCEPTED_IMAGE_TYPES.has(file.type) || IMAGE_EXTENSION_RE.test(file.name);
 }
