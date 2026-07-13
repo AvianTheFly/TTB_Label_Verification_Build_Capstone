@@ -90,6 +90,12 @@ def assert_error_envelope(response, code: str) -> None:
     assert isinstance(body["error"]["details"], dict)
 
 
+def assert_verification_result_literals(body: dict[str, Any]) -> None:
+    assert body["overall_verdict"] in {"APPROVED", "NEEDS_REVIEW"}
+    for result in body["results"]:
+        assert result["status"] in {"PASS", "FAIL"}
+
+
 def test_valid_verify_submission_returns_full_verification_result() -> None:
     client, fake_service = make_client()
 
@@ -101,6 +107,7 @@ def test_valid_verify_submission_returns_full_verification_result() -> None:
 
     assert response.status_code == 200
     body = response.json()
+    assert_verification_result_literals(body)
     assert body["overall_verdict"] == "APPROVED"
     assert isinstance(body["latency_ms"], int)
     assert body["latency_ms"] >= 0
@@ -110,7 +117,6 @@ def test_valid_verify_submission_returns_full_verification_result() -> None:
         assert set(result) == {"field", "match_type", "expected", "found", "status", "message"}
         assert result["expected"] is not None
         assert result["found"] is not None
-        assert result["status"] in {"PASS", "FAIL"}
     assert len(fake_service.calls) == 1
     assert fake_service.calls[0].content_type == "image/jpeg"
 
@@ -128,6 +134,7 @@ def test_response_includes_expected_found_for_failures_and_needs_review() -> Non
 
     assert response.status_code == 200
     body = response.json()
+    assert_verification_result_literals(body)
     assert body["overall_verdict"] == "NEEDS_REVIEW"
     brand_result = next(result for result in body["results"] if result["field"] == "brand_name")
     assert brand_result["status"] == "FAIL"
@@ -150,6 +157,7 @@ def test_warning_failure_surfaces_extracted_government_warning_text() -> None:
     )
 
     assert response.status_code == 200
+    assert_verification_result_literals(response.json())
     warning_result = next(
         result for result in response.json()["results"] if result["field"] == "government_warning"
     )
@@ -172,6 +180,7 @@ def test_missing_extracted_government_warning_needs_review_with_found_null() -> 
 
     assert response.status_code == 200
     body = response.json()
+    assert_verification_result_literals(body)
     assert body["overall_verdict"] == "NEEDS_REVIEW"
     warning_result = next(
         result for result in body["results"] if result["field"] == "government_warning"
@@ -193,6 +202,7 @@ def test_partial_uncertain_extraction_returns_needs_review_not_false_approval() 
 
     assert response.status_code == 200
     body = response.json()
+    assert_verification_result_literals(body)
     assert body["overall_verdict"] == "NEEDS_REVIEW"
     failed_fields = {result["field"] for result in body["results"] if result["status"] == "FAIL"}
     assert failed_fields == {
