@@ -524,7 +524,9 @@ def test_verify_logs_input_timing_without_payload_contents(caplog) -> None:
 
     assert response.status_code == 200
     messages = [record.getMessage() for record in caplog.records]
-    assert any("verify_request_input_timing parse_application_ms=" in message for message in messages)
+    assert any(
+        "verify_request_input_timing parse_application_ms=" in message for message in messages
+    )
     assert any("upload_read_ms=" in message for message in messages)
     assert any("upload_size_bytes=" in message for message in messages)
     assert all("OLD TOM DISTILLERY" not in message for message in messages)

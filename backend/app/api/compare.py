@@ -1,14 +1,14 @@
 import logging
 from time import perf_counter
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Body
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from app.api.request_parsing import safe_model_errors
 from app.core.errors import ApiError
-from app.domain.comparison import CANONICAL_FIELDS, compare_label
-from app.domain.models import ApplicationData, ExtractedLabel, VerificationResult
+from app.domain.models import ApplicationData, ExtractedLabel, ReviewerDecision, VerificationResult
+from app.use_cases.recomparison import compare_reviewed_extraction
 from app.use_cases.timing import elapsed_ms
 
 logger = logging.getLogger(__name__)
@@ -25,9 +25,6 @@ class CompareExtractedData(BaseModel):
     producer: str | None
     country_of_origin: str | None
     government_warning: str | None
-
-
-ReviewerDecision = Literal["pass", "fail"]
 
 
 class CompareFieldDecisions(BaseModel):
@@ -77,9 +74,16 @@ async def compare_extracted_values(
         ) from exc
 
     extracted_label = ExtractedLabel.model_validate(request.extracted_data.model_dump())
-    result = compare_label(request.application_data, extracted_label)
-    if request.field_decisions is not None:
-        result = _apply_reviewer_decisions(result, request.field_decisions)
+    reviewer_decisions = (
+        request.field_decisions.model_dump(exclude_none=True)
+        if request.field_decisions is not None
+        else None
+    )
+    result = compare_reviewed_extraction(
+        application=request.application_data,
+        extracted=extracted_label,
+        reviewer_decisions=reviewer_decisions,
+    )
     result.latency_ms = elapsed_ms(start)
     logger.info(
         "compare_request_completed latency_ms=%s overall_verdict=%s",
@@ -91,45 +95,3 @@ async def compare_extracted_values(
         },
     )
     return result
-
-
-def _apply_reviewer_decisions(
-    result: VerificationResult, decisions: CompareFieldDecisions
-) -> VerificationResult:
-    decision_map = decisions.model_dump(exclude_none=True)
-    if not decision_map:
-        return result
-
-    updated_results = []
-    for field_result in result.results:
-        decision = decision_map.get(field_result.field)
-        if decision == "pass":
-            updated_results.append(
-                field_result.model_copy(
-                    update={
-                        "status": "PASS",
-                        "message": "Reviewer marked this field as pass.",
-                    }
-                )
-            )
-        elif decision == "fail":
-            updated_results.append(
-                field_result.model_copy(
-                    update={
-                        "status": "FAIL",
-                        "message": "Reviewer marked this field as fail.",
-                    }
-                )
-            )
-        else:
-            updated_results.append(field_result)
-
-    overall_verdict = (
-        "APPROVED"
-        if all(field_result.status == "PASS" for field_result in updated_results)
-        else "NEEDS_REVIEW"
-    )
-    ordered_results = sorted(
-        updated_results, key=lambda field_result: CANONICAL_FIELDS.index(field_result.field)
-    )
-    return VerificationResult(results=ordered_results, overall_verdict=overall_verdict)

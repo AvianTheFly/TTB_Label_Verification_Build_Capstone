@@ -2,11 +2,10 @@ import ast
 from pathlib import Path
 
 from app.domain.comparison import (
-    CANONICAL_FIELDS,
     CANONICAL_GOVERNMENT_WARNING,
     compare_label,
 )
-from app.domain.models import ApplicationData, ExtractedLabel
+from app.domain.models import CANONICAL_FIELDS, ApplicationData, ExtractedLabel
 
 
 def make_application(**overrides: str) -> ApplicationData:
@@ -327,7 +326,7 @@ def test_domain_modules_do_not_import_forbidden_later_phase_dependencies() -> No
         "os",
         "shutil",
     }
-    domain_dir = Path(__file__).parents[1] / "domain"
+    domain_dir = Path(__file__).parents[1] / "app" / "domain"
 
     for path in domain_dir.glob("*.py"):
         tree = ast.parse(path.read_text())

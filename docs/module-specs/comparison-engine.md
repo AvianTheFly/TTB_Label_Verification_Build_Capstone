@@ -90,5 +90,5 @@ Domain comparison should not raise for normal mismatches. Missing or unclear ext
 - `backend/app/domain/models.py`
 - `backend/app/domain/comparison.py`
 - `backend/app/domain/normalization.py`
-- `backend/app/tests/test_comparison.py`
+- `backend/tests/test_comparison.py`
 - `docs/interfaces/api-contracts.md`

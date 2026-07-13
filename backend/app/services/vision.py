@@ -6,10 +6,10 @@ from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
-from app.domain.models import ExtractedLabel
+from app.domain.models import CANONICAL_FIELDS, ExtractedLabel
 from app.services.image_preprocess import PreprocessedImage
-from app.use_cases.timing import elapsed_ms
 from app.use_cases.timeout import run_with_timeout
+from app.use_cases.timing import elapsed_ms
 
 DEFAULT_OPENAI_VISION_MODEL = "gpt-5.4-nano"
 DEFAULT_OPENAI_TIMEOUT_SECONDS = 30.0
@@ -18,15 +18,7 @@ DEFAULT_OPENAI_MAX_OUTPUT_TOKENS = 500
 
 logger = logging.getLogger(__name__)
 
-CANONICAL_EXTRACTION_FIELDS = (
-    "brand_name",
-    "class_type",
-    "abv",
-    "net_contents",
-    "producer",
-    "country_of_origin",
-    "government_warning",
-)
+CANONICAL_EXTRACTION_FIELDS = CANONICAL_FIELDS
 
 VisionIssueCategory = Literal[
     "non_label_image",
@@ -288,16 +280,6 @@ def parse_structured_label_payload(payload: object) -> ExtractedLabel:
         ) from exc
 
     return structured.to_extracted_label()
-
-
-def classify_extraction_issue(extracted_label: ExtractedLabel) -> VisionIssueCategory | None:
-    values = [getattr(extracted_label, field) for field in CANONICAL_EXTRACTION_FIELDS]
-    populated_count = sum(value is not None for value in values)
-    if populated_count == 0:
-        return "non_label_image"
-    if populated_count < len(CANONICAL_EXTRACTION_FIELDS):
-        return "partial_extraction"
-    return None
 
 
 def _image_data_url(image: PreprocessedImage) -> str:

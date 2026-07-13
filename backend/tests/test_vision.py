@@ -23,7 +23,6 @@ from app.services.vision import (
     STRUCTURED_OUTPUT_SCHEMA,
     OpenAIVisionService,
     VisionServiceError,
-    classify_extraction_issue,
     parse_structured_label_payload,
 )
 
@@ -76,7 +75,7 @@ async def test_demo_vision_service_uses_filename_keyed_extraction() -> None:
 
 
 def test_demo_application_inputs_match_intended_scenarios() -> None:
-    project_root = Path(__file__).resolve().parents[3]
+    project_root = Path(__file__).resolve().parents[2]
     cases = {
         "evergreen-amber-bourbon": ("APPROVED", set()),
         "coastal-pear-cider": (
@@ -296,17 +295,6 @@ def test_parse_structured_output_rejects_missing_required_field() -> None:
     assert exc_info.value.category == "malformed_provider_output"
 
 
-def test_extraction_issue_classification_for_non_label_and_partial_results() -> None:
-    assert classify_extraction_issue(ExtractedLabel()) == "non_label_image"
-    assert (
-        classify_extraction_issue(ExtractedLabel(brand_name="OLD TOM DISTILLERY"))
-        == "partial_extraction"
-    )
-    assert classify_extraction_issue(
-        ExtractedLabel(**{field: "present" for field in CANONICAL_EXTRACTION_FIELDS})
-    ) is None
-
-
 @pytest.mark.asyncio
 async def test_openai_provider_uses_strict_structured_output_and_prompt_rules() -> None:
     image = preprocess_image(make_image_bytes(), "image/png")
@@ -429,7 +417,9 @@ class TimeoutOpenAIClient:
 class SlowResponses:
     async def create(self, **kwargs: Any) -> Any:
         await asyncio.sleep(1)
-        return SimpleNamespace(output_text=json.dumps({field: None for field in CANONICAL_EXTRACTION_FIELDS}))
+        return SimpleNamespace(
+            output_text=json.dumps({field: None for field in CANONICAL_EXTRACTION_FIELDS})
+        )
 
 
 class SlowOpenAIClient:

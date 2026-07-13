@@ -107,5 +107,5 @@ Warning-style compliance is not claimed in Phase 2. The service preserves warnin
 - `backend/app/services/fake_vision.py`
 - `backend/app/services/demo_vision.py`
 - `backend/app/services/image_preprocess.py`
-- `backend/app/tests/test_vision.py`
+- `backend/tests/test_vision.py`
 - `backend/scripts/run_vision_sample.py`
