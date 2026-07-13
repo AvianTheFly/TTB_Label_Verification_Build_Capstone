@@ -381,9 +381,12 @@ def test_vision_service_timeout_maps_to_safe_readable_error() -> None:
     assert len(fake_service.calls) == 1
 
 
-def test_verify_enforces_full_single_label_latency_budget(monkeypatch) -> None:
+def test_verify_logs_but_does_not_cut_off_single_label_latency_budget(
+    monkeypatch, caplog
+) -> None:
+    caplog.set_level("WARNING", logger="app.api.verify")
     monkeypatch.setenv("SINGLE_LABEL_TIMEOUT_SECONDS", "0.01")
-    client, slow_service = make_client(SlowVisionService(delay_seconds=1.0))
+    client, slow_service = make_client(SlowVisionService(delay_seconds=0.02))
 
     response = post_verify(
         client,
@@ -391,9 +394,12 @@ def test_verify_enforces_full_single_label_latency_budget(monkeypatch) -> None:
         image_bytes=make_image_bytes(),
     )
 
-    assert response.status_code == 504
-    assert_error_envelope(response, "vision_timeout")
-    assert response.json()["error"]["details"] == {"latency_budget_ms": 10}
+    assert response.status_code == 200
+    assert response.json()["latency_ms"] >= 20
+    assert any(
+        "verify_latency_budget_exceeded latency_ms=" in record.getMessage()
+        for record in caplog.records
+    )
     assert len(slow_service.calls) == 1
     get_settings.cache_clear()
 
