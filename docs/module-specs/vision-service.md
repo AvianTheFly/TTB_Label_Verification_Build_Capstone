@@ -33,6 +33,7 @@ Public interfaces:
 - `VisionService.extract_label(image) -> ExtractedLabel`
 - `OpenAIVisionService` real provider implementation, configured by environment-backed settings.
 - `FakeVisionService` test double for unit and Phase 3 API tests.
+- `DemoFixtureVisionService` filename-keyed fixture reader for demo scenarios.
 - `preprocess_image(image_bytes, content_type) -> PreprocessedImage`
 - `VisionServiceError` with safe provider/extraction categories.
 
@@ -92,6 +93,7 @@ Warning-style compliance is not claimed in Phase 2. The service preserves warnin
 
 - `backend/app/services/vision.py`
 - `backend/app/services/fake_vision.py`
+- `backend/app/services/demo_vision.py`
 - `backend/app/services/image_preprocess.py`
 - `backend/app/tests/test_vision.py`
 - `backend/scripts/run_vision_sample.py`
