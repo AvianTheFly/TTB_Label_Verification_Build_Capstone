@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import json
 import logging
@@ -11,8 +12,8 @@ from app.services.image_preprocess import PreprocessedImage
 from app.use_cases.timing import elapsed_ms
 
 DEFAULT_OPENAI_VISION_MODEL = "gpt-4.1-mini"
-DEFAULT_OPENAI_TIMEOUT_SECONDS = 4.5
-DEFAULT_OPENAI_IMAGE_DETAIL = "high"
+DEFAULT_OPENAI_TIMEOUT_SECONDS = 4.2
+DEFAULT_OPENAI_IMAGE_DETAIL = "low"
 
 logger = logging.getLogger(__name__)
 
@@ -132,43 +133,49 @@ class OpenAIVisionService:
             api_key=settings.openai_api_key,
             model=settings.vision_model or DEFAULT_OPENAI_VISION_MODEL,
             timeout_seconds=settings.openai_timeout_seconds,
+            image_detail=settings.openai_image_detail,
         )
 
     async def extract_label(self, image: PreprocessedImage) -> ExtractedLabel:
+        client_build_start = perf_counter()
         client = self._client or self._build_client()
+        client_build_ms = elapsed_ms(client_build_start)
         encode_start = perf_counter()
         image_data_url = _image_data_url(image)
         image_encode_ms = elapsed_ms(encode_start)
 
         try:
             provider_start = perf_counter()
-            response = await client.responses.create(
-                model=self._model,
-                input=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "input_text", "text": EXTRACTION_PROMPT},
-                            {
-                                "type": "input_image",
-                                "image_url": image_data_url,
-                                "detail": self._image_detail,
-                            },
-                        ],
-                    }
-                ],
-                text={
-                    "format": {
-                        "type": "json_schema",
-                        "name": "ttb_label_extraction",
-                        "strict": True,
-                        "schema": STRUCTURED_OUTPUT_SCHEMA,
-                    }
-                },
-                store=False,
+            response = await asyncio.wait_for(
+                client.responses.create(
+                    model=self._model,
+                    input=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "input_text", "text": EXTRACTION_PROMPT},
+                                {
+                                    "type": "input_image",
+                                    "image_url": image_data_url,
+                                    "detail": self._image_detail,
+                                },
+                            ],
+                        }
+                    ],
+                    text={
+                        "format": {
+                            "type": "json_schema",
+                            "name": "ttb_label_extraction",
+                            "strict": True,
+                            "schema": STRUCTURED_OUTPUT_SCHEMA,
+                        }
+                    },
+                    store=False,
+                ),
+                timeout=self._timeout_seconds,
             )
             provider_call_ms = elapsed_ms(provider_start)
-        except TimeoutError as exc:
+        except (asyncio.TimeoutError, TimeoutError) as exc:
             raise VisionServiceError(
                 "provider_timeout",
                 "The vision provider timed out while reading the label.",
@@ -184,14 +191,21 @@ class OpenAIVisionService:
         parse_start = perf_counter()
         extracted_label = parse_structured_label_payload(payload)
         payload_parse_ms = elapsed_ms(parse_start)
-        total_provider_ms = image_encode_ms + provider_call_ms + payload_extract_ms + payload_parse_ms
+        total_provider_ms = (
+            client_build_ms
+            + image_encode_ms
+            + provider_call_ms
+            + payload_extract_ms
+            + payload_parse_ms
+        )
         logger.info(
             (
-                "openai_vision_timing image_encode_ms=%s provider_call_ms=%s "
+                "openai_vision_timing client_build_ms=%s image_encode_ms=%s provider_call_ms=%s "
                 "payload_extract_ms=%s payload_parse_ms=%s total_provider_ms=%s "
                 "original_size_bytes=%s processed_size_bytes=%s original_pixels=%sx%s "
                 "processed_pixels=%sx%s model=%s image_detail=%s"
             ),
+            client_build_ms,
             image_encode_ms,
             provider_call_ms,
             payload_extract_ms,
@@ -206,6 +220,7 @@ class OpenAIVisionService:
             self._model,
             self._image_detail,
             extra={
+                "client_build_ms": client_build_ms,
                 "image_encode_ms": image_encode_ms,
                 "provider_call_ms": provider_call_ms,
                 "payload_extract_ms": payload_extract_ms,

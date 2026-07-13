@@ -1,3 +1,4 @@
+import asyncio
 import json
 from io import BytesIO
 from typing import Any
@@ -14,6 +15,17 @@ from app.domain.models import ExtractedLabel
 from app.main import create_app
 from app.services.fake_vision import FakeVisionService
 from app.services.vision import VisionServiceError
+
+
+class SlowVisionService:
+    def __init__(self, delay_seconds: float) -> None:
+        self._delay_seconds = delay_seconds
+        self.calls = []
+
+    async def extract_label(self, image):
+        self.calls.append(image)
+        await asyncio.sleep(self._delay_seconds)
+        return make_extracted_label()
 
 
 def make_image_bytes(image_format: str = "PNG") -> bytes:
@@ -367,6 +379,23 @@ def test_vision_service_timeout_maps_to_safe_readable_error() -> None:
     assert_error_envelope(response, "vision_timeout")
     assert "secret provider timeout detail" not in response.text
     assert len(fake_service.calls) == 1
+
+
+def test_verify_enforces_full_single_label_latency_budget(monkeypatch) -> None:
+    monkeypatch.setenv("SINGLE_LABEL_TIMEOUT_SECONDS", "0.01")
+    client, slow_service = make_client(SlowVisionService(delay_seconds=1.0))
+
+    response = post_verify(
+        client,
+        application_data=make_application_data(),
+        image_bytes=make_image_bytes(),
+    )
+
+    assert response.status_code == 504
+    assert_error_envelope(response, "vision_timeout")
+    assert response.json()["error"]["details"] == {"latency_budget_ms": 10}
+    assert len(slow_service.calls) == 1
+    get_settings.cache_clear()
 
 
 def test_vision_quota_error_maps_to_frontend_readable_message() -> None:
