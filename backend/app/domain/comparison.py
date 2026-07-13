@@ -118,7 +118,8 @@ def compare_government_warning(expected: str, found: str | None) -> FieldResult:
         "exact",
         expected,
         found,
-        f"Government warning does not match after whitespace collapse. AI detected: {found_collapsed}",
+        "Government warning does not match after whitespace collapse. "
+        f"AI detected: {found_collapsed}",
     )
 
 

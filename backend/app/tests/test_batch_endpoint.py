@@ -327,7 +327,9 @@ def test_batch_preserves_exact_canonical_field_names() -> None:
     assert result_fields == set(make_application_data())
 
 
-def test_batch_submitted_openai_fields_do_not_override_configured_vision_service(monkeypatch) -> None:
+def test_batch_submitted_openai_fields_do_not_override_configured_vision_service(
+    monkeypatch,
+) -> None:
     configured_service = FakeVisionService(
         results=[make_extracted_label(), make_extracted_label()]
     )

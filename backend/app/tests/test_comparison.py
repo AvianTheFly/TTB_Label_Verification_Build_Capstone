@@ -200,6 +200,26 @@ def test_misread_warning_failure_returns_extracted_warning_text_in_found() -> No
     assert misread_warning in field_result.message
 
 
+def test_warning_failure_message_contains_normalized_extracted_text() -> None:
+    extracted_warning = (
+        "GOVERNMENT WARNING: (1) According to the Surgeon General, women should\n\n"
+        "not drink alcoholic beverages because of OCR drift."
+    )
+    normalized_warning = (
+        "GOVERNMENT WARNING: (1) According to the Surgeon General, women should "
+        "not drink alcoholic beverages because of OCR drift."
+    )
+    field_result = result_for_field(
+        make_application(),
+        make_extracted(government_warning=extracted_warning),
+        "government_warning",
+    )
+
+    assert field_result.status == "FAIL"
+    assert field_result.found == extracted_warning
+    assert normalized_warning in field_result.message
+
+
 def test_government_warning_does_not_use_fuzzy_matching() -> None:
     near_match = CANONICAL_GOVERNMENT_WARNING.replace("health problems.", "health problem.")
     field_result = result_for_field(

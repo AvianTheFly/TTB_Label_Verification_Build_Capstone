@@ -16,6 +16,14 @@ uv run pytest
 uv run ruff check .
 ```
 
+## Live Smoke Check
+
+After deployment, run a real `/verify` request against the deployed backend:
+
+```bash
+uv run python scripts/live_checklist.py --url https://your-backend.example.com
+```
+
 ## App Structure
 
 ```text
@@ -36,4 +44,3 @@ app/
 - Put provider and preprocessing boundaries in `services/`.
 - Public API/model fields must stay snake_case and canonical: `brand_name`, `class_type`, `abv`, `net_contents`, `producer`, `country_of_origin`, `government_warning`.
 - Do not store uploads, extracted labels, application data, API keys, or request state beyond the request lifetime.
-
