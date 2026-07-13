@@ -129,6 +129,13 @@ def test_demo_application_inputs_match_intended_scenarios() -> None:
         assert {field.field for field in result.results if field.status == "FAIL"} == failed_fields
 
 
+def test_openai_vision_service_defaults_to_documented_model() -> None:
+    service = OpenAIVisionService(api_key="test-key")
+
+    assert service._model == "gpt-4.1-mini"
+    assert DEFAULT_OPENAI_VISION_MODEL == "gpt-4.1-mini"
+
+
 def test_preprocess_rejects_unsupported_content_type() -> None:
     with pytest.raises(ImagePreprocessError) as exc_info:
         preprocess_image(make_image_bytes(), "text/plain")

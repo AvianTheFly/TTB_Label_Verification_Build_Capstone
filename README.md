@@ -11,6 +11,13 @@ database.
 - `TTB_Label_Verification_Build_Playbook 1.pdf`
 - `Additional Project Requirements`
 
+## Current Status
+
+- Public repository: https://github.com/AvianTheFly/TTB_Label_Verification_Build_Capstone
+- Live frontend: https://fed-stack-capstone.vercel.app/
+- Real OpenAI live verification: pending until `OPENAI_API_KEY` is available.
+- Measured deployed p50/p95 latency: pending until real-provider live verification is run.
+
 ## Current Workflow
 
 1. User selects one or more label images.
@@ -33,6 +40,8 @@ database.
 - Exact, case-sensitive government-warning comparison after whitespace collapse.
 - Extracted government-warning text is surfaced on failures for human review.
 - Request-scoped image preprocessing before provider calls.
+- Editable extracted fields with backend recomparison through `/compare`.
+- Reviewed-results JSON download from the browser.
 - Real OpenAI vision adapter behind a `VisionService` interface.
 - Explicit local-only demo and test vision providers.
 
@@ -76,7 +85,9 @@ IMAGE_MAX_DIMENSION=1600
 IMAGE_JPEG_QUALITY=85
 ```
 
-`gpt-4.1-mini` is the configured default model for the OpenAI vision provider.
+`gpt-4.1-mini` is the configured default model for the OpenAI vision provider. Public OpenAI model
+documentation was reviewed on 2026-07-13; final account-backed model availability and live
+extraction verification are pending until `OPENAI_API_KEY` is available.
 
 Supported providers:
 
@@ -86,7 +97,30 @@ Supported providers:
 
 ## Environment Variables
 
-Copy the example file and fill deployment-local values:
+Secrets belong only in local `.env` files or deployment-provider environment settings. Do not
+commit real keys and do not add real keys to documentation.
+
+| Variable | Required | Default | Purpose |
+| --- | --- | --- | --- |
+| `APP_ENV` | No | `local` | Names the runtime environment. |
+| `APP_NAME` | No | `TTB Label Verification` | FastAPI application title. |
+| `APP_VERSION` | No | `0.1.0` | Public service version returned by `/health`. |
+| `SERVICE_SLUG` | No | `ttb-label-verification` | Public service slug returned by `/health`. |
+| `API_HOST` | No | `127.0.0.1` | Local backend host used by setup/run docs. |
+| `API_PORT` | No | `8000` | Local backend port used by setup/run docs. |
+| `BACKEND_CORS_ORIGINS` | Yes in deploy | `http://localhost:5173,http://127.0.0.1:5173` | Comma-separated frontend origins allowed to call the backend. |
+| `MAX_UPLOAD_MB` | No | `10` | Maximum uploaded image size per file. |
+| `MAX_BATCH_ITEMS` | No | `25` | Maximum labels accepted in one batch request. |
+| `BATCH_CONCURRENCY_LIMIT` | No | `3` | Maximum concurrent batch verification tasks. |
+| `IMAGE_MAX_DIMENSION` | No | `1600` | Maximum image dimension after preprocessing. |
+| `IMAGE_JPEG_QUALITY` | No | `85` | JPEG quality used for preprocessed images. |
+| `VISION_PROVIDER` | Yes in deploy | `openai` | Vision provider selector. Use `openai` for production. |
+| `VISION_MODEL` | Yes for real extraction | `gpt-4.1-mini` | OpenAI model used by the real vision provider. |
+| `OPENAI_TIMEOUT_SECONDS` | No | `4.5` | OpenAI client timeout. Keep at or below 4.5 seconds for deploy. |
+| `OPENAI_API_KEY` | Yes for real extraction | empty | OpenAI API key. Backend environment only. |
+| `VITE_API_BASE_URL` | Yes for frontend | `http://127.0.0.1:8000` | Frontend API base URL. |
+
+## Setup
 
 ```bash
 cp .env.example .env
@@ -94,42 +128,9 @@ cp .env.example .env
 
 Backend:
 
-```text
-APP_ENV=local
-APP_NAME=TTB Label Verification
-APP_VERSION=0.1.0
-SERVICE_SLUG=ttb-label-verification
-API_HOST=127.0.0.1
-API_PORT=8000
-BACKEND_CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
-MAX_UPLOAD_MB=10
-MAX_BATCH_ITEMS=25
-BATCH_CONCURRENCY_LIMIT=3
-IMAGE_MAX_DIMENSION=1600
-IMAGE_JPEG_QUALITY=85
-VISION_PROVIDER=openai
-VISION_MODEL=gpt-4.1-mini
-OPENAI_TIMEOUT_SECONDS=4.5
-OPENAI_API_KEY=
-```
-
-Frontend:
-
-```text
-VITE_API_BASE_URL=http://127.0.0.1:8000
-```
-
-For local development without a real provider key, explicitly set `VISION_PROVIDER=demo` or
-`VISION_PROVIDER=fake`. Do not use those providers for production verification.
-
-## Run Locally
-
-Backend:
-
 ```bash
 cd backend
 uv sync
-uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 Frontend:
@@ -137,44 +138,199 @@ Frontend:
 ```bash
 cd frontend
 npm install
-npm run dev
+```
+
+## Run Locally
+
+Run without a real provider key:
+
+```bash
+cd backend
+VISION_PROVIDER=demo OPENAI_API_KEY= uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+Frontend:
+
+```bash
+cd frontend
+VITE_API_BASE_URL=http://127.0.0.1:8000 npm run dev
 ```
 
 Open `http://localhost:5173`.
 
-## API Overview
+For real extraction, run the backend with `VISION_PROVIDER=openai`, `VISION_MODEL=gpt-4.1-mini`,
+and `OPENAI_API_KEY` set in the backend environment.
 
-`GET /health`
+## API Examples
 
-Returns service status.
+### `GET /health`
 
-`POST /verify`
+```bash
+curl -sS http://127.0.0.1:8000/health
+```
 
-- Multipart parts: `image`, `application_data`
-- Returns `VerificationResult` with `results`, `overall_verdict`, and `latency_ms`
+Expected response:
 
-`POST /verify/batch`
+```json
+{
+  "status": "ok",
+  "service": "ttb-label-verification",
+  "version": "0.1.0"
+}
+```
 
-- Multipart parts: repeated `images`, repeated `application_data`
-- Returns batch `items` plus `summary`
+### `POST /verify`
 
-`POST /compare`
+```bash
+APPLICATION_DATA='{
+  "brand_name": "NORTHERN LIGHT RIESLING",
+  "class_type": "White Wine Blend",
+  "abv": "13.8% Alc./Vol.",
+  "net_contents": "700 mL",
+  "producer": "Northstar Vineyards, Traverse City, MI",
+  "country_of_origin": "Canada",
+  "government_warning": "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems."
+}'
 
-- JSON body: `application_data`, `extracted_data`, optional `field_decisions`
-- Recomputes comparison after reviewer edits extracted text
-- Does not accept images and does not call the vision service
+curl -sS http://127.0.0.1:8000/verify \
+  -F "image=@demo-data/inputs/northstar-riesling.png;type=image/png" \
+  -F "application_data=${APPLICATION_DATA}"
+```
 
-Public API errors use:
+Expected success shape:
+
+```json
+{
+  "results": [
+    {
+      "field": "brand_name",
+      "match_type": "fuzzy",
+      "expected": "NORTHERN LIGHT RIESLING",
+      "found": "Northstar Riesling",
+      "status": "PASS",
+      "message": "Values match after normalization."
+    }
+  ],
+  "overall_verdict": "APPROVED",
+  "latency_ms": 1240
+}
+```
+
+### `POST /verify/batch`
+
+```bash
+APPLICATION_DATA_ONE="$(jq -c '.application_data' demo-data/inputs/evergreen-amber-bourbon.application.json)"
+APPLICATION_DATA_TWO="$(jq -c '.application_data' demo-data/inputs/coastal-pear-cider.application.json)"
+
+curl -sS http://127.0.0.1:8000/verify/batch \
+  -F "images=@demo-data/inputs/evergreen-amber-bourbon.png;type=image/png" \
+  -F "application_data=${APPLICATION_DATA_ONE}" \
+  -F "images=@demo-data/inputs/coastal-pear-cider.png;type=image/png" \
+  -F "application_data=${APPLICATION_DATA_TWO}"
+```
+
+Expected success shape:
+
+```json
+{
+  "items": [
+    {
+      "index": 0,
+      "result": {
+        "results": [],
+        "overall_verdict": "APPROVED",
+        "latency_ms": 1240
+      },
+      "error": null
+    }
+  ],
+  "summary": {
+    "passed": 1,
+    "needs_review": 0,
+    "total": 1
+  }
+}
+```
+
+### `POST /compare`
+
+`/compare` recomputes backend comparison after a reviewer edits extracted text. It accepts JSON
+with `application_data`, `extracted_data`, and optional `field_decisions`. It does not accept images
+and does not call the vision service.
+
+Expected API error shape:
 
 ```json
 {
   "error": {
-    "code": "bad_request",
-    "message": "Readable message safe for the UI.",
-    "details": {}
+    "code": "unsupported_file_type",
+    "message": "Please upload a JPG, PNG, or WEBP label image.",
+    "details": {
+      "field": "image"
+    }
   }
 }
 ```
+
+## Live Smoke Check
+
+Single-run deployed check:
+
+```bash
+cd backend
+uv run python scripts/live_checklist.py \
+  --url https://YOUR_BACKEND_ORIGIN \
+  --image ../demo-data/inputs/northstar-riesling.png \
+  --application-data ../demo-data/inputs/northstar-riesling.application.json
+```
+
+Expected output:
+
+```text
+Live checklist passed: overall_verdict=NEEDS_REVIEW latency_ms=1240 round_trip_ms=1500
+```
+
+Latency measurement command for the later real-provider pass:
+
+```bash
+cd backend
+uv run python scripts/live_checklist.py \
+  --url https://YOUR_BACKEND_ORIGIN \
+  --image ../demo-data/inputs/northstar-riesling.png \
+  --application-data ../demo-data/inputs/northstar-riesling.application.json \
+  --runs 20
+```
+
+Expected output includes:
+
+```text
+latency_p50_ms=...
+latency_p95_ms=...
+round_trip_p50_ms=...
+round_trip_p95_ms=...
+```
+
+## Performance
+
+Target: single-label verification should complete under 5 seconds for reasonable label images.
+
+Current implemented controls:
+
+- `/verify` responses include backend `latency_ms`.
+- `backend/scripts/live_checklist.py` asserts `latency_ms <= 5000` by default.
+- OpenAI client timeout defaults to `4.5` seconds.
+- Batch verification uses bounded concurrency with a default limit of `3`.
+- Images are validated and preprocessed before vision extraction.
+
+Live measurement status:
+
+| Metric | Value | How measured |
+| --- | --- | --- |
+| Deployed `/verify` p50 `latency_ms` | Pending | Run `backend/scripts/live_checklist.py --runs 20` after `OPENAI_API_KEY` is configured. |
+| Deployed `/verify` p95 `latency_ms` | Pending | Same 20-run script output, warm deployed service preferred. |
+| Cold-start round trip | Pending | Record first `round_trip_ms` separately on free-tier deploys. |
+
+These values are intentionally pending because real OpenAI live verification has not been run yet.
 
 ## Testing
 
@@ -182,7 +338,7 @@ Backend:
 
 ```bash
 cd backend
-uv run ruff check app
+uv run ruff check app scripts
 uv run pytest
 ```
 
@@ -195,8 +351,6 @@ npm test
 npm run build
 ```
 
-Live deployed image testing with the real provider is planned for the final verification pass.
-
 ## Deployment
 
 Committed deployment config:
@@ -208,6 +362,7 @@ Backend deployment requirements:
 
 - Set `OPENAI_API_KEY` only in the deployment provider environment.
 - Keep `VISION_PROVIDER=openai`.
+- Keep `VISION_MODEL=gpt-4.1-mini`.
 - Keep `OPENAI_TIMEOUT_SECONDS` at `4.5` or lower.
 - Set `BACKEND_CORS_ORIGINS` to the deployed frontend origin.
 
@@ -216,18 +371,73 @@ Frontend deployment requirements:
 - Set `VITE_API_BASE_URL` to the deployed backend origin.
 - Rebuild after changing `VITE_API_BASE_URL`.
 
+Before submission:
+
+- Confirm `/health` works on the deployed backend.
+- Run the live smoke check against the deployed backend.
+- Run single-label and batch flows from the deployed frontend.
+- Confirm browser devtools shows no CORS errors.
+
+## How To Use
+
+1. Open the frontend.
+2. Select or drop one or more JPG, PNG, or WEBP label images.
+3. Review the image preview window.
+4. Remove any incorrect image or cancel the upload if needed.
+5. Accept the selected images.
+6. Open an application row.
+7. Enter the seven application fields.
+8. Select the verify action.
+9. Review the overall verdict and each field's expected-vs-found result.
+10. If extracted text needs correction, edit the extracted value and recheck it through the backend.
+11. Download reviewed results JSON when finished.
+
+The app does not submit results to TTB, COLA, or any external system.
+
+## Demo Data
+
+Synthetic demo files live in:
+
+- `demo-data/inputs/`
+- `demo-data/outputs/reviewed-results.example.json`
+
+These are placeholder workflow fixtures, not real labels and not official TTB records.
+
+Use the standard government warning text when testing warning exactness:
+
+```text
+GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems.
+```
+
+## Assumptions And Limitations
+
+- This is a review aid, not an official TTB approval system.
+- Every verification request is self-contained and stateless.
+- Government warning text exactness is implemented; bold styling detection for the
+  `GOVERNMENT WARNING:` lead-in is not claimed.
+- Real OpenAI extraction has not been verified live yet because production API keys are not
+  available.
+- Measured deployed p50/p95 latency remains pending until the real-provider live pass.
+- Free-tier hosting may add cold-start latency outside request-scoped `latency_ms`.
+- Demo/fake providers are for local tests and demos only; they are not a substitute for production
+  vision extraction.
+
 ## Security And Privacy
 
 - Uploaded images, extracted data, and application data are processed only for the current request.
 - No database is used.
 - Real keys and secrets must live only in local `.env` files or deployment-provider settings.
+- The frontend never accepts or sends provider API keys.
 - `.env`, `backend/.env`, and `frontend/.env` are ignored.
 - API errors must not expose stack traces, provider internals, API keys, local paths, or raw images.
 
-## Assumptions And Limitations
+## Final Submission Checklist
 
-- This is a review aid, not an official TTB approval system.
-- Government warning text exactness is implemented; bold styling detection for the
-  `GOVERNMENT WARNING:` lead-in is not claimed.
-- Free-tier hosting may add cold-start latency outside request-scoped `latency_ms`.
-- Final live testing with real sample images still needs to be run before submission.
+- Public repo URL documented.
+- Live frontend URL documented.
+- Backend deployment URL verified through `/health`.
+- Live smoke check run against deployed `/verify`.
+- Batch flow verified from the deployed frontend.
+- Real-provider extraction verified after `OPENAI_API_KEY` is configured.
+- p50 and p95 single-label latency recorded in this README.
+- Secret audit confirms no `.env` files or real keys are tracked.
