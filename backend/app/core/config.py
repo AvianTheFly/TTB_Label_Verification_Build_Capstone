@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -18,11 +18,13 @@ class Settings(BaseSettings):
     max_upload_mb: int = 10
     max_batch_items: int = 25
     batch_concurrency_limit: int = 3
-    image_max_dimension: int = 1600
-    image_jpeg_quality: int = 85
+    single_label_timeout_seconds: float = 4.8
+    image_max_dimension: int = 1024
+    image_jpeg_quality: int = 70
     vision_provider: str = "openai"
     vision_model: str = "gpt-4.1-mini"
-    openai_timeout_seconds: float = 4.5
+    openai_timeout_seconds: float = 4.2
+    openai_image_detail: Literal["low", "high", "auto"] = "low"
     openai_api_key: str = ""
 
     @field_validator("backend_cors_origins", mode="before")
@@ -58,6 +60,15 @@ class Settings(BaseSettings):
     def validate_openai_timeout_seconds(cls, value: float) -> float:
         if value <= 0 or value > 4.5:
             raise ValueError("openai_timeout_seconds must be greater than 0 and no more than 4.5")
+        return value
+
+    @field_validator("single_label_timeout_seconds")
+    @classmethod
+    def validate_single_label_timeout_seconds(cls, value: float) -> float:
+        if value <= 0 or value > 5.0:
+            raise ValueError(
+                "single_label_timeout_seconds must be greater than 0 and no more than 5.0"
+            )
         return value
 
     model_config = SettingsConfigDict(

@@ -1,3 +1,4 @@
+import asyncio
 import json
 from io import BytesIO
 from pathlib import Path
@@ -15,6 +16,7 @@ from app.services.fake_vision import FakeVisionService
 from app.services.image_preprocess import ImagePreprocessError, preprocess_image
 from app.services.vision import (
     CANONICAL_EXTRACTION_FIELDS,
+    DEFAULT_OPENAI_IMAGE_DETAIL,
     DEFAULT_OPENAI_TIMEOUT_SECONDS,
     DEFAULT_OPENAI_VISION_MODEL,
     EXTRACTION_PROMPT,
@@ -182,12 +184,14 @@ def test_openai_provider_reads_model_and_timeout_from_settings() -> None:
         openai_api_key="test-key",
         vision_model="gpt-test-model",
         openai_timeout_seconds=3.25,
+        openai_image_detail="high",
     )
 
     service = OpenAIVisionService.from_settings(settings)
 
     assert service._model == "gpt-test-model"
     assert service._timeout_seconds == 3.25
+    assert service._image_detail == "high"
 
 
 def test_openai_provider_defaults_are_current_and_budgeted() -> None:
@@ -196,7 +200,9 @@ def test_openai_provider_defaults_are_current_and_budgeted() -> None:
     assert service._model == DEFAULT_OPENAI_VISION_MODEL
     assert DEFAULT_OPENAI_VISION_MODEL == "gpt-4.1-mini"
     assert service._timeout_seconds == DEFAULT_OPENAI_TIMEOUT_SECONDS
-    assert DEFAULT_OPENAI_TIMEOUT_SECONDS == 4.5
+    assert DEFAULT_OPENAI_TIMEOUT_SECONDS == 4.2
+    assert service._image_detail == DEFAULT_OPENAI_IMAGE_DETAIL
+    assert DEFAULT_OPENAI_IMAGE_DETAIL == "low"
 
 
 def test_parse_structured_output_preserves_government_warning_verbatim() -> None:
@@ -310,7 +316,8 @@ async def test_openai_provider_logs_timing_metadata_without_payload_contents(cap
     await service.extract_label(image)
 
     messages = [record.getMessage() for record in caplog.records]
-    assert any("openai_vision_timing image_encode_ms=" in message for message in messages)
+    assert any("openai_vision_timing client_build_ms=" in message for message in messages)
+    assert any("image_encode_ms=" in message for message in messages)
     assert any("provider_call_ms=" in message for message in messages)
     assert any("payload_extract_ms=" in message for message in messages)
     assert any("payload_parse_ms=" in message for message in messages)
@@ -323,6 +330,17 @@ async def test_openai_provider_logs_timing_metadata_without_payload_contents(cap
 async def test_openai_provider_timeout_is_categorized() -> None:
     image = preprocess_image(make_image_bytes(), "image/png")
     service = OpenAIVisionService(client=TimeoutOpenAIClient())
+
+    with pytest.raises(VisionServiceError) as exc_info:
+        await service.extract_label(image)
+
+    assert exc_info.value.category == "provider_timeout"
+
+
+@pytest.mark.asyncio
+async def test_openai_provider_enforces_total_provider_timeout() -> None:
+    image = preprocess_image(make_image_bytes(), "image/png")
+    service = OpenAIVisionService(client=SlowOpenAIClient(), timeout_seconds=0.01)
 
     with pytest.raises(VisionServiceError) as exc_info:
         await service.extract_label(image)
@@ -375,6 +393,16 @@ class TimeoutResponses:
 
 class TimeoutOpenAIClient:
     responses = TimeoutResponses()
+
+
+class SlowResponses:
+    async def create(self, **kwargs: Any) -> Any:
+        await asyncio.sleep(1)
+        return SimpleNamespace(output_text=json.dumps({field: None for field in CANONICAL_EXTRACTION_FIELDS}))
+
+
+class SlowOpenAIClient:
+    responses = SlowResponses()
 
 
 class FakeRateLimitError(Exception):
