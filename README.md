@@ -79,13 +79,13 @@ Production defaults:
 
 ```text
 VISION_PROVIDER=openai
-VISION_MODEL=gpt-4.1-mini
-OPENAI_TIMEOUT_SECONDS=4.5
-IMAGE_MAX_DIMENSION=1600
-IMAGE_JPEG_QUALITY=85
+VISION_MODEL=gpt-5.4-nano
+OPENAI_TIMEOUT_SECONDS=30
+IMAGE_MAX_DIMENSION=768
+IMAGE_JPEG_QUALITY=60
 ```
 
-`gpt-4.1-mini` is the configured default model for the OpenAI vision provider. Public OpenAI model
+`gpt-5.4-nano` is the configured default model for the OpenAI vision provider. Public OpenAI model
 documentation was reviewed on 2026-07-13. Local account-backed extraction was verified on
 2026-07-13 with `VISION_PROVIDER=openai` and the API key stored only in `backend/.env`.
 
@@ -112,11 +112,11 @@ commit real keys and do not add real keys to documentation.
 | `MAX_UPLOAD_MB` | No | `10` | Maximum uploaded image size per file. |
 | `MAX_BATCH_ITEMS` | No | `25` | Maximum labels accepted in one batch request. |
 | `BATCH_CONCURRENCY_LIMIT` | No | `3` | Maximum concurrent batch verification tasks. |
-| `IMAGE_MAX_DIMENSION` | No | `1600` | Maximum image dimension after preprocessing. |
-| `IMAGE_JPEG_QUALITY` | No | `85` | JPEG quality used for preprocessed images. |
+| `IMAGE_MAX_DIMENSION` | No | `768` | Maximum image dimension after preprocessing. |
+| `IMAGE_JPEG_QUALITY` | No | `60` | JPEG quality used for preprocessed images. |
 | `VISION_PROVIDER` | Yes in deploy | `openai` | Vision provider selector. Use `openai` for production. |
-| `VISION_MODEL` | Yes for real extraction | `gpt-4.1-mini` | OpenAI model used by the real vision provider. |
-| `OPENAI_TIMEOUT_SECONDS` | No | `4.5` | OpenAI client timeout. Keep at or below 4.5 seconds for deploy. |
+| `VISION_MODEL` | Yes for real extraction | `gpt-5.4-nano` | OpenAI model used by the real vision provider. |
+| `OPENAI_TIMEOUT_SECONDS` | No | `30` | OpenAI client safety timeout used while measuring live response duration. |
 | `OPENAI_API_KEY` | Yes for real extraction | empty | OpenAI API key. Backend environment only. |
 | `VITE_API_BASE_URL` | Yes for frontend | `http://127.0.0.1:8000` | Frontend API base URL. |
 
@@ -158,7 +158,7 @@ VITE_API_BASE_URL=http://127.0.0.1:8000 npm run dev
 
 Open `http://localhost:5173`.
 
-For real extraction, run the backend with `VISION_PROVIDER=openai`, `VISION_MODEL=gpt-4.1-mini`,
+For real extraction, run the backend with `VISION_PROVIDER=openai`, `VISION_MODEL=gpt-5.4-nano`,
 and `OPENAI_API_KEY` set in the backend environment.
 
 ## API Examples
@@ -365,8 +365,8 @@ Backend deployment requirements:
 
 - Set `OPENAI_API_KEY` only in the deployment provider environment.
 - Keep `VISION_PROVIDER=openai`.
-- Keep `VISION_MODEL=gpt-4.1-mini`.
-- Keep `OPENAI_TIMEOUT_SECONDS` at `4.5` or lower.
+- Keep `VISION_MODEL=gpt-5.4-nano`.
+- Keep `OPENAI_TIMEOUT_SECONDS=30` while measuring live response duration.
 - Set `BACKEND_CORS_ORIGINS` to the deployed frontend origin.
 
 Frontend deployment requirements:

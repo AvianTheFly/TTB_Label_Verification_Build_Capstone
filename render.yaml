@@ -23,14 +23,14 @@ services:
       - key: BATCH_CONCURRENCY_LIMIT
         value: "3"
       - key: IMAGE_MAX_DIMENSION
-        value: "1600"
+        value: "768"
       - key: IMAGE_JPEG_QUALITY
-        value: "85"
+        value: "60"
       - key: VISION_PROVIDER
         value: openai
       - key: VISION_MODEL
-        value: gpt-4.1-mini
+        value: gpt-5.4-nano
       - key: OPENAI_TIMEOUT_SECONDS
-        value: "4.5"
+        value: "30"
       - key: OPENAI_API_KEY
         sync: false
