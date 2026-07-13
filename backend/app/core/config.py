@@ -18,8 +18,11 @@ class Settings(BaseSettings):
     max_upload_mb: int = 10
     max_batch_items: int = 25
     batch_concurrency_limit: int = 3
-    vision_provider: str = "fake"
-    vision_model: str = ""
+    image_max_dimension: int = 1600
+    image_jpeg_quality: int = 85
+    vision_provider: str = "openai"
+    vision_model: str = "gpt-4.1-mini"
+    openai_timeout_seconds: float = 4.5
     openai_api_key: str = ""
 
     @field_validator("backend_cors_origins", mode="before")
@@ -27,6 +30,34 @@ class Settings(BaseSettings):
     def parse_cors_origins(cls, value: Any) -> list[str] | Any:
         if isinstance(value, str):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
+
+    @field_validator("vision_provider", mode="before")
+    @classmethod
+    def normalize_vision_provider(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
+
+    @field_validator("image_max_dimension")
+    @classmethod
+    def validate_image_max_dimension(cls, value: int) -> int:
+        if value < 320:
+            raise ValueError("image_max_dimension must be at least 320")
+        return value
+
+    @field_validator("image_jpeg_quality")
+    @classmethod
+    def validate_image_jpeg_quality(cls, value: int) -> int:
+        if value < 40 or value > 95:
+            raise ValueError("image_jpeg_quality must be between 40 and 95")
+        return value
+
+    @field_validator("openai_timeout_seconds")
+    @classmethod
+    def validate_openai_timeout_seconds(cls, value: float) -> float:
+        if value <= 0 or value > 4.5:
+            raise ValueError("openai_timeout_seconds must be greater than 0 and no more than 4.5")
         return value
 
     model_config = SettingsConfigDict(

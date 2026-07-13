@@ -25,6 +25,7 @@ Outputs:
 - Tuned image/model behavior.
 - Improved validation and accessible UI.
 - Checklist report.
+- Environment-backed provider timeout and image preprocessing settings.
 
 ## 5. Public Interfaces
 
@@ -66,6 +67,8 @@ All known bad inputs should produce plain-English errors. Provider failures shou
 
 - Checklist passes against the deployed URL.
 - Actual single-label latency numbers are reported.
+- Provider timeout is no more than 4.5 seconds.
+- Image preprocessing dimensions and JPEG quality are configurable from environment variables.
 - Accessibility issues found in the pass are fixed or documented as limitations.
 
 ## 10. Files Likely Touched

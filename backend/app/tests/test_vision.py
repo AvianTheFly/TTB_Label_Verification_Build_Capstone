@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 from PIL import Image
 
+from app.core.config import Settings
 from app.domain.comparison import compare_label
 from app.domain.models import ApplicationData, ExtractedLabel
 from app.services.demo_vision import DemoFixtureVisionService
@@ -14,6 +15,8 @@ from app.services.fake_vision import FakeVisionService
 from app.services.image_preprocess import ImagePreprocessError, preprocess_image
 from app.services.vision import (
     CANONICAL_EXTRACTION_FIELDS,
+    DEFAULT_OPENAI_TIMEOUT_SECONDS,
+    DEFAULT_OPENAI_VISION_MODEL,
     EXTRACTION_PROMPT,
     STRUCTURED_OUTPUT_SCHEMA,
     OpenAIVisionService,
@@ -164,6 +167,29 @@ def test_preprocess_downscales_and_reencodes_oversized_images() -> None:
     assert processed.original_height == 1200
     assert max(processed.processed_width, processed.processed_height) == 1200
     assert processed.processed_size_bytes > 0
+
+
+def test_openai_provider_reads_model_and_timeout_from_settings() -> None:
+    settings = Settings(
+        _env_file=None,
+        openai_api_key="test-key",
+        vision_model="gpt-test-model",
+        openai_timeout_seconds=3.25,
+    )
+
+    service = OpenAIVisionService.from_settings(settings)
+
+    assert service._model == "gpt-test-model"
+    assert service._timeout_seconds == 3.25
+
+
+def test_openai_provider_defaults_are_current_and_budgeted() -> None:
+    service = OpenAIVisionService()
+
+    assert service._model == DEFAULT_OPENAI_VISION_MODEL
+    assert DEFAULT_OPENAI_VISION_MODEL == "gpt-4.1-mini"
+    assert service._timeout_seconds == DEFAULT_OPENAI_TIMEOUT_SECONDS
+    assert DEFAULT_OPENAI_TIMEOUT_SECONDS == 4.5
 
 
 def test_parse_structured_output_preserves_government_warning_verbatim() -> None:

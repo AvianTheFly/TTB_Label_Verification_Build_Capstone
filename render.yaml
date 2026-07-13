@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: ttb-label-verification-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install uv && uv sync --frozen
+    startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_NAME
+        value: TTB Label Verification
+      - key: APP_VERSION
+        value: 0.1.0
+      - key: SERVICE_SLUG
+        value: ttb-label-verification
+      - key: BACKEND_CORS_ORIGINS
+        value: https://fed-stack-capstone.vercel.app
+      - key: MAX_UPLOAD_MB
+        value: "10"
+      - key: MAX_BATCH_ITEMS
+        value: "25"
+      - key: BATCH_CONCURRENCY_LIMIT
+        value: "3"
+      - key: IMAGE_MAX_DIMENSION
+        value: "1600"
+      - key: IMAGE_JPEG_QUALITY
+        value: "85"
+      - key: VISION_PROVIDER
+        value: openai
+      - key: VISION_MODEL
+        value: gpt-4.1-mini
+      - key: OPENAI_TIMEOUT_SECONDS
+        value: "4.5"
+      - key: OPENAI_API_KEY
+        sync: false
