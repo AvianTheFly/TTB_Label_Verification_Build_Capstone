@@ -155,6 +155,8 @@ def test_warning_failure_surfaces_extracted_government_warning_text() -> None:
     )
     assert warning_result["status"] == "FAIL"
     assert warning_result["found"] == extracted_warning
+    assert "AI detected:" in warning_result["message"]
+    assert extracted_warning in warning_result["message"]
 
 
 def test_missing_extracted_government_warning_needs_review_with_found_null() -> None:

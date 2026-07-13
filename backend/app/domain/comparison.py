@@ -103,9 +103,8 @@ def compare_government_warning(expected: str, found: str | None) -> FieldResult:
 
     expected_collapsed = collapse_whitespace(expected)
     found_collapsed = collapse_whitespace(found)
-    canonical_collapsed = collapse_whitespace(CANONICAL_GOVERNMENT_WARNING)
 
-    if expected_collapsed == canonical_collapsed and found_collapsed == canonical_collapsed:
+    if expected_collapsed == found_collapsed:
         return _pass(
             "government_warning",
             "exact",
@@ -119,7 +118,7 @@ def compare_government_warning(expected: str, found: str | None) -> FieldResult:
         "exact",
         expected,
         found,
-        "Government warning must match the canonical text exactly after whitespace collapse.",
+        f"Government warning does not match after whitespace collapse. AI detected: {found_collapsed}",
     )
 
 
