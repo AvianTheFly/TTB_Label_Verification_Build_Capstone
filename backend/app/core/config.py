@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     max_upload_mb: int = 10
     max_batch_items: int = 25
     batch_concurrency_limit: int = 3
+    single_label_timeout_seconds: float = 4.8
     image_max_dimension: int = 1024
     image_jpeg_quality: int = 70
     vision_provider: str = "openai"
@@ -59,6 +60,15 @@ class Settings(BaseSettings):
     def validate_openai_timeout_seconds(cls, value: float) -> float:
         if value <= 0 or value > 4.5:
             raise ValueError("openai_timeout_seconds must be greater than 0 and no more than 4.5")
+        return value
+
+    @field_validator("single_label_timeout_seconds")
+    @classmethod
+    def validate_single_label_timeout_seconds(cls, value: float) -> float:
+        if value <= 0 or value > 5.0:
+            raise ValueError(
+                "single_label_timeout_seconds must be greater than 0 and no more than 5.0"
+            )
         return value
 
     model_config = SettingsConfigDict(
