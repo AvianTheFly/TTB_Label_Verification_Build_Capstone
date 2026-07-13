@@ -4,6 +4,11 @@ import { formatFileSize } from "../../labelFields";
 import { createPreviewUrl, revokePreviewUrl } from "../filePreviews";
 import { isSupportedImageFile } from "../packageWorkflowUtils";
 
+interface PreviewImage {
+  file: File;
+  url: string;
+}
+
 interface UploadPreviewDialogProps {
   files: File[];
   onAccept: (files: File[]) => void;
@@ -19,28 +24,21 @@ export function UploadPreviewDialog({
 }: UploadPreviewDialogProps) {
   const imageFiles = useMemo(() => files.filter(isSupportedImageFile), [files]);
   const [selectedFilename, setSelectedFilename] = useState(imageFiles[0]?.name ?? "");
-  const previewUrls = useMemo(
-    () =>
-      new Map(
-        imageFiles.map((file) => [
-          file.name,
-          {
-            file,
-            url: createPreviewUrl(file)
-          }
-        ])
-      ),
-    [imageFiles]
-  );
+  const [previewImages, setPreviewImages] = useState<PreviewImage[]>([]);
 
-  useEffect(
-    () => () => {
-      for (const preview of previewUrls.values()) {
+  useEffect(() => {
+    const nextPreviewImages = imageFiles.map((file) => ({
+      file,
+      url: createPreviewUrl(file)
+    }));
+    setPreviewImages(nextPreviewImages);
+
+    return () => {
+      for (const preview of nextPreviewImages) {
         revokePreviewUrl(preview.url);
       }
-    },
-    [previewUrls]
-  );
+    };
+  }, [imageFiles]);
 
   useEffect(() => {
     if (!imageFiles.some((file) => file.name === selectedFilename)) {
@@ -59,7 +57,8 @@ export function UploadPreviewDialog({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onCancel]);
 
-  const selectedPreview = previewUrls.get(selectedFilename) ?? Array.from(previewUrls.values())[0];
+  const previewByFilename = new Map(previewImages.map((preview) => [preview.file.name, preview]));
+  const selectedPreview = previewByFilename.get(selectedFilename) ?? previewImages[0];
 
   return (
     <div className="upload-preview-overlay" role="dialog" aria-modal="true" aria-labelledby="upload-preview-title">
@@ -79,7 +78,7 @@ export function UploadPreviewDialog({
         <div className="upload-preview-body">
           <div className="upload-preview-grid" aria-label="Selected image previews">
             {imageFiles.map((file) => {
-              const preview = previewUrls.get(file.name);
+              const preview = previewByFilename.get(file.name);
               return (
                 <article className="upload-preview-tile" key={file.name}>
                   <button

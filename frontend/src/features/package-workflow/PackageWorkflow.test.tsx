@@ -444,11 +444,15 @@ describe("PackageWorkflow", () => {
       acceptPreview: false
     });
 
-    expect(container.querySelector('img[alt="Large preview of first.png"]')).not.toBeNull();
+    const firstPreview = container.querySelector('img[alt="Large preview of first.png"]');
+    expect(firstPreview).toBeInstanceOf(HTMLImageElement);
+    expect((firstPreview as HTMLImageElement).src).toContain("blob:first.png");
 
     await clickButtonLabel("Open larger preview for second.png");
 
-    expect(container.querySelector('img[alt="Large preview of second.png"]')).not.toBeNull();
+    const secondPreview = container.querySelector('img[alt="Large preview of second.png"]');
+    expect(secondPreview).toBeInstanceOf(HTMLImageElement);
+    expect((secondPreview as HTMLImageElement).src).toContain("blob:second.png");
   });
 
   it("adds later uploads to the current batch instead of replacing them", async () => {
