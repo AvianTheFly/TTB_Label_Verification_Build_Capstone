@@ -1,87 +1,99 @@
 # TTB Label Verification
 
-Free-tier cloud link: https://fed-stack-capstone.vercel.app/
+Live frontend: https://fed-stack-capstone.vercel.app/
 
 AI-assisted proof-of-concept for checking alcohol beverage label images against user-entered
-application data. The app lets a reviewer select label images, enter the seven required
-application fields, run verification, inspect expected-vs-found results, optionally correct
-extracted text, and download reviewed results.
+application data. The app is standalone, stateless, and does not integrate with COLA or use a
+database.
 
 ## Source Requirements
 
-This project follows:
-
 - `TTB_Label_Verification_Build_Playbook 1.pdf`
 - `Additional Project Requirements`
-
-The prototype is standalone. It does not integrate with COLA, does not use a database, and does not
-persist uploaded images, extracted label data, or application data beyond the lifetime of each
-request.
 
 ## Current Status
 
 - Public repository: https://github.com/AvianTheFly/TTB_Label_Verification_Build_Capstone
 - Live frontend: https://fed-stack-capstone.vercel.app/
-- Live backend verification with real OpenAI extraction: pending until `OPENAI_API_KEY` is available.
+- Real OpenAI live verification: pending until `OPENAI_API_KEY` is available.
 - Measured deployed p50/p95 latency: pending until real-provider live verification is run.
 
-## Tech Stack
+## Current Workflow
 
-- Backend: Python 3.12, FastAPI, Pydantic v2, Pillow, OpenAI Python SDK, `uv`
-- Frontend: React, TypeScript, Vite, npm
-- Default OpenAI vision model target: `gpt-4.1-mini`
-- Model verification status: public OpenAI model documentation was reviewed on 2026-07-13; final
-  account-backed model availability and live extraction verification are pending until an
-  `OPENAI_API_KEY` is available.
+1. User selects one or more label images.
+2. The frontend shows an image preview confirmation before adding the images.
+3. Each accepted image becomes one application.
+4. User opens an application and enters the seven application fields.
+5. User selects `Verify`.
+6. Frontend sends the image and application data together to `POST /verify`.
+7. Backend validates and preprocesses the image, extracts label text, compares fields, and returns
+   `APPROVED` or `NEEDS_REVIEW`.
 
 ## Features
 
-- Single-label image verification with seven user-entered application fields.
-- Batch image workflow with one application row per uploaded image.
-- Image preview confirmation before images are added to the workflow.
-- Backend-owned comparison and verdict logic.
+- Single-label verification with image upload, seven application fields, loading state, and result
+  view.
+- Batch upload with preview confirmation, per-image removal, bounded backend concurrency, and
+  per-item error isolation.
+- Backend-owned comparison logic with per-field `PASS` or `FAIL`.
+- Overall verdict rule: all fields pass -> `APPROVED`; any field fails -> `NEEDS_REVIEW`.
+- Exact, case-sensitive government-warning comparison after whitespace collapse.
+- Extracted government-warning text is surfaced on failures for human review.
+- Request-scoped image preprocessing before provider calls.
 - Editable extracted fields with backend recomparison through `/compare`.
 - Reviewed-results JSON download from the browser.
-- Bounded backend batch concurrency and item-level error isolation.
-- Required `latency_ms` on every single-label result and each successful batch item.
-- Exact, case-sensitive government warning comparison after whitespace collapse.
-- Extracted government warning text is surfaced on warning failure for human review.
-- Fake/demo vision paths for deterministic local testing.
-- Real OpenAI vision-service adapter behind an explicit `VisionService` interface.
-
-Canonical API fields:
-
-```text
-brand_name
-class_type
-abv
-net_contents
-producer
-country_of_origin
-government_warning
-```
+- Real OpenAI vision adapter behind a `VisionService` interface.
+- Explicit local-only demo and test vision providers.
 
 ## Architecture
 
 ```text
-Frontend
-  - Image upload and preview confirmation
-  - One application row per selected image
-  - Seven-field application data entry
-  - Results and reviewer corrections
-  - Calls backend APIs; does not implement comparison rules
+frontend/
+  React + TypeScript + Vite
+  image preview, application fields, result display
 
-Backend
-  - FastAPI routes: /health, /verify, /verify/batch, /compare
-  - Upload validation and error shaping
-  - Image preprocessing
-  - VisionService extraction boundary
-  - Pure comparison engine
-  - Stateless request handling
+backend/
+  FastAPI
+  /health, /verify, /verify/batch, /compare
+  image validation and preprocessing
+  VisionService provider boundary
+  pure comparison engine
 ```
 
-Provider-specific code is isolated behind `VisionService`. Tests use fake or mocked extraction and
-do not require real model calls.
+The frontend mirrors backend API field names exactly:
+
+- `brand_name`
+- `class_type`
+- `abv`
+- `net_contents`
+- `producer`
+- `country_of_origin`
+- `government_warning`
+
+## Vision Provider Configuration
+
+Provider choice and credentials are backend environment configuration only. The frontend never
+accepts or sends API keys, model names, or provider-selection flags.
+
+Production defaults:
+
+```text
+VISION_PROVIDER=openai
+VISION_MODEL=gpt-4.1-mini
+OPENAI_TIMEOUT_SECONDS=4.5
+IMAGE_MAX_DIMENSION=1600
+IMAGE_JPEG_QUALITY=85
+```
+
+`gpt-4.1-mini` is the configured default model for the OpenAI vision provider. Public OpenAI model
+documentation was reviewed on 2026-07-13; final account-backed model availability and live
+extraction verification are pending until `OPENAI_API_KEY` is available.
+
+Supported providers:
+
+- `openai`: real provider for production and deployed verification.
+- `demo`: filename-keyed fixture extraction for explicit local demonstrations.
+- `fake`: deterministic test double for automated tests and explicit local development only.
 
 ## Environment Variables
 
@@ -100,8 +112,11 @@ commit real keys and do not add real keys to documentation.
 | `MAX_UPLOAD_MB` | No | `10` | Maximum uploaded image size per file. |
 | `MAX_BATCH_ITEMS` | No | `25` | Maximum labels accepted in one batch request. |
 | `BATCH_CONCURRENCY_LIMIT` | No | `3` | Maximum concurrent batch verification tasks. |
-| `VISION_PROVIDER` | Yes in deploy | `fake` | Vision provider selector. Use `fake` for deterministic tests and `openai` for real extraction. |
+| `IMAGE_MAX_DIMENSION` | No | `1600` | Maximum image dimension after preprocessing. |
+| `IMAGE_JPEG_QUALITY` | No | `85` | JPEG quality used for preprocessed images. |
+| `VISION_PROVIDER` | Yes in deploy | `openai` | Vision provider selector. Use `openai` for production. |
 | `VISION_MODEL` | Yes for real extraction | `gpt-4.1-mini` | OpenAI model used by the real vision provider. |
+| `OPENAI_TIMEOUT_SECONDS` | No | `4.5` | OpenAI client timeout. Keep at or below 4.5 seconds for deploy. |
 | `OPENAI_API_KEY` | Yes for real extraction | empty | OpenAI API key. Backend environment only. |
 | `VITE_API_BASE_URL` | Yes for frontend | `http://127.0.0.1:8000` | Frontend API base URL. |
 
@@ -127,11 +142,11 @@ npm install
 
 ## Run Locally
 
-Local fake-provider mode does not require an API key:
+Run without a real provider key:
 
 ```bash
 cd backend
-VISION_PROVIDER=fake OPENAI_API_KEY= uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+VISION_PROVIDER=demo OPENAI_API_KEY= uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
 Frontend:
@@ -237,7 +252,13 @@ Expected success shape:
 }
 ```
 
-Expected error shape:
+### `POST /compare`
+
+`/compare` recomputes backend comparison after a reviewer edits extracted text. It accepts JSON
+with `application_data`, `extracted_data`, and optional `field_decisions`. It does not accept images
+and does not call the vision service.
+
+Expected API error shape:
 
 ```json
 {
@@ -297,6 +318,7 @@ Current implemented controls:
 
 - `/verify` responses include backend `latency_ms`.
 - `backend/scripts/live_checklist.py` asserts `latency_ms <= 5000` by default.
+- OpenAI client timeout defaults to `4.5` seconds.
 - Batch verification uses bounded concurrency with a default limit of `3`.
 - Images are validated and preprocessed before vision extraction.
 
@@ -316,7 +338,7 @@ Backend:
 
 ```bash
 cd backend
-uv run ruff check app
+uv run ruff check app scripts
 uv run pytest
 ```
 
@@ -331,18 +353,23 @@ npm run build
 
 ## Deployment
 
-Backend deployment environment:
+Committed deployment config:
 
-- Set `APP_ENV=production`.
+- `render.yaml` for the FastAPI backend.
+- `vercel.json` for the Vite frontend.
+
+Backend deployment requirements:
+
+- Set `OPENAI_API_KEY` only in the deployment provider environment.
+- Keep `VISION_PROVIDER=openai`.
+- Keep `VISION_MODEL=gpt-4.1-mini`.
+- Keep `OPENAI_TIMEOUT_SECONDS` at `4.5` or lower.
 - Set `BACKEND_CORS_ORIGINS` to the deployed frontend origin.
-- Set `VISION_PROVIDER=openai` only when the backend has a valid `OPENAI_API_KEY`.
-- Set `VISION_MODEL=gpt-4.1-mini`.
-- Keep `OPENAI_API_KEY` in provider settings only.
 
-Frontend deployment environment:
+Frontend deployment requirements:
 
 - Set `VITE_API_BASE_URL` to the deployed backend origin.
-- Rebuild and redeploy the frontend after changing the backend URL.
+- Rebuild after changing `VITE_API_BASE_URL`.
 
 Before submission:
 
@@ -384,27 +411,25 @@ GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink
 
 ## Assumptions And Limitations
 
-- The prototype is a standalone review aid, not an official TTB approval system.
+- This is a review aid, not an official TTB approval system.
 - Every verification request is self-contained and stateless.
-- Government warning text comparison is implemented, but warning lead-in bold styling detection is
-  not claimed.
+- Government warning text exactness is implemented; bold styling detection for the
+  `GOVERNMENT WARNING:` lead-in is not claimed.
 - Real OpenAI extraction has not been verified live yet because production API keys are not
   available.
 - Measured deployed p50/p95 latency remains pending until the real-provider live pass.
-- Free-tier hosting may introduce cold-start latency separate from backend `latency_ms`.
+- Free-tier hosting may add cold-start latency outside request-scoped `latency_ms`.
 - Demo/fake providers are for local tests and demos only; they are not a substitute for production
   vision extraction.
 
 ## Security And Privacy
 
-- Uploaded images are processed for the current request only.
-- Extracted label data and application data are not persisted by the app.
-- No database is used for the MVP.
-- API keys and secrets belong only in backend environment variables or deployment-provider settings.
+- Uploaded images, extracted data, and application data are processed only for the current request.
+- No database is used.
+- Real keys and secrets must live only in local `.env` files or deployment-provider settings.
 - The frontend never accepts or sends provider API keys.
 - `.env`, `backend/.env`, and `frontend/.env` are ignored.
-- Public API errors must not expose stack traces, provider internals, API keys, local paths, raw
-  images, or unhandled exceptions.
+- API errors must not expose stack traces, provider internals, API keys, local paths, or raw images.
 
 ## Final Submission Checklist
 
