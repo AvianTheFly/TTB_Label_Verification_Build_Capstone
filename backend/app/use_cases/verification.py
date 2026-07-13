@@ -28,6 +28,8 @@ async def verify_label_image(
         content_type,
         filename=filename,
         max_upload_mb=settings.max_upload_mb,
+        max_dimension_px=settings.image_max_dimension,
+        jpeg_quality=settings.image_jpeg_quality,
     )
     preprocessing_ms = elapsed_ms(preprocess_start)
 
@@ -57,4 +59,3 @@ async def verify_label_image(
         },
     )
     return result
-

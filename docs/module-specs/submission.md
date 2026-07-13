@@ -23,6 +23,7 @@ Inputs:
 Outputs:
 
 - Complete README.
+- Committed deployment configuration.
 - Clean secret audit.
 - Final end-to-end verification notes.
 
@@ -61,6 +62,7 @@ Document known limitations honestly. Do not hide failing checks.
 ## 9. Exit Criteria
 
 - README includes setup, run, deployed URL, approach, tools, assumptions, and limitations.
+- Deploy config is committed and matches the README deployment path.
 - Audit confirms `.env` and secrets are not committed.
 - Live demo works end to end.
 - README honestly documents whether warning styling detection is supported or out of scope.

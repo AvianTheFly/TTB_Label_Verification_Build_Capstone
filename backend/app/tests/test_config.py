@@ -1,4 +1,6 @@
-from app.core.config import get_settings
+import pytest
+
+from app.core.config import Settings, get_settings
 
 
 def test_cors_origins_accept_comma_separated_env(monkeypatch) -> None:
@@ -27,3 +29,26 @@ def test_public_identity_can_be_set_from_env(monkeypatch) -> None:
     assert settings.app_version == "9.9.9"
     assert settings.service_slug == "example-service"
     get_settings.cache_clear()
+
+
+def test_production_safe_defaults_use_real_provider() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.vision_provider == "openai"
+    assert settings.vision_model == "gpt-5.6-luna"
+    assert settings.openai_timeout_seconds == 4.5
+    assert settings.image_max_dimension == 1600
+    assert settings.image_jpeg_quality == 85
+
+
+def test_openai_timeout_cannot_exceed_latency_budget() -> None:
+    with pytest.raises(ValueError):
+        Settings(_env_file=None, openai_timeout_seconds=5.0)
+
+
+def test_image_preprocess_knobs_are_validated() -> None:
+    with pytest.raises(ValueError):
+        Settings(_env_file=None, image_max_dimension=200)
+
+    with pytest.raises(ValueError):
+        Settings(_env_file=None, image_jpeg_quality=99)
