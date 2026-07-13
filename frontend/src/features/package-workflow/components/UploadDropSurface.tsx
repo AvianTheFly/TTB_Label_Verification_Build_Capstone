@@ -48,7 +48,7 @@ export function UploadDropSurface({
           Choose Files
         </button>
         <input
-          accept="image/jpeg,image/png,image/webp"
+          accept="image/*"
           className="file-input"
           multiple
           onChange={onFileInputChange}

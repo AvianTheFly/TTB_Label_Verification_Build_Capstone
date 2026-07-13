@@ -9,7 +9,8 @@ from PIL import Image
 
 from app.domain.comparison import compare_label
 from app.domain.models import ApplicationData, ExtractedLabel
-from app.services.fake_vision import DemoVisionService, FakeVisionService
+from app.services.demo_vision import DemoFixtureVisionService
+from app.services.fake_vision import FakeVisionService
 from app.services.image_preprocess import ImagePreprocessError, preprocess_image
 from app.services.vision import (
     CANONICAL_EXTRACTION_FIELDS,
@@ -61,7 +62,7 @@ async def test_demo_vision_service_uses_filename_keyed_extraction() -> None:
         "image/png",
         filename="evergreen-amber-bourbon.png",
     )
-    service = DemoVisionService()
+    service = DemoFixtureVisionService()
 
     result = await service.extract_label(image)
 

@@ -343,6 +343,7 @@ describe("PackageWorkflow", () => {
     await renderPackageWorkflow();
 
     expect(container.querySelector('[data-testid="package-upload-area"]')).not.toBeNull();
+    expect(fileInput().accept).toBe("image/*");
     expect(container.textContent).toContain("Choose Files");
     expect(container.textContent).toContain("Download Demo Data");
     expect(container.textContent).not.toContain("Submit");
@@ -659,8 +660,14 @@ describe("PackageWorkflow", () => {
     expect(container.textContent).not.toContain("AI Reasoning");
 
     const applicationBrand = container.querySelector('[aria-label="Application Value Brand Name"]');
+    const applicationAbv = container.querySelector('[aria-label="Application Value Alcohol Content"]');
+    const applicationNetContents = container.querySelector('[aria-label="Application Value Net Contents"]');
     const extractedBrand = container.querySelector('[aria-label="Extracted Value Brand Name"]');
     expect(applicationBrand).toBeInstanceOf(HTMLInputElement);
+    expect(applicationAbv).toBeInstanceOf(HTMLInputElement);
+    expect(applicationNetContents).toBeInstanceOf(HTMLInputElement);
+    expect((applicationAbv as HTMLInputElement).inputMode).toBe("decimal");
+    expect((applicationNetContents as HTMLInputElement).inputMode).toBe("decimal");
     expect(extractedBrand).toBeInstanceOf(HTMLParagraphElement);
     expect(extractedBrand?.textContent).toBe("Old Tom Distillery");
     expect(buttonWithText("X")).toBeInstanceOf(HTMLButtonElement);

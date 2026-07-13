@@ -102,6 +102,7 @@ export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: 
           const fieldResult = fieldResults.get(field.name);
           const extractedValue = extractedData[field.name] ?? "";
           const selectedDecision = fieldDecisions[field.name];
+          const inputMode = field.name === "abv" || field.name === "net_contents" ? "decimal" : undefined;
 
           return (
             <div
@@ -162,6 +163,7 @@ export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: 
                       onChange={(event) =>
                         onApplicationDataChange(record.package_id, field.name, event.target.value)
                       }
+                      inputMode={inputMode}
                       type="text"
                       value={record.application_data[field.name]}
                     />
