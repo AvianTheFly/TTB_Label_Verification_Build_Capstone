@@ -102,7 +102,9 @@ export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: 
           const fieldResult = fieldResults.get(field.name);
           const extractedValue = extractedData[field.name] ?? "";
           const selectedDecision = fieldDecisions[field.name];
-          const inputMode = field.name === "abv" || field.name === "net_contents" ? "decimal" : undefined;
+          const isNumericTextField = field.name === "abv" || field.name === "net_contents";
+          const inputMode = isNumericTextField ? "decimal" : undefined;
+          const pattern = isNumericTextField ? ".*[0-9]+(\\.[0-9]+)?.*" : undefined;
 
           return (
             <div
@@ -164,6 +166,8 @@ export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: 
                         onApplicationDataChange(record.package_id, field.name, event.target.value)
                       }
                       inputMode={inputMode}
+                      pattern={pattern}
+                      title={isNumericTextField ? `${field.label} must include a number.` : undefined}
                       type="text"
                       value={record.application_data[field.name]}
                     />

@@ -84,3 +84,26 @@ def test_live_checklist_percentile_uses_nearest_rank() -> None:
 
     assert live_checklist._percentile(values, 50) == 300
     assert live_checklist._percentile(values, 95) == 500
+
+
+def test_live_checklist_default_sample_paths_exist() -> None:
+    live_checklist = load_live_checklist()
+
+    assert live_checklist._default_image_path().exists()
+    assert live_checklist._default_application_data_path().exists()
+
+
+def test_live_checklist_falls_back_to_frontend_demo_inputs(tmp_path: Path) -> None:
+    live_checklist = load_live_checklist()
+    fallback_input = (
+        tmp_path
+        / "frontend"
+        / "public"
+        / "demo-data"
+        / "inputs"
+        / "northstar-riesling.png"
+    )
+    fallback_input.parent.mkdir(parents=True)
+    fallback_input.write_bytes(b"sample")
+
+    assert live_checklist._demo_input_path("northstar-riesling.png", tmp_path) == fallback_input
