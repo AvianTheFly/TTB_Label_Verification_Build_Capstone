@@ -5,8 +5,8 @@ from pydantic import ValidationError
 
 from app.core.errors import ApiError
 from app.domain.models import ApplicationData
-from app.use_cases.batch_verification import (
-    BatchVerificationInput,
+from app.use_cases.batch_verification import BatchVerificationInput
+from app.use_cases.error_mapping import (
     bad_request_item_error,
     file_too_large_item_error,
     validation_item_error,
@@ -218,4 +218,3 @@ def _load_json_object(raw_json: str, *, field: str) -> dict[str, Any]:
             details={"field": field},
         )
     return payload
-

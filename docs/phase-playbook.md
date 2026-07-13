@@ -17,7 +17,7 @@ Files usually touched:
 - `backend/app/api/health.py`
 - `backend/app/core/config.py`
 - `backend/app/core/errors.py`
-- `backend/app/tests/test_health.py`
+- `backend/tests/test_health.py`
 - `frontend/package.json`
 - `frontend/src/app/App.tsx`
 - `frontend/src/api/health.ts`
@@ -39,7 +39,7 @@ Files usually touched:
 - `backend/app/domain/models.py`
 - `backend/app/domain/comparison.py`
 - `backend/app/domain/normalization.py`
-- `backend/app/tests/test_comparison.py`
+- `backend/tests/test_comparison.py`
 - `docs/interfaces/api-contracts.md`
 - `docs/module-specs/comparison-engine.md`
 
@@ -65,7 +65,7 @@ Files usually touched:
 - `backend/app/services/vision.py`
 - `backend/app/services/image_preprocess.py`
 - `backend/app/services/fake_vision.py`
-- `backend/app/tests/test_vision.py`
+- `backend/tests/test_vision.py`
 - `backend/scripts/run_vision_sample.py`
 - `docs/module-specs/vision-service.md`
 
@@ -82,7 +82,7 @@ Files usually touched:
 - `backend/app/api/verify.py`
 - `backend/app/api/dependencies.py`
 - `backend/app/core/error_handlers.py`
-- `backend/app/tests/test_verify_endpoint.py`
+- `backend/tests/test_verify_endpoint.py`
 - `docs/interfaces/api-contracts.md`
 - `docs/module-specs/verify-endpoint.md`
 
@@ -109,9 +109,9 @@ Boundary risk: UI labels can be friendly, but API payload keys must stay exactly
 Files usually touched:
 
 - `backend/app/api/batch.py`
-- `backend/app/services/batch.py`
-- `backend/app/tests/test_batch_endpoint.py`
-- `frontend/src/features/batch/`
+- `backend/app/use_cases/batch_verification.py`
+- `backend/tests/test_batch_endpoint.py`
+- `frontend/src/features/package-workflow/`
 - `frontend/src/api/verification.ts`
 - `docs/module-specs/batch-verification.md`
 

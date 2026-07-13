@@ -36,7 +36,10 @@ async def verify_label(
         image_bytes = await read_image_upload(image, max_upload_mb=settings.max_upload_mb)
         upload_read_ms = elapsed_ms(upload_start)
         logger.info(
-            "verify_request_input_timing parse_application_ms=%s upload_read_ms=%s upload_size_bytes=%s",
+            (
+                "verify_request_input_timing parse_application_ms=%s "
+                "upload_read_ms=%s upload_size_bytes=%s"
+            ),
             parse_application_ms,
             upload_read_ms,
             len(image_bytes),

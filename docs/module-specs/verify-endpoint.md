@@ -71,5 +71,5 @@ Bad file types, oversized files, malformed JSON, missing required fields, empty 
 - `backend/app/api/verify.py`
 - `backend/app/api/dependencies.py`
 - `backend/app/core/error_handlers.py`
-- `backend/app/tests/test_verify_endpoint.py`
+- `backend/tests/test_verify_endpoint.py`
 - `docs/interfaces/api-contracts.md`

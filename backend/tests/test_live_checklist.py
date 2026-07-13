@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 def load_live_checklist():
-    script_path = Path(__file__).resolve().parents[2] / "scripts" / "live_checklist.py"
+    script_path = Path(__file__).resolve().parents[1] / "scripts" / "live_checklist.py"
     spec = importlib.util.spec_from_file_location("live_checklist", script_path)
     assert spec is not None
     assert spec.loader is not None

@@ -7,6 +7,7 @@ from app.domain.models import (
     CanonicalField,
     ExtractedLabel,
     FieldResult,
+    MatchType,
     VerificationResult,
 )
 from app.domain.normalization import (
@@ -18,16 +19,8 @@ from app.domain.normalization import (
     parse_abv,
     parse_net_contents_ml,
 )
+from app.domain.results import build_verification_result
 
-CANONICAL_FIELDS: tuple[CanonicalField, ...] = (
-    "brand_name",
-    "class_type",
-    "abv",
-    "net_contents",
-    "producer",
-    "country_of_origin",
-    "government_warning",
-)
 CANONICAL_GOVERNMENT_WARNING = (
     "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink "
     "alcoholic beverages during pregnancy because of the risk of birth defects. (2) "
@@ -35,6 +28,7 @@ CANONICAL_GOVERNMENT_WARNING = (
     "machinery, and may cause health problems."
 )
 FUZZY_THRESHOLD = 90
+FieldComparer = Callable[[str, str | None], FieldResult]
 
 
 def compare_brand_name(expected: str, found: str | None) -> FieldResult:
@@ -123,26 +117,25 @@ def compare_government_warning(expected: str, found: str | None) -> FieldResult:
     )
 
 
+FIELD_COMPARERS: tuple[tuple[CanonicalField, FieldComparer], ...] = (
+    ("brand_name", compare_brand_name),
+    ("class_type", compare_class_type),
+    ("abv", compare_abv),
+    ("net_contents", compare_net_contents),
+    ("producer", compare_producer),
+    ("country_of_origin", compare_country_of_origin),
+    ("government_warning", compare_government_warning),
+)
+
+
 def compare_label(
     application_data: ApplicationData, extracted_label: ExtractedLabel
 ) -> VerificationResult:
-    comparisons: tuple[tuple[CanonicalField, Callable[[str, str | None], FieldResult]], ...] = (
-        ("brand_name", compare_brand_name),
-        ("class_type", compare_class_type),
-        ("abv", compare_abv),
-        ("net_contents", compare_net_contents),
-        ("producer", compare_producer),
-        ("country_of_origin", compare_country_of_origin),
-        ("government_warning", compare_government_warning),
-    )
     results = [
         compare(getattr(application_data, field), getattr(extracted_label, field))
-        for field, compare in comparisons
+        for field, compare in FIELD_COMPARERS
     ]
-    overall_verdict = (
-        "APPROVED" if all(result.status == "PASS" for result in results) else "NEEDS_REVIEW"
-    )
-    return VerificationResult(results=results, overall_verdict=overall_verdict)
+    return build_verification_result(results)
 
 
 def _compare_fuzzy(field: CanonicalField, expected: str, found: str | None) -> FieldResult:
@@ -165,7 +158,7 @@ def _compare_fuzzy(field: CanonicalField, expected: str, found: str | None) -> F
 
 
 def _pass(
-    field: CanonicalField, match_type: str, expected: str, found: str | None, message: str
+    field: CanonicalField, match_type: MatchType, expected: str, found: str | None, message: str
 ) -> FieldResult:
     return FieldResult(
         field=field,
@@ -178,7 +171,7 @@ def _pass(
 
 
 def _fail(
-    field: CanonicalField, match_type: str, expected: str, found: str | None, message: str
+    field: CanonicalField, match_type: MatchType, expected: str, found: str | None, message: str
 ) -> FieldResult:
     return FieldResult(
         field=field,

@@ -73,7 +73,7 @@ The frontend health check may display a plain-English connection error when the 
 - `backend/app/api/health.py`
 - `backend/app/core/config.py`
 - `backend/app/core/errors.py`
-- `backend/app/tests/test_health.py`
+- `backend/tests/test_health.py`
 - `frontend/package.json`
 - `frontend/src/app/App.tsx`
 - `frontend/src/api/health.ts`

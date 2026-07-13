@@ -2,8 +2,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.api.dependencies import get_vision_service
 from app.api import dependencies
+from app.api.dependencies import get_vision_service
 from app.core.errors import ApiError
 from app.services.demo_vision import DemoFixtureVisionService
 from app.services.fake_vision import FakeVisionService

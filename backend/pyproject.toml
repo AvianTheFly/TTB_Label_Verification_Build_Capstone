@@ -30,7 +30,7 @@ build-backend = "hatchling.build"
 packages = ["app"]
 
 [tool.pytest.ini_options]
-testpaths = ["app/tests"]
+testpaths = ["tests"]
 asyncio_mode = "auto"
 
 [tool.ruff]

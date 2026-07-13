@@ -14,6 +14,16 @@ CanonicalField = Literal[
 MatchType = Literal["fuzzy", "numeric", "unit", "synonym", "exact"]
 FieldStatus = Literal["PASS", "FAIL"]
 OverallVerdict = Literal["APPROVED", "NEEDS_REVIEW"]
+ReviewerDecision = Literal["pass", "fail"]
+CANONICAL_FIELDS: tuple[CanonicalField, ...] = (
+    "brand_name",
+    "class_type",
+    "abv",
+    "net_contents",
+    "producer",
+    "country_of_origin",
+    "government_warning",
+)
 
 
 class ApplicationData(BaseModel):

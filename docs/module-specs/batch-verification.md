@@ -81,8 +81,8 @@ Batch processing uses a bounded async concurrency limit, default `3`. Batch tota
 ## 10. Files Likely Touched
 
 - `backend/app/api/batch.py`
-- `backend/app/services/batch.py`
-- `backend/app/tests/test_batch_endpoint.py`
-- `frontend/src/features/batch/`
+- `backend/app/use_cases/batch_verification.py`
+- `backend/tests/test_batch_endpoint.py`
+- `frontend/src/features/package-workflow/`
 - `frontend/src/api/verification.ts`
 - `frontend/src/types/api.ts`

@@ -388,7 +388,7 @@
               Coordinates image preprocessing, vision extraction, comparison, timing, and batch
               concurrency.
             </p>
-            <p><code>services/verification.py</code>, <code>services/batch.py</code></p>
+            <p><code>use_cases/verification.py</code>, <code>use_cases/batch_verification.py</code></p>
           </div>
           <div class="mini red">
             <h3>Provider Boundary</h3>
@@ -617,7 +617,7 @@ government_warning</code></pre>
           <li>Batch tests verify bounded concurrency behavior, summary counts, and item-level error isolation.</li>
         </ul>
         <pre><code>cd backend
-uv run pytest</code></pre>
+uv run --extra dev pytest</code></pre>
       </section>
 
       <section id="tradeoffs">

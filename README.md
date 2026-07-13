@@ -344,8 +344,8 @@ Backend:
 
 ```bash
 cd backend
-uv run ruff check app scripts
-uv run pytest
+uv run --extra dev ruff check .
+uv run --extra dev pytest
 ```
 
 Frontend:
