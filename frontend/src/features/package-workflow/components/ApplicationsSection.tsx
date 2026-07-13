@@ -67,7 +67,7 @@ export function ApplicationsSection({
             <h2>{allRecordCount === 0 ? "No Applications Loaded" : "No Matching Applications"}</h2>
             <p>
               {allRecordCount === 0
-                ? "Choose JSON and image files to begin."
+                ? "Choose label images to begin."
                 : "Adjust search filters to show more applications."}
             </p>
           </div>
@@ -88,7 +88,7 @@ export function ApplicationsSection({
                   <span className="package-card__thumbnail package-card__thumbnail--blank" />
                 )}
                 <span className="package-card__body">
-                  <strong>{record.application_data.brand_name}</strong>
+                  <strong>{record.application_data.brand_name.trim() || record.image_filename}</strong>
                   <span className={`status-chip status-chip--${cardStatusClass(record.status)}`}>
                     {record.status}
                   </span>
@@ -104,4 +104,3 @@ export function ApplicationsSection({
     </section>
   );
 }
-

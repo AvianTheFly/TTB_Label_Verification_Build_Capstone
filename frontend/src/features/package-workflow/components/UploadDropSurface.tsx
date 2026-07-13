@@ -41,14 +41,14 @@ export function UploadDropSurface({
         data-testid="package-upload-area"
       >
         <div>
-          <h2>Drop Application Packages</h2>
-          <p>JSON and label image files</p>
+          <h2>Drop Label Images</h2>
+          <p>JPG, PNG, or WEBP label images</p>
         </div>
         <button className="secondary-button" onClick={() => fileInputRef.current?.click()} type="button">
           Choose Files
         </button>
         <input
-          accept=".json,application/json,image/jpeg,image/png,image/webp"
+          accept="image/jpeg,image/png,image/webp"
           className="file-input"
           multiple
           onChange={onFileInputChange}
