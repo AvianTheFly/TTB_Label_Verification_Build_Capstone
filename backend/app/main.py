@@ -1,3 +1,6 @@
+import logging
+import sys
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,7 +15,21 @@ from app.core.error_handlers import api_error_handler, request_validation_error_
 from app.core.errors import ApiError, ErrorEnvelope, ErrorPayload
 
 
+def configure_app_logging() -> None:
+    app_logger = logging.getLogger("app")
+    app_logger.setLevel(logging.INFO)
+    app_logger.propagate = False
+
+    if app_logger.handlers:
+        return
+
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+    app_logger.addHandler(handler)
+
+
 def create_app() -> FastAPI:
+    configure_app_logging()
     settings = get_settings()
     app = FastAPI(title=settings.app_name, version=settings.app_version)
 
