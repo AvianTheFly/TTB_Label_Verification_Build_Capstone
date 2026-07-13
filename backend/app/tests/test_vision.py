@@ -185,6 +185,7 @@ def test_openai_provider_reads_model_and_timeout_from_settings() -> None:
         vision_model="gpt-test-model",
         openai_timeout_seconds=3.25,
         openai_image_detail="high",
+        openai_max_output_tokens=650,
     )
 
     service = OpenAIVisionService.from_settings(settings)
@@ -192,6 +193,7 @@ def test_openai_provider_reads_model_and_timeout_from_settings() -> None:
     assert service._model == "gpt-test-model"
     assert service._timeout_seconds == 3.25
     assert service._image_detail == "high"
+    assert service._max_output_tokens == 650
 
 
 def test_openai_provider_defaults_are_current_and_budgeted() -> None:
@@ -200,9 +202,10 @@ def test_openai_provider_defaults_are_current_and_budgeted() -> None:
     assert service._model == DEFAULT_OPENAI_VISION_MODEL
     assert DEFAULT_OPENAI_VISION_MODEL == "gpt-4.1-mini"
     assert service._timeout_seconds == DEFAULT_OPENAI_TIMEOUT_SECONDS
-    assert DEFAULT_OPENAI_TIMEOUT_SECONDS == 4.2
+    assert DEFAULT_OPENAI_TIMEOUT_SECONDS == 3.8
     assert service._image_detail == DEFAULT_OPENAI_IMAGE_DETAIL
     assert DEFAULT_OPENAI_IMAGE_DETAIL == "low"
+    assert service._max_output_tokens == 500
 
 
 def test_parse_structured_output_preserves_government_warning_verbatim() -> None:
@@ -293,6 +296,7 @@ async def test_openai_provider_uses_strict_structured_output_and_prompt_rules() 
     assert result.government_warning == "GOVERNMENT WARNING: Visible text."
     assert request["model"] == "test-model"
     assert request["store"] is False
+    assert request["max_output_tokens"] == 500
     assert request["text"]["format"]["strict"] is True
     assert request["text"]["format"]["schema"] == STRUCTURED_OUTPUT_SCHEMA
     assert "Copy government_warning verbatim" in EXTRACTION_PROMPT
@@ -323,6 +327,7 @@ async def test_openai_provider_logs_timing_metadata_without_payload_contents(cap
     assert any("payload_parse_ms=" in message for message in messages)
     assert any("processed_size_bytes=" in message for message in messages)
     assert any("model=test-model" in message for message in messages)
+    assert any("max_output_tokens=500" in message for message in messages)
     assert all("OLD TOM DISTILLERY" not in message for message in messages)
 
 

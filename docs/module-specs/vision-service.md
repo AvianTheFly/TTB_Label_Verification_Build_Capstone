@@ -65,7 +65,8 @@ Runtime provider selection is environment-backed:
 
 Image preprocessing is configurable through `IMAGE_MAX_DIMENSION` and `IMAGE_JPEG_QUALITY`.
 OpenAI calls use `OPENAI_TIMEOUT_SECONDS`, capped at 4.5 seconds to preserve the single-label
-latency budget.
+latency budget. `OPENAI_IMAGE_DETAIL` defaults to `low`, and `OPENAI_MAX_OUTPUT_TOKENS`
+caps the structured response size for latency control.
 
 Safe categories include:
 

@@ -37,10 +37,11 @@ def test_production_safe_defaults_use_real_provider() -> None:
     assert settings.vision_provider == "openai"
     assert settings.vision_model == "gpt-4.1-mini"
     assert settings.single_label_timeout_seconds == 4.8
-    assert settings.openai_timeout_seconds == 4.2
+    assert settings.openai_timeout_seconds == 3.8
     assert settings.openai_image_detail == "low"
-    assert settings.image_max_dimension == 1024
-    assert settings.image_jpeg_quality == 70
+    assert settings.openai_max_output_tokens == 500
+    assert settings.image_max_dimension == 768
+    assert settings.image_jpeg_quality == 60
 
 
 def test_openai_timeout_cannot_exceed_latency_budget() -> None:
@@ -70,3 +71,11 @@ def test_openai_image_detail_allows_provider_supported_values() -> None:
 
     with pytest.raises(ValueError):
         Settings(_env_file=None, openai_image_detail="maximum")
+
+
+def test_openai_max_output_tokens_are_validated() -> None:
+    assert Settings(_env_file=None, openai_max_output_tokens=100)
+    assert Settings(_env_file=None, openai_max_output_tokens=2000)
+
+    with pytest.raises(ValueError):
+        Settings(_env_file=None, openai_max_output_tokens=99)

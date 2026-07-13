@@ -19,12 +19,13 @@ class Settings(BaseSettings):
     max_batch_items: int = 25
     batch_concurrency_limit: int = 3
     single_label_timeout_seconds: float = 4.8
-    image_max_dimension: int = 1024
-    image_jpeg_quality: int = 70
+    image_max_dimension: int = 768
+    image_jpeg_quality: int = 60
     vision_provider: str = "openai"
     vision_model: str = "gpt-4.1-mini"
-    openai_timeout_seconds: float = 4.2
+    openai_timeout_seconds: float = 3.8
     openai_image_detail: Literal["low", "high", "auto"] = "low"
+    openai_max_output_tokens: int = 500
     openai_api_key: str = ""
 
     @field_validator("backend_cors_origins", mode="before")
@@ -60,6 +61,13 @@ class Settings(BaseSettings):
     def validate_openai_timeout_seconds(cls, value: float) -> float:
         if value <= 0 or value > 4.5:
             raise ValueError("openai_timeout_seconds must be greater than 0 and no more than 4.5")
+        return value
+
+    @field_validator("openai_max_output_tokens")
+    @classmethod
+    def validate_openai_max_output_tokens(cls, value: int) -> int:
+        if value < 100 or value > 2000:
+            raise ValueError("openai_max_output_tokens must be between 100 and 2000")
         return value
 
     @field_validator("single_label_timeout_seconds")

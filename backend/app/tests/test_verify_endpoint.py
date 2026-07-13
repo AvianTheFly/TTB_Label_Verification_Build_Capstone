@@ -393,7 +393,9 @@ def test_verify_enforces_full_single_label_latency_budget(monkeypatch) -> None:
 
     assert response.status_code == 504
     assert_error_envelope(response, "vision_timeout")
-    assert response.json()["error"]["details"] == {"latency_budget_ms": 10}
+    assert response.json()["error"]["details"]["latency_budget_ms"] == 10
+    assert response.json()["error"]["details"]["timeout_scope"] == "single_label_request"
+    assert response.json()["error"]["details"]["elapsed_timeout_ms"] < 500
     assert len(slow_service.calls) == 1
     get_settings.cache_clear()
 

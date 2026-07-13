@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from time import perf_counter
 from typing import Annotated
@@ -14,6 +13,7 @@ from app.domain.models import VerificationResult
 from app.services.image_preprocess import ImagePreprocessError
 from app.services.vision import VisionService, VisionServiceError
 from app.use_cases.timing import elapsed_ms
+from app.use_cases.timeout import run_with_timeout
 from app.use_cases.verification import verify_label_image
 
 logger = logging.getLogger(__name__)
@@ -54,7 +54,7 @@ async def verify_label(
             raise _verification_timeout_error(settings.single_label_timeout_seconds)
 
         try:
-            result = await asyncio.wait_for(
+            result = await run_with_timeout(
                 verify_label_image(
                     application=application,
                     image_bytes=image_bytes,
@@ -63,10 +63,14 @@ async def verify_label(
                     vision_service=vision_service,
                     settings=settings,
                 ),
-                timeout=remaining_budget_seconds,
+                remaining_budget_seconds,
             )
-        except asyncio.TimeoutError as exc:
-            raise _verification_timeout_error(settings.single_label_timeout_seconds) from exc
+        except TimeoutError as exc:
+            raise _verification_timeout_error(
+                settings.single_label_timeout_seconds,
+                elapsed_ms(start),
+                "single_label_request",
+            ) from exc
 
         logger.info(
             "verify_request_completed latency_ms=%s overall_verdict=%s",
@@ -108,10 +112,20 @@ def _log_request_failure(
     )
 
 
-def _verification_timeout_error(timeout_seconds: float) -> ApiError:
+def _verification_timeout_error(
+    timeout_seconds: float,
+    elapsed_timeout_ms: int | None = None,
+    timeout_scope: str = "single_label_request",
+) -> ApiError:
+    details = {
+        "latency_budget_ms": int(timeout_seconds * 1000),
+        "timeout_scope": timeout_scope,
+    }
+    if elapsed_timeout_ms is not None:
+        details["elapsed_timeout_ms"] = elapsed_timeout_ms
     return ApiError(
         status_code=504,
         code="vision_timeout",
         message="The label check took too long. Please try again.",
-        details={"latency_budget_ms": int(timeout_seconds * 1000)},
+        details=details,
     )
