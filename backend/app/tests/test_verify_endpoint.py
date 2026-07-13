@@ -477,6 +477,25 @@ def test_verify_logs_request_timing_without_payload_contents(caplog) -> None:
     assert all(CANONICAL_GOVERNMENT_WARNING not in message for message in messages)
 
 
+def test_verify_logs_input_timing_without_payload_contents(caplog) -> None:
+    client, _ = make_client()
+    caplog.set_level("INFO", logger="app.api.verify")
+
+    response = post_verify(
+        client,
+        application_data=make_application_data(),
+        image_bytes=make_image_bytes(),
+    )
+
+    assert response.status_code == 200
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("verify_request_input_timing parse_application_ms=" in message for message in messages)
+    assert any("upload_read_ms=" in message for message in messages)
+    assert any("upload_size_bytes=" in message for message in messages)
+    assert all("OLD TOM DISTILLERY" not in message for message in messages)
+    assert all(CANONICAL_GOVERNMENT_WARNING not in message for message in messages)
+
+
 def test_verify_logs_timing_breakdown_without_payload_contents(caplog) -> None:
     client, _ = make_client()
     caplog.set_level("INFO", logger="app.use_cases.verification")

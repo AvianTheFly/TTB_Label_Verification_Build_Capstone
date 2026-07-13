@@ -22,6 +22,18 @@ export class VerificationApiError extends Error {
 
 const REQUEST_TIMEOUT_MS = 60000;
 
+interface VerificationTimingLog {
+  event: "verification_api_request";
+  path: string;
+  method: string;
+  ok: boolean;
+  status: number | null;
+  round_trip_ms: number;
+  backend_latency_ms: number | null;
+  overall_verdict?: VerificationResult["overall_verdict"];
+  timestamp: string;
+}
+
 function getApiBaseUrl(): string {
   const configuredUrl = import.meta.env.VITE_API_BASE_URL;
   if (!configuredUrl) {
@@ -32,6 +44,45 @@ function getApiBaseUrl(): string {
   }
 
   return configuredUrl.replace(/\/+$/, "");
+}
+
+function logVerificationTiming(log: VerificationTimingLog): void {
+  if (import.meta.env.MODE === "test") {
+    return;
+  }
+
+  console.info("[ttb-verification-timing]", log);
+}
+
+function responseStatus(response: Response): number | null {
+  return typeof response.status === "number" ? response.status : null;
+}
+
+function backendLatencyFromPayload(payload: unknown): number | null {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "latency_ms" in payload &&
+    typeof (payload as { latency_ms?: unknown }).latency_ms === "number"
+  ) {
+    return (payload as { latency_ms: number }).latency_ms;
+  }
+
+  return null;
+}
+
+function overallVerdictFromPayload(payload: unknown): VerificationResult["overall_verdict"] | undefined {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "overall_verdict" in payload &&
+    ((payload as { overall_verdict?: unknown }).overall_verdict === "APPROVED" ||
+      (payload as { overall_verdict?: unknown }).overall_verdict === "NEEDS_REVIEW")
+  ) {
+    return (payload as { overall_verdict: VerificationResult["overall_verdict"] }).overall_verdict;
+  }
+
+  return undefined;
 }
 
 function isApiErrorEnvelope(value: unknown): value is ApiErrorEnvelope {
@@ -81,6 +132,7 @@ async function readSuccess<T>(response: Response): Promise<T> {
 
 async function requestVerification<T>(path: string, init: RequestInit): Promise<T> {
   let response: Response;
+  const startedAt = performance.now();
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
@@ -89,6 +141,17 @@ async function requestVerification<T>(path: string, init: RequestInit): Promise<
       signal: controller.signal
     });
   } catch (error) {
+    logVerificationTiming({
+      event: "verification_api_request",
+      path,
+      method: init.method ?? "GET",
+      ok: false,
+      status: null,
+      round_trip_ms: Math.round(performance.now() - startedAt),
+      backend_latency_ms: null,
+      timestamp: new Date().toISOString()
+    });
+
     if (error instanceof VerificationApiError) {
       throw error;
     }
@@ -109,10 +172,33 @@ async function requestVerification<T>(path: string, init: RequestInit): Promise<
   }
 
   if (!response.ok) {
+    logVerificationTiming({
+      event: "verification_api_request",
+      path,
+      method: init.method ?? "GET",
+      ok: false,
+      status: responseStatus(response),
+      round_trip_ms: Math.round(performance.now() - startedAt),
+      backend_latency_ms: null,
+      timestamp: new Date().toISOString()
+    });
     throw await readError(response);
   }
 
-  return readSuccess<T>(response);
+  const payload = await readSuccess<T>(response);
+  logVerificationTiming({
+    event: "verification_api_request",
+    path,
+    method: init.method ?? "GET",
+    ok: true,
+    status: responseStatus(response),
+    round_trip_ms: Math.round(performance.now() - startedAt),
+    backend_latency_ms: backendLatencyFromPayload(payload),
+    overall_verdict: overallVerdictFromPayload(payload),
+    timestamp: new Date().toISOString()
+  });
+
+  return payload;
 }
 
 export async function verifyLabel(

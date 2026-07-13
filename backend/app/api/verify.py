@@ -28,8 +28,24 @@ async def verify_label(
     start = perf_counter()
     try:
         settings = get_settings()
+        parse_start = perf_counter()
         application = parse_application_data(application_data)
+        parse_application_ms = elapsed_ms(parse_start)
+
+        upload_start = perf_counter()
         image_bytes = await read_image_upload(image, max_upload_mb=settings.max_upload_mb)
+        upload_read_ms = elapsed_ms(upload_start)
+        logger.info(
+            "verify_request_input_timing parse_application_ms=%s upload_read_ms=%s upload_size_bytes=%s",
+            parse_application_ms,
+            upload_read_ms,
+            len(image_bytes),
+            extra={
+                "parse_application_ms": parse_application_ms,
+                "upload_read_ms": upload_read_ms,
+                "upload_size_bytes": len(image_bytes),
+            },
+        )
         result = await verify_label_image(
             application=application,
             image_bytes=image_bytes,
