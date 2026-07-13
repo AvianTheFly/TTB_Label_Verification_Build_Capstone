@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     image_max_dimension: int = 768
     image_jpeg_quality: int = 60
     vision_provider: str = "openai"
-    vision_model: str = "gpt-4.1-mini"
+    vision_model: str = "gpt-5.4-nano"
     openai_timeout_seconds: float = 30.0
     openai_image_detail: Literal["low", "high", "auto"] = "low"
     openai_max_output_tokens: int = 500

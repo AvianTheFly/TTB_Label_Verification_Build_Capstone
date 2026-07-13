@@ -11,7 +11,7 @@ from app.services.image_preprocess import PreprocessedImage
 from app.use_cases.timing import elapsed_ms
 from app.use_cases.timeout import run_with_timeout
 
-DEFAULT_OPENAI_VISION_MODEL = "gpt-4.1-mini"
+DEFAULT_OPENAI_VISION_MODEL = "gpt-5.4-nano"
 DEFAULT_OPENAI_TIMEOUT_SECONDS = 30.0
 DEFAULT_OPENAI_IMAGE_DETAIL = "low"
 DEFAULT_OPENAI_MAX_OUTPUT_TOKENS = 500

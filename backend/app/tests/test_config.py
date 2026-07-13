@@ -35,7 +35,7 @@ def test_production_safe_defaults_use_real_provider() -> None:
     settings = Settings(_env_file=None)
 
     assert settings.vision_provider == "openai"
-    assert settings.vision_model == "gpt-4.1-mini"
+    assert settings.vision_model == "gpt-5.4-nano"
     assert settings.single_label_timeout_seconds == 4.8
     assert settings.openai_timeout_seconds == 30.0
     assert settings.openai_image_detail == "low"

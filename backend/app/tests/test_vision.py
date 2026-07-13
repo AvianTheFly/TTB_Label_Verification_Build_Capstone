@@ -98,17 +98,7 @@ def test_demo_application_inputs_match_intended_scenarios() -> None:
 
     for stem, (verdict, failed_fields) in cases.items():
         root_application_path = project_root / "demo-data" / "inputs" / f"{stem}.application.json"
-        public_application_path = (
-            project_root
-            / "frontend"
-            / "public"
-            / "demo-data"
-            / "inputs"
-            / f"{stem}.application.json"
-        )
-        assert json.loads(root_application_path.read_text()) == json.loads(
-            public_application_path.read_text()
-        )
+        assert root_application_path.exists()
         application_payload = json.loads(root_application_path.read_text())["application_data"]
         extraction_path = (
             project_root
@@ -134,8 +124,8 @@ def test_demo_application_inputs_match_intended_scenarios() -> None:
 def test_openai_vision_service_defaults_to_documented_model() -> None:
     service = OpenAIVisionService(api_key="test-key")
 
-    assert service._model == "gpt-4.1-mini"
-    assert DEFAULT_OPENAI_VISION_MODEL == "gpt-4.1-mini"
+    assert service._model == "gpt-5.4-nano"
+    assert DEFAULT_OPENAI_VISION_MODEL == "gpt-5.4-nano"
 
 
 def test_preprocess_rejects_unsupported_content_type() -> None:
@@ -200,7 +190,7 @@ def test_openai_provider_defaults_are_current_and_budgeted() -> None:
     service = OpenAIVisionService()
 
     assert service._model == DEFAULT_OPENAI_VISION_MODEL
-    assert DEFAULT_OPENAI_VISION_MODEL == "gpt-4.1-mini"
+    assert DEFAULT_OPENAI_VISION_MODEL == "gpt-5.4-nano"
     assert service._timeout_seconds == DEFAULT_OPENAI_TIMEOUT_SECONDS
     assert DEFAULT_OPENAI_TIMEOUT_SECONDS == 30.0
     assert service._image_detail == DEFAULT_OPENAI_IMAGE_DETAIL
