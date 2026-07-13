@@ -2,7 +2,12 @@ import type { RefObject } from "react";
 
 import type { CanonicalLabelField, FieldReviewDecision } from "../../../types/api";
 import type { ApplicationPackageRecord } from "../packageWorkflowUtils";
-import { applicationNumber, cardStatusClass } from "../recordStatus";
+import {
+  applicationNumber,
+  cardStatusClass,
+  resolvedFieldDecisions,
+  summarizeFieldDecisions
+} from "../recordStatus";
 import { DataPanel } from "./DataPanel";
 import { ZoomableLabelImage } from "./ZoomableLabelImage";
 
@@ -34,6 +39,9 @@ export function ApplicationDetailDialog({
   record
 }: ApplicationDetailDialogProps) {
   const title = record.application_data.brand_name.trim() || record.image_filename;
+  const fieldSummary = summarizeFieldDecisions(resolvedFieldDecisions(record));
+  const reviewLabel =
+    fieldSummary.fail === 1 ? "1 field to review" : `${fieldSummary.fail} fields to review`;
 
   return (
     <div
@@ -68,8 +76,14 @@ export function ApplicationDetailDialog({
                 {title}
               </h2>
               <div className="detail-meta-strip" aria-label="Application metadata">
-                <span>Application #{applicationNumber(record.package_id)}</span>
-                <span>{record.image_filename}</span>
+                <span className="detail-meta-chip detail-meta-chip--strong">
+                  Application #{applicationNumber(record.package_id)}
+                </span>
+                <span className="detail-meta-chip">{reviewLabel}</span>
+                <span className="detail-meta-chip">{fieldSummary.pass} passed</span>
+                <span className="detail-meta-chip detail-meta-chip--file">
+                  {record.image_filename}
+                </span>
               </div>
             </div>
           </div>
