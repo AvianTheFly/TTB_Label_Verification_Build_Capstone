@@ -7,7 +7,6 @@ import { buildReviewedResultsExport, parseApplicationPackages } from "./packageW
 
 let container: HTMLDivElement;
 let root: Root;
-let createdBlobs: Blob[];
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -201,7 +200,7 @@ async function uploadOpenFillAndVerify(
     firstPackageButton().click();
   });
   await fillApplicationData(data);
-  await clickButton("SUBMIT / VERIFY");
+  await clickButton("VERIFY");
 }
 
 async function waitForAsyncUpdates() {
@@ -225,28 +224,6 @@ function packageButtonAt(index: number): HTMLButtonElement {
     throw new Error("Missing package button");
   }
   return button;
-}
-
-function readBlobText(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(reader.error ?? new Error("Could not read blob."));
-    reader.readAsText(blob);
-  });
-}
-
-function readBlobArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
-  if (typeof blob.arrayBuffer === "function") {
-    return blob.arrayBuffer();
-  }
-
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as ArrayBuffer);
-    reader.onerror = () => reject(reader.error ?? new Error("Could not read blob."));
-    reader.readAsArrayBuffer(blob);
-  });
 }
 
 describe("package parser", () => {
@@ -328,7 +305,6 @@ describe("package parser", () => {
 
 describe("PackageWorkflow", () => {
   beforeEach(() => {
-    createdBlobs = [];
     vi.stubEnv("VITE_API_BASE_URL", "http://127.0.0.1:8000");
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
       callback(0);
@@ -336,13 +312,7 @@ describe("PackageWorkflow", () => {
     });
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
-      value: vi.fn((value: Blob | File) => {
-        if (value instanceof Blob && !(value instanceof File)) {
-          createdBlobs.push(value);
-          return `blob:export-${createdBlobs.length}`;
-        }
-        return `blob:${(value as File).name}`;
-      })
+      value: vi.fn((value: Blob | File) => `blob:${(value as File).name}`)
     });
     Object.defineProperty(URL, "revokeObjectURL", {
       configurable: true,
@@ -371,7 +341,7 @@ describe("PackageWorkflow", () => {
     expect(container.querySelector('[data-testid="package-upload-area"]')).not.toBeNull();
     expect(container.textContent).toContain("Choose Files");
     expect(container.textContent).toContain("Download Demo Data");
-    expect(container.textContent).toContain("Submit");
+    expect(container.textContent).not.toContain("Submit");
     expect(container.textContent).toContain("Drop Label Images");
     expect(container.textContent).toContain("Applications");
     expect(container.textContent).not.toContain("Incomplete Applications");
@@ -549,7 +519,7 @@ describe("PackageWorkflow", () => {
     expect(readFormDataBody().get("use_real_vision")).toBeNull();
     expect(readFormDataBody().get("openai_api_key")).toBeNull();
     expect(readFormDataBody().get("openai_model")).toBeNull();
-    expect(container.textContent).toContain("Passed");
+    expect(container.textContent).toContain("Approved");
   });
 
   it("does not call /verify/batch automatically for multiple applications", async () => {
@@ -570,7 +540,7 @@ describe("PackageWorkflow", () => {
       packageButtonAt(0).click();
     });
     await fillApplicationData({ ...canonicalApplicationData, brand_name: "FIRST BRAND" });
-    await clickButton("SUBMIT / VERIFY");
+    await clickButton("VERIFY");
 
     expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:8000/verify", {
       method: "POST",
@@ -585,7 +555,7 @@ describe("PackageWorkflow", () => {
 
     const firstCard = container.textContent ?? "";
     expect(firstCard).toContain("FIRST BRAND");
-    expect(firstCard).toContain("Passed");
+    expect(firstCard).toContain("Approved");
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -620,7 +590,7 @@ describe("PackageWorkflow", () => {
     expect(extractedBrand?.textContent).toBe("Old Tom Distillery");
     expect(buttonWithText("X")).toBeInstanceOf(HTMLButtonElement);
     expect(container.querySelector('[aria-label="Fail Brand Name"]')).not.toBeNull();
-    expect(container.querySelector('[aria-label="Needs review Brand Name"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Needs review Brand Name"]')).toBeNull();
     expect(container.querySelector('[aria-label="Pass Brand Name"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="Brand Name comparison rule"]')).not.toBeNull();
     expect(container.textContent).toContain("same within 0.1 percentage points");
@@ -641,7 +611,7 @@ describe("PackageWorkflow", () => {
     await uploadOpenFillAndVerify();
 
     expect(container.querySelector("#data-title")).not.toBeNull();
-    await clickButtonLabel("Close detail view. Current status: Passed");
+    await clickButtonLabel("Close detail view. Current status: Approved");
     expect(container.querySelector("#data-title")).toBeNull();
   });
 
@@ -677,23 +647,22 @@ describe("PackageWorkflow", () => {
     }
 
     expect(dataPanel.textContent).toContain("7 total");
-    expect(dataPanel.textContent).toContain("0 fail");
-    expect(dataPanel.textContent).toContain("1 needs review");
+    expect(dataPanel.textContent).toContain("1 fail");
     expect(dataPanel.textContent).toContain("6 passed");
 
-    const reviewFilter = Array.from(dataPanel.querySelectorAll("button")).find(
-      (button) => button.textContent === "1 needs review"
+    const failFilter = Array.from(dataPanel.querySelectorAll("button")).find(
+      (button) => button.textContent === "1 fail"
     );
-    if (!(reviewFilter instanceof HTMLButtonElement)) {
-      throw new Error("Missing review field filter");
+    if (!(failFilter instanceof HTMLButtonElement)) {
+      throw new Error("Missing fail field filter");
     }
 
     await act(async () => {
-      reviewFilter.click();
+      failFilter.click();
     });
     await waitForAsyncUpdates();
 
-    expect(reviewFilter.getAttribute("aria-pressed")).toBe("true");
+    expect(failFilter.getAttribute("aria-pressed")).toBe("true");
     expect(dataPanel.textContent).toContain("Brand Name");
     expect(dataPanel.textContent).not.toContain("Class Type");
   });
@@ -887,7 +856,7 @@ describe("PackageWorkflow", () => {
     expect((labelImage as HTMLElement).style.transform).toMatch(/translate\(\d+(\.\d+)?px, 0px\) rotate\(5deg\)/);
   });
 
-  it("uses backend field results to enable review decision buttons", async () => {
+  it("shows needs review when any backend field result fails", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -912,71 +881,10 @@ describe("PackageWorkflow", () => {
     await renderPackageWorkflow();
     await uploadOpenFillAndVerify();
 
-    expect(buttonWithText("FAIL").getAttribute("aria-disabled")).toBe("false");
-    expect(buttonWithText("PASS").getAttribute("aria-disabled")).toBe("true");
-    await clickButton("FAIL");
-    expect(container.textContent).toContain("Fail");
-    expect(container.querySelector("#data-title")).toBeNull();
-  });
-
-  it("warns before overriding a grayed out pass decision", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () =>
-          verificationResult({
-            overall_verdict: "NEEDS_REVIEW",
-            results: [
-              {
-                field: "brand_name",
-                match_type: "fuzzy",
-                expected: "OLD TOM DISTILLERY",
-                found: "WRONG BRAND",
-                status: "FAIL",
-                message: "Values do not match after fuzzy normalization."
-              }
-            ]
-          })
-      })
-    );
-
-    await renderPackageWorkflow();
-    await uploadOpenFillAndVerify();
-
-    await clickButton("PASS");
-    expect(container.textContent).toContain("Pass this application anyway?");
     expect(container.textContent).toContain("Needs Review");
-    expect(container.textContent).toContain("Brand Name");
-    await clickButton("Cancel");
-    expect(container.querySelector("#data-title")).not.toBeNull();
-
-    await clickButton("PASS");
-    await clickButton("Proceed With Pass");
-    expect(container.textContent).toContain("Passed");
-    expect(container.querySelector("#data-title")).toBeNull();
-  });
-
-  it("warns before overriding a grayed out fail decision", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => verificationResult()
-      })
-    );
-
-    await renderPackageWorkflow();
-    await uploadOpenFillAndVerify();
-
-    expect(buttonWithText("FAIL").getAttribute("aria-disabled")).toBe("true");
-    await clickButton("FAIL");
-    expect(container.textContent).toContain("Fail this application anyway?");
-    expect(container.textContent).toContain("Pass");
-    expect(container.textContent).toContain("Brand Name");
-    await clickButton("Proceed With Fail");
-    expect(container.textContent).toContain("Fail");
-    expect(container.querySelector("#data-title")).toBeNull();
+    expect(container.textContent).toContain("fail");
+    expect(() => buttonWithText("FAIL")).toThrow("Missing button: FAIL");
+    expect(() => buttonWithText("PASS")).toThrow("Missing button: PASS");
   });
 
   it("does not open detail from card hover and closes detail when clicking outside", async () => {
@@ -1029,24 +937,6 @@ describe("PackageWorkflow", () => {
                   expected: "OLD TOM DISTILLERY",
                   found: "Old Tom Distillery",
                   status: "FAIL",
-                  message: "Reviewer marked this field as needs review."
-                },
-                ...verificationResult().results.slice(1)
-              ]
-            })
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () =>
-            verificationResult({
-              overall_verdict: "NEEDS_REVIEW",
-              results: [
-                {
-                  field: "brand_name",
-                  match_type: "fuzzy",
-                  expected: "OLD TOM DISTILLERY",
-                  found: "Old Tom Distillery",
-                  status: "FAIL",
                   message: "Reviewer marked this field as fail."
                 },
                 ...verificationResult().results.slice(1)
@@ -1058,7 +948,7 @@ describe("PackageWorkflow", () => {
     await renderPackageWorkflow();
     await uploadOpenFillAndVerify();
 
-    await clickButtonLabel("Needs review Brand Name");
+    await clickButtonLabel("Fail Brand Name");
     expect(fetch).toHaveBeenLastCalledWith("http://127.0.0.1:8000/compare", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1066,53 +956,9 @@ describe("PackageWorkflow", () => {
       signal: expect.any(AbortSignal)
     });
     expect(JSON.parse((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[1][1].body)).toMatchObject({
-      field_decisions: { brand_name: "review" }
-    });
-    expect(container.textContent).toContain("Needs Review");
-    await clickButtonLabel("Fail Brand Name");
-    expect(JSON.parse((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[2][1].body)).toMatchObject({
       field_decisions: { brand_name: "fail" }
     });
-    expect(container.textContent).toContain("Fail");
-  });
-
-  it("opens pretend submission warning and downloads one zip with applications and results", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => verificationResult()
-      })
-    );
-
-    await renderPackageWorkflow();
-    await uploadOpenFillAndVerify();
-    await clickButton("Submit");
-
-    expect(container.textContent).toContain("This is the pretend submission.");
-    expect(container.textContent).toContain("This will download the application documents with pass/fail attached.");
-    expect(container.textContent).toContain("Proceed Without Download");
-    expect(container.textContent).toContain("Proceed With Download");
-    await clickButton("Cancel");
-    expect(createdBlobs).toHaveLength(0);
-
-    await clickButton("Submit");
-    await clickButton("Proceed Without Download");
-    expect(createdBlobs).toHaveLength(0);
-
-    await clickButton("Submit");
-    await clickButton("Proceed With Download");
-    expect(createdBlobs).toHaveLength(1);
-    expect(createdBlobs[0].type).toBe("application/zip");
-    const bytes = new Uint8Array(await readBlobArrayBuffer(createdBlobs[0]));
-    expect(Array.from(bytes.slice(0, 4))).toEqual([0x50, 0x4b, 0x03, 0x04]);
-    const zipText = await readBlobText(createdBlobs[0]);
-    expect(zipText).toContain("applications/label.png");
-    expect(zipText).toContain("results/submission-results.json");
-    expect(zipText).toContain('"schema_version": "pretend-submission-results-v1"');
-    expect(zipText).toContain('"application_id": "application-1"');
-    expect(zipText).toContain('"status": "pass"');
-    expect(zipText).not.toContain("incomplete-application");
+    expect(container.textContent).toContain("Needs Review");
   });
 
   it("exports pending items honestly", () => {
@@ -1135,9 +981,8 @@ describe("PackageWorkflow", () => {
     ]);
 
     expect(exportJson.summary).toEqual({
-      failed: 0,
-      passed: 0,
       needs_review: 0,
+      passed: 0,
       pending: 1,
       total: 1
     });
@@ -1176,9 +1021,8 @@ describe("PackageWorkflow", () => {
 
     expect(exported.generated_at).toBe("2026-06-20T00:00:00.000Z");
     expect(exported.summary).toEqual({
-      failed: 0,
-      passed: 0,
       needs_review: 1,
+      passed: 0,
       pending: 0,
       total: 1
     });

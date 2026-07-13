@@ -1,11 +1,9 @@
 import type {
   AdvancedSearchFilters,
-  AbvOperator,
-  IncompleteFilter
+  AbvOperator
 } from "./types";
 import type {
   ApplicationPackageRecord,
-  IncompleteApplicationRecord,
   VisibleStatus
 } from "./packageWorkflowUtils";
 
@@ -39,30 +37,6 @@ export function matchesApplicationSearch(
   ].some((value) => normalizeSearchTerm(value ?? "").includes(normalizedSearch));
 }
 
-export function matchesIncompleteSearch(
-  record: IncompleteApplicationRecord,
-  searchTerm: string,
-  incompleteFilters: Record<IncompleteFilter, boolean>
-): boolean {
-  const filterKey = incompleteFilterKey(record);
-  if (!incompleteFilters[filterKey]) {
-    return false;
-  }
-
-  const normalizedSearch = normalizeSearchTerm(searchTerm);
-  if (!normalizedSearch) {
-    return true;
-  }
-
-  return [
-    record.incomplete_id,
-    record.json_filename ?? "",
-    record.image_filename ?? "",
-    record.expected_image_filename ?? "",
-    record.message
-  ].some((value) => normalizeSearchTerm(value).includes(normalizedSearch));
-}
-
 export function normalizeSearchTerm(value: string): string {
   return value.trim().toLowerCase();
 }
@@ -70,21 +44,9 @@ export function normalizeSearchTerm(value: string): string {
 export function allStatusFilters(): Record<VisibleStatus, boolean> {
   return {
     "Pending Check": true,
-    Passed: true,
-    "Needs Review": true,
-    Fail: true
+    Approved: true,
+    "Needs Review": true
   };
-}
-
-export function allIncompleteFilters(): Record<IncompleteFilter, boolean> {
-  return {
-    json: true,
-    image: true
-  };
-}
-
-export function incompleteFilterKey(record: IncompleteApplicationRecord): IncompleteFilter {
-  return record.kind === "json_missing_image" ? "json" : "image";
 }
 
 export function matchesAdvancedApplicationFilters(
@@ -142,4 +104,3 @@ function parseAbv(value: string): number | null {
   const match = value.match(/\d+(?:\.\d+)?/);
   return match ? Number(match[0]) : null;
 }
-

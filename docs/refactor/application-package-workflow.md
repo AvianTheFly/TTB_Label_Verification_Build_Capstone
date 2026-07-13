@@ -94,7 +94,7 @@ The package pairing rule is a frontend workflow rule. It does not change the cur
 The frontend should normalize each valid package into one application record. Field names that mirror API/domain data remain snake_case.
 
 ```ts
-type VisibleStatus = "Pending Check" | "Passed" | "Needs Review";
+type VisibleStatus = "Pending Check" | "Approved" | "Needs Review";
 
 type ApplicationData = {
   brand_name: string;
@@ -170,7 +170,7 @@ The export/download file should contain enough information for a reviewer to aud
       "application_id": "application-1",
       "json_filename": "evergreen-amber-bourbon.application.json",
       "image_filename": "evergreen-amber-bourbon.png",
-      "status": "Passed",
+      "status": "Approved",
       "application_data": {
         "brand_name": "EVERGREEN AMBER BOURBON",
         "class_type": "Kentucky Straight Bourbon Whiskey",
@@ -227,14 +227,14 @@ The export/download file should contain enough information for a reviewer to aud
 
 Exported files must not include raw image data, local absolute paths, API keys, provider internals, or stack traces. Pending applications must use `status` of `Pending Check`, `reviewed_extracted_data` of `null`, empty `field_results`, and `overall_verdict` of `null`.
 
-Reviewer field decisions are sent to the backend `/compare` endpoint as optional `field_decisions` values. Supported decisions are `pass`, `review`, and `fail`. The backend applies those decisions after running comparison and returns the updated `VerificationResult`; the frontend must use that backend response for displayed field status and exported field results.
+Reviewer field decisions are sent to the backend `/compare` endpoint as optional `field_decisions` values. Supported decisions are `pass` and `fail`. The backend applies those decisions after running comparison and returns the updated `VerificationResult`; the frontend must use that backend response for displayed field status and exported field results.
 
 ## Visible Statuses
 
 Application records use only these visible statuses:
 
 - `Pending Check`: the package is valid and has not received a backend comparison result yet.
-- `Passed`: the latest backend comparison result has `overall_verdict` equal to `APPROVED`.
+- `Approved`: the latest backend comparison result has `overall_verdict` equal to `APPROVED`.
 - `Needs Review`: the latest backend comparison result has `overall_verdict` equal to `NEEDS_REVIEW`, or the item has a readable item-level processing error.
 
 Package import validation errors should be shown as blocking upload errors. Invalid packages should not be silently converted to `Pending Check`.
@@ -307,7 +307,7 @@ Later implementation phases must add tests for:
 - unsupported image type,
 - read-only application fields in the detail view,
 - editable extracted fields in the detail view,
-- Overview status transitions from `Pending Check` to `Passed` or `Needs Review`,
+- Overview status transitions from `Pending Check` to `Approved` or `Needs Review`,
 - `/verify` usage for one application package,
 - `/verify/batch` usage for multiple valid packages,
 - `/compare` usage after reviewer edits,

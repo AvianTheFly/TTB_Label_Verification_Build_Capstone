@@ -65,7 +65,7 @@ Playwright or Vitest can be added when the phase plan selects the test level.
 
 ## 9. Exit Criteria
 
-- User can submit one image plus application data on the running app.
+- User can verify one image plus application data on the running app.
 - Results are understandable without instructions.
 - Controls are large, clear, and high contrast.
 

@@ -36,7 +36,7 @@ export interface ExtractedData {
 export type FieldStatus = "PASS" | "FAIL";
 export type OverallVerdict = "APPROVED" | "NEEDS_REVIEW";
 export type MatchType = "fuzzy" | "numeric" | "unit" | "synonym" | "exact";
-export type FieldReviewDecision = "fail" | "review" | "pass";
+export type FieldReviewDecision = "fail" | "pass";
 
 export interface FieldResult {
   field: CanonicalLabelField;

@@ -1,7 +1,7 @@
 import type { RefObject } from "react";
 
 import type { CanonicalLabelField, FieldReviewDecision } from "../../../types/api";
-import type { ApplicationPackageRecord, VisibleStatus } from "../packageWorkflowUtils";
+import type { ApplicationPackageRecord } from "../packageWorkflowUtils";
 import { applicationNumber, cardStatusClass } from "../recordStatus";
 import { DataPanel } from "./DataPanel";
 import { ZoomableLabelImage } from "./ZoomableLabelImage";
@@ -15,18 +15,13 @@ interface ApplicationDetailDialogProps {
     value: string
   ) => void;
   onClose: () => void;
-  onFailClick: (record: ApplicationPackageRecord) => void;
   onFieldDecision: (
     packageId: string,
     field: CanonicalLabelField,
     decision: FieldReviewDecision
   ) => void;
-  onPassClick: (record: ApplicationPackageRecord) => void;
-  onSetRecordStatus: (packageId: string, status: VisibleStatus) => void;
   onVerify: (packageId: string) => void;
   record: ApplicationPackageRecord;
-  selectedCanFail: boolean;
-  selectedCanPass: boolean;
 }
 
 export function ApplicationDetailDialog({
@@ -34,14 +29,9 @@ export function ApplicationDetailDialog({
   isChecking,
   onApplicationDataChange,
   onClose,
-  onFailClick,
   onFieldDecision,
-  onPassClick,
-  onSetRecordStatus,
   onVerify,
-  record,
-  selectedCanFail,
-  selectedCanPass
+  record
 }: ApplicationDetailDialogProps) {
   const title = record.application_data.brand_name.trim() || record.image_filename;
 
@@ -117,41 +107,14 @@ export function ApplicationDetailDialog({
           </div>
         )}
 
-        <div className="review-actions" aria-label="Review decision">
+        <div className="decision-actions" aria-label="Application decision">
           <button
-            className="decision-button decision-button--review"
+            className="decision-button decision-button--verify"
             disabled={isChecking}
             onClick={() => onVerify(record.package_id)}
             type="button"
           >
-            {isChecking ? "VERIFYING..." : "SUBMIT / VERIFY"}
-          </button>
-          <button
-            aria-disabled={!selectedCanFail}
-            className={`decision-button decision-button--fail ${
-              selectedCanFail ? "" : "decision-button--disabled"
-            }`}
-            onClick={() => onFailClick(record)}
-            type="button"
-          >
-            FAIL
-          </button>
-          <button
-            className="decision-button decision-button--review"
-            onClick={() => onSetRecordStatus(record.package_id, "Needs Review")}
-            type="button"
-          >
-            NEEDS REVIEW
-          </button>
-          <button
-            aria-disabled={!selectedCanPass}
-            className={`decision-button decision-button--pass ${
-              selectedCanPass ? "" : "decision-button--disabled"
-            }`}
-            onClick={() => onPassClick(record)}
-            type="button"
-          >
-            PASS
+            {isChecking ? "VERIFYING..." : "VERIFY"}
           </button>
         </div>
       </section>

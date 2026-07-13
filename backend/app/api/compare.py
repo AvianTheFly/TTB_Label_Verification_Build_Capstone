@@ -27,7 +27,7 @@ class CompareExtractedData(BaseModel):
     government_warning: str | None
 
 
-ReviewerDecision = Literal["pass", "review", "fail"]
+ReviewerDecision = Literal["pass", "fail"]
 
 
 class CompareFieldDecisions(BaseModel):
@@ -109,15 +109,6 @@ def _apply_reviewer_decisions(
                     update={
                         "status": "PASS",
                         "message": "Reviewer marked this field as pass.",
-                    }
-                )
-            )
-        elif decision == "review":
-            updated_results.append(
-                field_result.model_copy(
-                    update={
-                        "status": "FAIL",
-                        "message": "Reviewer marked this field as needs review.",
                     }
                 )
             )

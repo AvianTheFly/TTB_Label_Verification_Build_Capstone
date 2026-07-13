@@ -30,7 +30,6 @@ interface DataPanelProps {
 export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: DataPanelProps) {
   const [fieldFilters, setFieldFilters] = useState<Record<FieldReviewDecision, boolean>>({
     fail: true,
-    review: true,
     pass: true
   });
   const extractedData = record.reviewed_extracted_data ?? emptyExtractedData();
@@ -47,7 +46,6 @@ export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: 
         const allActive = FIELD_DECISIONS.every((decision) => current[decision]);
         return {
           fail: !allActive,
-          review: !allActive,
           pass: !allActive
         };
       }
@@ -55,7 +53,6 @@ export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: 
       if (FIELD_DECISIONS.every((decision) => current[decision])) {
         return {
           fail: filter === "fail",
-          review: filter === "review",
           pass: filter === "pass"
         };
       }
@@ -86,13 +83,6 @@ export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: 
               label: "fail",
               value: fieldSummary.fail,
               tone: "fail"
-            },
-            {
-              active: fieldFilters.review,
-              filterKey: "review",
-              label: "needs review",
-              value: fieldSummary.review,
-              tone: "review"
             },
             {
               active: fieldFilters.pass,
@@ -134,18 +124,12 @@ export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: 
                     </span>
                   </button>
                 </div>
-                <div className="field-decision-buttons" aria-label={`${field.label} review status`}>
+                <div className="field-decision-buttons" aria-label={`${field.label} field decision`}>
                   <FieldDecisionButton
                     decision="fail"
                     fieldLabel={field.label}
                     isActive={selectedDecision === "fail"}
                     onClick={() => onFieldDecision(record.package_id, field.name, "fail")}
-                  />
-                  <FieldDecisionButton
-                    decision="review"
-                    fieldLabel={field.label}
-                    isActive={selectedDecision === "review"}
-                    onClick={() => onFieldDecision(record.package_id, field.name, "review")}
                   />
                   <FieldDecisionButton
                     decision="pass"
@@ -210,7 +194,7 @@ interface FieldDecisionButtonProps {
 }
 
 function FieldDecisionButton({ decision, fieldLabel, isActive, onClick }: FieldDecisionButtonProps) {
-  const label = decision === "fail" ? "Fail" : decision === "review" ? "Needs review" : "Pass";
+  const label = decision === "fail" ? "Fail" : "Pass";
 
   return (
     <button
@@ -227,14 +211,6 @@ function FieldDecisionButton({ decision, fieldLabel, isActive, onClick }: FieldD
 }
 
 function DecisionIcon({ decision }: { decision: FieldReviewDecision }) {
-  if (decision === "review") {
-    return (
-      <svg aria-hidden="true" viewBox="0 0 24 24">
-        <path d="M5 21V4h10l.4 2H20v10h-6l-.4-2H7v7H5Z" />
-      </svg>
-    );
-  }
-
   if (decision === "pass") {
     return (
       <svg aria-hidden="true" viewBox="0 0 24 24">
