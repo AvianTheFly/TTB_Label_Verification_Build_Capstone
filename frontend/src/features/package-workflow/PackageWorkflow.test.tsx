@@ -621,7 +621,9 @@ describe("PackageWorkflow", () => {
     const applicationAbv = container.querySelector('[aria-label="Application Value Alcohol Content"]');
     const applicationNetContents = container.querySelector('[aria-label="Application Value Net Contents"]');
     const extractedBrand = container.querySelector('[aria-label="Extracted Value Brand Name"]');
-    expect(applicationBrand).toBeInstanceOf(HTMLInputElement);
+    expect(applicationBrand).toBeInstanceOf(HTMLTextAreaElement);
+    expect(applicationBrand?.classList.contains("application-value-input--auto-grow")).toBe(true);
+    expect((applicationBrand as HTMLTextAreaElement).rows).toBe(1);
     expect(applicationAbv).toBeInstanceOf(HTMLInputElement);
     expect(applicationNetContents).toBeInstanceOf(HTMLInputElement);
     expect((applicationAbv as HTMLInputElement).inputMode).toBe("decimal");
