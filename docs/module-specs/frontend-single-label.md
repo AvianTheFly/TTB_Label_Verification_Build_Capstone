@@ -17,6 +17,7 @@ Frontend application, API client, components, and styles.
 Inputs:
 
 - User-selected label image.
+- Preview confirmation before the image becomes an application record.
 - Seven canonical application fields.
 
 Outputs:
@@ -58,6 +59,7 @@ At minimum:
 
 - Typecheck passes.
 - Form requires the seven fields and an image.
+- Image selection opens a preview before adding the application.
 - API error renders readably.
 - Result view shows verdict and failing-field details.
 
@@ -65,7 +67,7 @@ Playwright or Vitest can be added when the phase plan selects the test level.
 
 ## 9. Exit Criteria
 
-- User can submit one image plus application data on the running app.
+- User can verify one image plus application data on the running app.
 - Results are understandable without instructions.
 - Controls are large, clear, and high contrast.
 

@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from app.api.dependencies import get_vision_service
-from app.api.verify import _read_image_upload
+from app.api.request_parsing import read_image_upload
 from app.core.config import get_settings
 from app.core.errors import ApiError
 from app.domain.comparison import CANONICAL_GOVERNMENT_WARNING
@@ -68,15 +68,9 @@ def post_verify(
     image_bytes: bytes | None = None,
     filename: str = "label.png",
     content_type: str = "image/png",
-    use_real_vision: bool = True,
-    openai_api_key: str | None = None,
-    openai_model: str | None = None,
+    extra_data: dict[str, str] | None = None,
 ):
-    data = {"use_real_vision": str(use_real_vision).lower()}
-    if openai_api_key is not None:
-        data["openai_api_key"] = openai_api_key
-    if openai_model is not None:
-        data["openai_model"] = openai_model
+    data = dict(extra_data or {})
     if application_data is not None:
         data["application_data"] = (
             application_data if isinstance(application_data, str) else json.dumps(application_data)
@@ -96,6 +90,12 @@ def assert_error_envelope(response, code: str) -> None:
     assert isinstance(body["error"]["details"], dict)
 
 
+def assert_verification_result_literals(body: dict[str, Any]) -> None:
+    assert body["overall_verdict"] in {"APPROVED", "NEEDS_REVIEW"}
+    for result in body["results"]:
+        assert result["status"] in {"PASS", "FAIL"}
+
+
 def test_valid_verify_submission_returns_full_verification_result() -> None:
     client, fake_service = make_client()
 
@@ -107,6 +107,7 @@ def test_valid_verify_submission_returns_full_verification_result() -> None:
 
     assert response.status_code == 200
     body = response.json()
+    assert_verification_result_literals(body)
     assert body["overall_verdict"] == "APPROVED"
     assert isinstance(body["latency_ms"], int)
     assert body["latency_ms"] >= 0
@@ -116,7 +117,6 @@ def test_valid_verify_submission_returns_full_verification_result() -> None:
         assert set(result) == {"field", "match_type", "expected", "found", "status", "message"}
         assert result["expected"] is not None
         assert result["found"] is not None
-        assert result["status"] in {"PASS", "FAIL"}
     assert len(fake_service.calls) == 1
     assert fake_service.calls[0].content_type == "image/jpeg"
 
@@ -134,6 +134,7 @@ def test_response_includes_expected_found_for_failures_and_needs_review() -> Non
 
     assert response.status_code == 200
     body = response.json()
+    assert_verification_result_literals(body)
     assert body["overall_verdict"] == "NEEDS_REVIEW"
     brand_result = next(result for result in body["results"] if result["field"] == "brand_name")
     assert brand_result["status"] == "FAIL"
@@ -156,11 +157,44 @@ def test_warning_failure_surfaces_extracted_government_warning_text() -> None:
     )
 
     assert response.status_code == 200
+    assert_verification_result_literals(response.json())
     warning_result = next(
         result for result in response.json()["results"] if result["field"] == "government_warning"
     )
     assert warning_result["status"] == "FAIL"
     assert warning_result["found"] == extracted_warning
+    assert "AI detected:" in warning_result["message"]
+    assert extracted_warning in warning_result["message"]
+
+
+def test_warning_failure_message_surfaces_normalized_extracted_text() -> None:
+    extracted_warning = (
+        "GOVERNMENT WARNING: (1) According to the Surgeon General, women should\n\n"
+        "not drink alcoholic beverages because of OCR drift."
+    )
+    normalized_warning = (
+        "GOVERNMENT WARNING: (1) According to the Surgeon General, women should "
+        "not drink alcoholic beverages because of OCR drift."
+    )
+    client, _ = make_client(
+        FakeVisionService(result=make_extracted_label(government_warning=extracted_warning))
+    )
+
+    response = post_verify(
+        client,
+        application_data=make_application_data(),
+        image_bytes=make_image_bytes(),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert_verification_result_literals(body)
+    warning_result = next(
+        result for result in body["results"] if result["field"] == "government_warning"
+    )
+    assert warning_result["status"] == "FAIL"
+    assert warning_result["found"] == extracted_warning
+    assert normalized_warning in warning_result["message"]
 
 
 def test_missing_extracted_government_warning_needs_review_with_found_null() -> None:
@@ -176,6 +210,7 @@ def test_missing_extracted_government_warning_needs_review_with_found_null() -> 
 
     assert response.status_code == 200
     body = response.json()
+    assert_verification_result_literals(body)
     assert body["overall_verdict"] == "NEEDS_REVIEW"
     warning_result = next(
         result for result in body["results"] if result["field"] == "government_warning"
@@ -197,6 +232,7 @@ def test_partial_uncertain_extraction_returns_needs_review_not_false_approval() 
 
     assert response.status_code == 200
     body = response.json()
+    assert_verification_result_literals(body)
     assert body["overall_verdict"] == "NEEDS_REVIEW"
     failed_fields = {result["field"] for result in body["results"] if result["status"] == "FAIL"}
     assert failed_fields == {
@@ -304,7 +340,7 @@ async def test_unreadable_upload_returns_readable_bad_request() -> None:
             raise OSError("stream closed")
 
     try:
-        await _read_image_upload(BrokenUpload())
+        await read_image_upload(BrokenUpload(), max_upload_mb=10)
     except ApiError as exc:
         assert exc.status_code == 400
         assert exc.code == "bad_request"
@@ -393,64 +429,35 @@ def test_tests_use_fake_vision_service_without_api_key_or_network(monkeypatch) -
     assert len(fake_service.calls) == 1
 
 
-def test_submitted_openai_key_uses_request_scoped_real_vision_service(monkeypatch) -> None:
+def test_submitted_openai_fields_do_not_override_configured_vision_service(monkeypatch) -> None:
     configured_service = FakeVisionService(
-        result=make_extracted_label(brand_name="SHOULD NOT BE USED")
+        result=make_extracted_label(brand_name="Old Tom Distillery")
     )
-    submitted_service = FakeVisionService(result=make_extracted_label())
-    captured: dict[str, str | None] = {}
 
-    def fake_openai_service(*, api_key: str | None = None, model: str | None = None, **kwargs):
+    def fail_if_constructed(*args, **kwargs):
+        _ = args
         _ = kwargs
-        captured["api_key"] = api_key
-        captured["model"] = model
-        return submitted_service
+        raise AssertionError("Submitted OpenAI fields must not construct a request-scoped service")
 
-    monkeypatch.setattr("app.api.dependencies.OpenAIVisionService", fake_openai_service)
+    monkeypatch.setattr("app.api.dependencies.OpenAIVisionService", fail_if_constructed)
     client, _ = make_client(configured_service)
 
     response = post_verify(
         client,
         application_data=make_application_data(),
         image_bytes=make_image_bytes(),
-        use_real_vision=True,
-        openai_api_key="sk-submitted-test-key",
-        openai_model="gpt-test-vision",
-    )
-
-    assert response.status_code == 200
-    assert response.json()["overall_verdict"] == "APPROVED"
-    assert captured == {"api_key": "sk-submitted-test-key", "model": "gpt-test-vision"}
-    assert configured_service.calls == []
-    assert len(submitted_service.calls) == 1
-
-
-def test_demo_mode_uses_filename_keyed_pretend_extraction() -> None:
-    client, fake_service = make_client(
-        FakeVisionService(result=make_extracted_label(brand_name="SHOULD NOT BE USED"))
-    )
-
-    response = post_verify(
-        client,
-        application_data={
-            "brand_name": "EVERGREEN AMBER BOURBON",
-            "class_type": "Kentucky Straight Bourbon Whiskey",
-            "abv": "45% Alc./Vol. (90 Proof)",
-            "net_contents": "750 mL",
-            "producer": "Evergreen Spirits LLC, Louisville, KY",
-            "country_of_origin": "United States",
-            "government_warning": CANONICAL_GOVERNMENT_WARNING,
+        extra_data={
+            "use_real_vision": "true",
+            "openai_api_key": "sk-submitted-test-key",
+            "openai_model": "gpt-test-vision",
         },
-        image_bytes=make_image_bytes(),
-        filename="evergreen-amber-bourbon.png",
-        use_real_vision=False,
     )
 
     assert response.status_code == 200
-    assert response.json()["overall_verdict"] == "APPROVED"
-    brand = next(result for result in response.json()["results"] if result["field"] == "brand_name")
-    assert brand["found"] == "EVERGREEN AMBER BOURBON"
-    assert fake_service.calls == []
+    body = response.json()
+    assert_verification_result_literals(body)
+    assert body["overall_verdict"] == "APPROVED"
+    assert len(configured_service.calls) == 1
 
 
 def test_verify_logs_request_timing_without_payload_contents(caplog) -> None:
@@ -472,7 +479,7 @@ def test_verify_logs_request_timing_without_payload_contents(caplog) -> None:
 
 def test_verify_logs_timing_breakdown_without_payload_contents(caplog) -> None:
     client, _ = make_client()
-    caplog.set_level("INFO", logger="app.services.verification")
+    caplog.set_level("INFO", logger="app.use_cases.verification")
 
     response = post_verify(
         client,

@@ -32,7 +32,8 @@ Public interfaces:
 
 - `VisionService.extract_label(image) -> ExtractedLabel`
 - `OpenAIVisionService` real provider implementation, configured by environment-backed settings.
-- `FakeVisionService` test double for unit and Phase 3 API tests.
+- `FakeVisionService` test double for unit and API tests. It is never the default runtime provider.
+- `DemoFixtureVisionService` filename-keyed fixture reader for explicit local demo scenarios only.
 - `preprocess_image(image_bytes, content_type) -> PreprocessedImage`
 - `VisionServiceError` with safe provider/extraction categories.
 
@@ -55,6 +56,16 @@ Forbidden:
 Non-label, blurry, angled, glare-heavy, timeout, and malformed provider responses should degrade gracefully. Return partial fields when possible. Use safe provider error categories when extraction cannot complete.
 
 OpenAI extraction uses structured output for exactly the seven canonical fields. Unknown, unclear, absent, obscured, or ambiguous fields must be returned as `null`; the provider prompt forbids guessing and asks for `government_warning` to be copied verbatim when visible.
+
+Runtime provider selection is environment-backed:
+
+- `VISION_PROVIDER=openai` uses the real provider and is the production default.
+- `VISION_PROVIDER=demo` uses filename-keyed demo fixtures for local demonstrations.
+- `VISION_PROVIDER=fake` is reserved for tests and explicit local development.
+
+Image preprocessing is configurable through `IMAGE_MAX_DIMENSION` and `IMAGE_JPEG_QUALITY`.
+OpenAI calls use `OPENAI_TIMEOUT_SECONDS`, capped at 4.5 seconds to preserve the single-label
+latency budget.
 
 Safe categories include:
 
@@ -92,6 +103,7 @@ Warning-style compliance is not claimed in Phase 2. The service preserves warnin
 
 - `backend/app/services/vision.py`
 - `backend/app/services/fake_vision.py`
+- `backend/app/services/demo_vision.py`
 - `backend/app/services/image_preprocess.py`
 - `backend/app/tests/test_vision.py`
 - `backend/scripts/run_vision_sample.py`

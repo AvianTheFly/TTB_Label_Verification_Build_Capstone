@@ -190,3 +190,19 @@ Original requirement files are mirrored in `docs/source/` for reviewer visibilit
 - Keep modules small enough for AI agents and humans to review locally.
 - Return public API errors using the canonical error envelope in `docs/interfaces/error-contracts.md`.
 - Do not expose stack traces, provider internals, API keys, local absolute paths, or raw unhandled exceptions in API responses.
+
+## Git Conventions
+
+- Use `main` or `master` only for release-ready code. Use `develop` for integration work.
+- Create work branches from `develop` unless the user says otherwise.
+- Branch names should use lowercase kebab-case: `<type>/<short-description>`.
+- Allowed branch types: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `ci`.
+- Commit messages should follow Conventional Commits: `<type>(optional-scope): <short summary>`.
+- Allowed commit types: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `ci`, `build`.
+- Keep commit summaries imperative and under 72 characters when practical.
+- Examples:
+  - `feat(api): add verify endpoint validation`
+  - `fix(ui): show readable upload error`
+  - `docs: add phase 3 verification notes`
+- Pull request titles should follow the same Conventional Commit format.
+- Do not mix unrelated phase work in one branch or commit.

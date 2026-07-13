@@ -7,8 +7,8 @@ from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 from app.domain.models import ExtractedLabel
 from app.services.image_preprocess import PreprocessedImage
 
-DEFAULT_OPENAI_VISION_MODEL = "gpt-5.5"
-DEFAULT_OPENAI_TIMEOUT_SECONDS = 20.0
+DEFAULT_OPENAI_VISION_MODEL = "gpt-4.1-mini"
+DEFAULT_OPENAI_TIMEOUT_SECONDS = 4.5
 DEFAULT_OPENAI_IMAGE_DETAIL = "high"
 
 CANONICAL_EXTRACTION_FIELDS = (
@@ -126,6 +126,7 @@ class OpenAIVisionService:
         return cls(
             api_key=settings.openai_api_key,
             model=settings.vision_model or DEFAULT_OPENAI_VISION_MODEL,
+            timeout_seconds=settings.openai_timeout_seconds,
         )
 
     async def extract_label(self, image: PreprocessedImage) -> ExtractedLabel:
@@ -257,5 +258,8 @@ def _safe_provider_message(category: VisionIssueCategory) -> str:
     if category == "provider_timeout":
         return "The vision provider timed out while reading the label."
     if category == "provider_quota_exceeded":
-        return "This API call exceeds your current quota. Please check your OpenAI plan and billing details."
+        return (
+            "This API call exceeds your current quota. "
+            "Please check your OpenAI plan and billing details."
+        )
     return "The vision provider is unavailable."

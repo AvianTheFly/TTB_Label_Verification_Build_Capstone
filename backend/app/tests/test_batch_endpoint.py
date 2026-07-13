@@ -6,8 +6,8 @@ from typing import Any
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from app.api.batch import _read_item_image
 from app.api.dependencies import get_vision_service
+from app.api.request_parsing import read_batch_item_image
 from app.core.config import get_settings
 from app.domain.comparison import CANONICAL_GOVERNMENT_WARNING
 from app.domain.models import ExtractedLabel
@@ -63,9 +63,7 @@ def post_batch(
     *,
     application_items: list[dict[str, Any] | str | None],
     image_items: list[tuple[bytes, str, str] | None],
-    use_real_vision: bool = True,
-    openai_api_key: str | None = None,
-    openai_model: str | None = None,
+    extra_fields: dict[str, str] | None = None,
 ):
     files: list[tuple[str, tuple[str | None, bytes | str, str] | tuple[str, bytes, str]]] = []
     for image in image_items:
@@ -79,11 +77,8 @@ def post_batch(
             continue
         value = application if isinstance(application, str) else json.dumps(application)
         files.append(("application_data", (None, value, "text/plain")))
-    files.append(("use_real_vision", (None, str(use_real_vision).lower(), "text/plain")))
-    if openai_api_key is not None:
-        files.append(("openai_api_key", (None, openai_api_key, "text/plain")))
-    if openai_model is not None:
-        files.append(("openai_model", (None, openai_model, "text/plain")))
+    for name, value in (extra_fields or {}).items():
+        files.append((name, (None, value, "text/plain")))
 
     return client.post("/verify/batch", files=files)
 
@@ -95,6 +90,12 @@ def assert_error_envelope(response, code: str) -> None:
     assert isinstance(body["error"]["message"], str)
     assert body["error"]["message"]
     assert isinstance(body["error"]["details"], dict)
+
+
+def assert_verification_result_literals(result: dict[str, Any]) -> None:
+    assert result["overall_verdict"] in {"APPROVED", "NEEDS_REVIEW"}
+    for field_result in result["results"]:
+        assert field_result["status"] in {"PASS", "FAIL"}
 
 
 def test_successful_batch_with_three_passing_labels() -> None:
@@ -113,6 +114,8 @@ def test_successful_batch_with_three_passing_labels() -> None:
     assert len(body["items"]) == 3
     assert [item["index"] for item in body["items"]] == [0, 1, 2]
     assert all(item["error"] is None for item in body["items"])
+    for item in body["items"]:
+        assert_verification_result_literals(item["result"])
     assert all(item["result"]["overall_verdict"] == "APPROVED" for item in body["items"])
     assert all(isinstance(item["result"]["latency_ms"], int) for item in body["items"])
     assert len(service.calls) == 3
@@ -136,6 +139,8 @@ def test_batch_can_mix_approved_and_needs_review_labels() -> None:
 
     assert response.status_code == 200
     body = response.json()
+    for item in body["items"]:
+        assert_verification_result_literals(item["result"])
     assert body["summary"] == {"passed": 2, "needs_review": 1, "total": 3}
     assert body["items"][1]["result"]["overall_verdict"] == "NEEDS_REVIEW"
     failed = [
@@ -170,6 +175,8 @@ def test_partial_extraction_counts_as_needs_review_in_batch_summary() -> None:
     body = response.json()
     assert body["summary"] == {"passed": 1, "needs_review": 1, "total": 2}
     assert body["items"][1]["error"] is None
+    assert_verification_result_literals(body["items"][0]["result"])
+    assert_verification_result_literals(body["items"][1]["result"])
     assert body["items"][1]["result"]["overall_verdict"] == "NEEDS_REVIEW"
     failed_fields = {
         result["field"]
@@ -213,6 +220,7 @@ def test_more_application_data_parts_than_images_creates_trailing_item_error() -
 
     assert response.status_code == 200
     body = response.json()
+    assert_verification_result_literals(body["items"][0]["result"])
     assert body["summary"] == {"passed": 1, "needs_review": 1, "total": 2}
     assert body["items"][1]["error"]["code"] == "validation_error"
     assert body["items"][1]["error"]["details"]["field"] == "image"
@@ -233,6 +241,7 @@ def test_more_images_than_application_data_parts_creates_trailing_item_error() -
 
     assert response.status_code == 200
     body = response.json()
+    assert_verification_result_literals(body["items"][0]["result"])
     assert body["summary"] == {"passed": 1, "needs_review": 1, "total": 2}
     assert body["items"][1]["error"]["code"] == "validation_error"
     assert body["items"][1]["error"]["details"]["field"] == "application_data"
@@ -271,7 +280,7 @@ async def test_unreadable_batch_upload_becomes_item_error() -> None:
             _ = size
             raise OSError("stream closed")
 
-    item = await _read_item_image(3, BrokenUpload(), max_upload_mb=10)
+    item = await read_batch_item_image(3, BrokenUpload(), max_upload_mb=10)
 
     assert item.index == 3
     assert item.error is not None
@@ -312,6 +321,8 @@ def test_batch_concurrency_is_bounded(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert response.json()["summary"] == {"passed": 5, "needs_review": 0, "total": 5}
+    for item in response.json()["items"]:
+        assert_verification_result_literals(item["result"])
     assert service.calls == 5
     assert service.max_active == 2
     get_settings.cache_clear()
@@ -328,24 +339,25 @@ def test_batch_preserves_exact_canonical_field_names() -> None:
     )
 
     assert response.status_code == 200
-    result_fields = {result["field"] for result in response.json()["items"][0]["result"]["results"]}
+    body = response.json()
+    assert_verification_result_literals(body["items"][0]["result"])
+    result_fields = {result["field"] for result in body["items"][0]["result"]["results"]}
     assert result_fields == set(make_application_data())
 
 
-def test_batch_submitted_openai_key_uses_request_scoped_real_vision_service(monkeypatch) -> None:
+def test_batch_submitted_openai_fields_do_not_override_configured_vision_service(
+    monkeypatch,
+) -> None:
     configured_service = FakeVisionService(
-        result=make_extracted_label(brand_name="SHOULD NOT BE USED")
+        results=[make_extracted_label(), make_extracted_label()]
     )
-    submitted_service = FakeVisionService(results=[make_extracted_label(), make_extracted_label()])
-    captured: dict[str, str | None] = {}
 
-    def fake_openai_service(*, api_key: str | None = None, model: str | None = None, **kwargs):
+    def fail_if_constructed(*args, **kwargs):
+        _ = args
         _ = kwargs
-        captured["api_key"] = api_key
-        captured["model"] = model
-        return submitted_service
+        raise AssertionError("Submitted OpenAI fields must not construct a request-scoped service")
 
-    monkeypatch.setattr("app.api.dependencies.OpenAIVisionService", fake_openai_service)
+    monkeypatch.setattr("app.api.dependencies.OpenAIVisionService", fail_if_constructed)
     client = make_client(configured_service)
 
     response = post_batch(
@@ -355,64 +367,16 @@ def test_batch_submitted_openai_key_uses_request_scoped_real_vision_service(monk
             (make_image_bytes(), "label-0.png", "image/png"),
             (make_image_bytes(), "label-1.png", "image/png"),
         ],
-        use_real_vision=True,
-        openai_api_key="sk-submitted-test-key",
-        openai_model="gpt-test-vision",
-    )
-
-    assert response.status_code == 200
-    assert response.json()["summary"] == {"passed": 2, "needs_review": 0, "total": 2}
-    assert captured == {"api_key": "sk-submitted-test-key", "model": "gpt-test-vision"}
-    assert configured_service.calls == []
-    assert len(submitted_service.calls) == 2
-
-
-def test_demo_mode_batch_uses_filename_keyed_extractions_in_item_order() -> None:
-    service = FakeVisionService(result=make_extracted_label(brand_name="SHOULD NOT BE USED"))
-    client = make_client(service)
-
-    response = post_batch(
-        client,
-        application_items=[
-            {
-                "brand_name": "EVERGREEN AMBER BOURBON",
-                "class_type": "Kentucky Straight Bourbon Whiskey",
-                "abv": "45% Alc./Vol. (90 Proof)",
-                "net_contents": "750 mL",
-                "producer": "Evergreen Spirits LLC, Louisville, KY",
-                "country_of_origin": "United States",
-                "government_warning": CANONICAL_GOVERNMENT_WARNING,
-            },
-            {
-                "brand_name": "COASTAL PEAR CIDER",
-                "class_type": "Hard Cider",
-                "abv": "6.8% Alc./Vol.",
-                "net_contents": "12 fl oz",
-                "producer": "Coastal Orchard Works, Portland, OR",
-                "country_of_origin": "United States",
-                "government_warning": CANONICAL_GOVERNMENT_WARNING.replace(
-                    "GOVERNMENT WARNING:", "Government Warning:"
-                ),
-            },
-        ],
-        image_items=[
-            (make_image_bytes(), "evergreen-amber-bourbon.png", "image/png"),
-            (make_image_bytes(), "coastal-pear-cider.png", "image/png"),
-        ],
-        use_real_vision=False,
+        extra_fields={
+            "use_real_vision": "true",
+            "openai_api_key": "sk-submitted-test-key",
+            "openai_model": "gpt-test-vision",
+        },
     )
 
     assert response.status_code == 200
     body = response.json()
-    assert [item["index"] for item in body["items"]] == [0, 1]
-    first_brand = next(
-        result
-        for result in body["items"][0]["result"]["results"]
-        if result["field"] == "brand_name"
-    )
-    second_abv = next(
-        result for result in body["items"][1]["result"]["results"] if result["field"] == "abv"
-    )
-    assert first_brand["found"] == "EVERGREEN AMBER BOURBON"
-    assert second_abv["found"] == "6.2% Alc./Vol."
-    assert service.calls == []
+    assert body["summary"] == {"passed": 2, "needs_review": 0, "total": 2}
+    for item in body["items"]:
+        assert_verification_result_literals(item["result"])
+    assert len(configured_service.calls) == 2

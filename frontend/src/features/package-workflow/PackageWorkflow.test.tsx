@@ -7,7 +7,6 @@ import { buildReviewedResultsExport, parseApplicationPackages } from "./packageW
 
 let container: HTMLDivElement;
 let root: Root;
-let createdBlobs: Blob[];
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -141,7 +140,8 @@ function buttonWithLabel(label: string): HTMLButtonElement {
   return button;
 }
 
-async function chooseFiles(files: File[]) {
+async function chooseFiles(files: File[], options: { acceptPreview?: boolean } = {}) {
+  const { acceptPreview = true } = options;
   await act(async () => {
     Object.defineProperty(fileInput(), "files", {
       configurable: true,
@@ -150,6 +150,9 @@ async function chooseFiles(files: File[]) {
     fileInput().dispatchEvent(new Event("change", { bubbles: true }));
   });
   await waitForAsyncUpdates();
+  if (acceptPreview && container.textContent?.includes("Review Images")) {
+    await clickButton("Use Images");
+  }
 }
 
 async function clickButton(text: string) {
@@ -182,6 +185,28 @@ async function changeField(label: string, value: string) {
   });
 }
 
+async function fillApplicationData(data = canonicalApplicationData) {
+  await changeField("Application Value Brand Name", data.brand_name);
+  await changeField("Application Value Class / Type", data.class_type);
+  await changeField("Application Value Alcohol Content", data.abv);
+  await changeField("Application Value Net Contents", data.net_contents);
+  await changeField("Application Value Producer", data.producer);
+  await changeField("Application Value Country of Origin", data.country_of_origin);
+  await changeField("Application Value Government Warning", data.government_warning);
+}
+
+async function uploadOpenFillAndVerify(
+  image = imageFile("label.png"),
+  data = canonicalApplicationData
+) {
+  await chooseFiles([image]);
+  await act(async () => {
+    firstPackageButton().click();
+  });
+  await fillApplicationData(data);
+  await clickButton("VERIFY");
+}
+
 async function waitForAsyncUpdates() {
   await act(async () => {
     await Promise.resolve();
@@ -194,57 +219,39 @@ function readFormDataBody(callIndex = 0): FormData {
 }
 
 function firstPackageButton(): HTMLButtonElement {
-  const button = container.querySelector(".package-card__button");
+  return packageButtonAt(0);
+}
+
+function packageButtonAt(index: number): HTMLButtonElement {
+  const button = container.querySelectorAll(".package-card__button")[index];
   if (!(button instanceof HTMLButtonElement)) {
     throw new Error("Missing package button");
   }
   return button;
 }
 
-function readBlobText(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(reader.error ?? new Error("Could not read blob."));
-    reader.readAsText(blob);
-  });
-}
-
-function readBlobArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
-  if (typeof blob.arrayBuffer === "function") {
-    return blob.arrayBuffer();
-  }
-
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as ArrayBuffer);
-    reader.onerror = () => reject(reader.error ?? new Error("Could not read blob."));
-    reader.readAsArrayBuffer(blob);
-  });
-}
-
 describe("package parser", () => {
-  it("parses a valid package", async () => {
-    const result = await parseApplicationPackages([
-      jsonFile("application.json", "label.png"),
-      imageFile("label.png")
-    ]);
+  it("creates one pending application for an uploaded image", async () => {
+    const result = await parseApplicationPackages([imageFile("label.png")]);
 
     expect(result.errors).toEqual([]);
     expect(result.records).toHaveLength(1);
     expect(result.incomplete_records).toEqual([]);
     expect(result.records[0].image_filename).toBe("label.png");
-    expect(result.records[0].application_data).toEqual(canonicalApplicationData);
+    expect(result.records[0].application_data).toEqual({
+      brand_name: "",
+      class_type: "",
+      abv: "",
+      net_contents: "",
+      producer: "",
+      country_of_origin: "",
+      government_warning: ""
+    });
     expect(result.records[0].status).toBe("Pending Check");
   });
 
-  it("parses multiple packages", async () => {
-    const result = await parseApplicationPackages([
-      jsonFile("first.json", "first.png"),
-      imageFile("first.png"),
-      jsonFile("second.json", "second.png"),
-      imageFile("second.png")
-    ]);
+  it("creates one application per uploaded image", async () => {
+    const result = await parseApplicationPackages([imageFile("first.png"), imageFile("second.png")]);
 
     expect(result.errors).toEqual([]);
     expect(result.incomplete_records).toEqual([]);
@@ -254,97 +261,54 @@ describe("package parser", () => {
     ]);
   });
 
-  it("pairs JSON to image by filename instead of upload order", async () => {
+  it("keeps image upload order instead of pairing JSON files", async () => {
     const result = await parseApplicationPackages([
       imageFile("second.png"),
-      jsonFile("first.json", "first.png", {
-        ...canonicalApplicationData,
-        brand_name: "FIRST BRAND"
-      }),
-      imageFile("first.png"),
-      jsonFile("second.json", "second.png", {
-        ...canonicalApplicationData,
-        brand_name: "SECOND BRAND"
-      })
+      imageFile("first.png")
     ]);
 
     expect(result.errors).toEqual([]);
     expect(result.incomplete_records).toEqual([]);
-    expect(result.records[0].image_filename).toBe("first.png");
-    expect(result.records[0].image_file.name).toBe("first.png");
-    expect(result.records[0].application_data.brand_name).toBe("FIRST BRAND");
-    expect(result.records[1].image_file.name).toBe("second.png");
+    expect(result.records.map((record) => record.image_filename)).toEqual([
+      "second.png",
+      "first.png"
+    ]);
   });
 
-  it("tracks incomplete packages when a matching image or JSON is missing", async () => {
+  it("rejects JSON files instead of creating incomplete applications", async () => {
     const result = await parseApplicationPackages([
       jsonFile("orphan-json.json", "not-uploaded.png"),
       imageFile("orphan-image.png")
     ]);
 
-    expect(result.errors).toEqual([]);
-    expect(result.records).toHaveLength(0);
-    expect(result.incomplete_records).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          kind: "json_missing_image",
-          json_filename: "orphan-json.json",
-          expected_image_filename: "not-uploaded.png"
-        }),
-        expect.objectContaining({
-          kind: "image_missing_json",
-          image_filename: "orphan-image.png"
-        })
-      ])
-    );
+    expect(result.records).toHaveLength(1);
+    expect(result.records[0].image_filename).toBe("orphan-image.png");
+    expect(result.incomplete_records).toEqual([]);
+    expect(result.errors).toEqual([
+      expect.objectContaining({
+        code: "unsupported_image_type",
+        filename: "orphan-json.json"
+      })
+    ]);
   });
 
-  it("reports readable errors for invalid packages", async () => {
-    const missingFields = { ...canonicalApplicationData };
-    delete (missingFields as Partial<typeof canonicalApplicationData>).government_warning;
-    const extraFields = {
-      ...canonicalApplicationData,
-      alcohol_content: "45%"
-    };
-
+  it("reports readable errors for duplicate or unsupported image files", async () => {
     const result = await parseApplicationPackages([
-      new File(["not-json"], "bad.json", { type: "application/json" }),
-      new File([JSON.stringify({ application_data: canonicalApplicationData })], "missing-image.json", {
-        type: "application/json"
-      }),
-      new File([JSON.stringify({ image_filename: "x.png" })], "missing-data.json", {
-        type: "application/json"
-      }),
-      jsonFile("missing-field.json", "missing-field.png", missingFields),
-      imageFile("missing-field.png"),
-      jsonFile("extra-field.json", "extra-field.png", extraFields),
-      imageFile("extra-field.png"),
-      jsonFile("duplicate-a.json", "duplicate.png"),
-      jsonFile("duplicate-b.json", "duplicate.png"),
+      imageFile("duplicate.png"),
       imageFile("duplicate.png"),
       imageFile("unsupported.gif", "image/gif")
     ]);
 
-    expect(result.records).toHaveLength(0);
+    expect(result.records).toHaveLength(1);
     expect(result.errors.map((error) => error.code)).toEqual(
-      expect.arrayContaining([
-        "invalid_json",
-        "missing_image_filename",
-        "missing_application_data",
-        "missing_canonical_fields",
-        "extra_non_canonical_fields",
-        "duplicate_image_filename",
-        "unsupported_image_type"
-      ])
+      expect.arrayContaining(["duplicate_image_filename", "unsupported_image_type"])
     );
-    expect(result.errors.map((error) => error.message).join(" ")).toContain("government_warning");
-    expect(result.errors.map((error) => error.message).join(" ")).toContain("alcohol_content");
+    expect(result.errors.map((error) => error.message).join(" ")).toContain("JPG, PNG, or WEBP");
   });
 });
 
 describe("PackageWorkflow", () => {
   beforeEach(() => {
-    createdBlobs = [];
     vi.stubEnv("VITE_API_BASE_URL", "http://127.0.0.1:8000");
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
       callback(0);
@@ -352,13 +316,7 @@ describe("PackageWorkflow", () => {
     });
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
-      value: vi.fn((value: Blob | File) => {
-        if (value instanceof Blob && !(value instanceof File)) {
-          createdBlobs.push(value);
-          return `blob:export-${createdBlobs.length}`;
-        }
-        return `blob:${(value as File).name}`;
-      })
+      value: vi.fn((value: Blob | File) => `blob:${(value as File).name}`)
     });
     Object.defineProperty(URL, "revokeObjectURL", {
       configurable: true,
@@ -385,34 +343,27 @@ describe("PackageWorkflow", () => {
     await renderPackageWorkflow();
 
     expect(container.querySelector('[data-testid="package-upload-area"]')).not.toBeNull();
+    expect(fileInput().accept).toBe("image/*");
     expect(container.textContent).toContain("Choose Files");
     expect(container.textContent).toContain("Download Demo Data");
-    expect(container.textContent).toContain("Use OPENAI KEY");
-    expect(container.textContent).toContain("Submit");
+    expect(container.textContent).not.toContain("Submit");
+    expect(container.textContent).toContain("Drop Label Images");
     expect(container.textContent).toContain("Applications");
-    expect(container.textContent).toContain("Incomplete Applications");
-    expect(container.textContent).toContain("No Incomplete Applications");
+    expect(container.textContent).not.toContain("Incomplete Applications");
+    expect(container.textContent).not.toContain("Use OPENAI KEY");
+    expect(container.textContent).not.toContain("API Key");
     expect(container.textContent).not.toContain("Check Applications");
     expect(container.textContent).not.toContain("Single Label");
     expect(container.textContent).not.toContain("Batch Upload");
   });
 
-  it("shows OpenAI key warning inputs when enabled", async () => {
+  it("does not render OpenAI key controls", async () => {
     await renderPackageWorkflow();
 
-    await act(async () => {
-      const checkbox = container.querySelector('input[type="checkbox"]');
-      if (!(checkbox instanceof HTMLInputElement)) {
-        throw new Error("Missing OpenAI checkbox");
-      }
-      checkbox.click();
-    });
-
-    expect(container.textContent).toContain("WARNING: THIS USES REAL API CALLS");
-    expect(container.textContent).toContain("API Key");
-    expect(container.textContent).toContain("Model");
-    await clickButton("Cancel");
     expect(container.textContent).not.toContain("WARNING: THIS USES REAL API CALLS");
+    expect(container.textContent).not.toContain("Use Real AI Vision");
+    expect(container.textContent).not.toContain("Use OPENAI KEY");
+    expect(container.querySelector('input[type="password"]')).toBeNull();
   });
 
   it("downloads demo inputs as one archive", async () => {
@@ -434,88 +385,115 @@ describe("PackageWorkflow", () => {
     expect(anchors[0].href).toContain("/demo-data/demo-inputs.zip");
   });
 
-  it("adds later uploads to the current batch instead of replacing them", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => verificationResult()
-      })
-    );
+  it("previews selected images before adding applications", async () => {
+    vi.stubGlobal("fetch", vi.fn());
 
     await renderPackageWorkflow();
-    await chooseFiles([jsonFile("first.json", "first.png"), imageFile("first.png")]);
-    await chooseFiles([
-      jsonFile("second.json", "second.png", {
-        ...canonicalApplicationData,
-        brand_name: "SECOND BRAND"
-      }),
-      imageFile("second.png")
-    ]);
+    await chooseFiles([imageFile("first.png"), imageFile("second.png")], {
+      acceptPreview: false
+    });
 
-    expect(container.textContent).toContain("OLD TOM DISTILLERY");
-    expect(container.textContent).toContain("SECOND BRAND");
-    expect(container.textContent).toContain("2 total");
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain("Review Images");
+    expect(container.textContent).toContain("2 images selected");
+    expect(container.querySelectorAll(".package-card")).toHaveLength(0);
+
+    await clickButton("Use Images");
+
+    expect(container.textContent).not.toContain("Review Images");
+    expect(container.textContent).toContain("first.png");
+    expect(container.textContent).toContain("second.png");
+    expect(container.querySelectorAll(".package-card")).toHaveLength(2);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("shows incomplete uploads and moves them to applications when the pair arrives", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => verificationResult()
-      })
-    );
+  it("removes a single image from the preview before accepting", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+
+    await renderPackageWorkflow();
+    await chooseFiles([imageFile("first.png"), imageFile("second.png")], {
+      acceptPreview: false
+    });
+
+    await clickButtonLabel("Remove first.png");
+    await clickButton("Use Images");
+
+    expect(container.textContent).not.toContain("first.png");
+    expect(container.textContent).toContain("second.png");
+    expect(container.querySelectorAll(".package-card")).toHaveLength(1);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("cancels selected images before they become applications", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+
+    await renderPackageWorkflow();
+    await chooseFiles([imageFile("cancelled.png")], {
+      acceptPreview: false
+    });
+
+    await clickButton("Cancel");
+
+    expect(container.textContent).not.toContain("Review Images");
+    expect(container.textContent).not.toContain("cancelled.png");
+    expect(container.querySelectorAll(".package-card")).toHaveLength(0);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("opens a larger image preview from a thumbnail", async () => {
+    await renderPackageWorkflow();
+    await chooseFiles([imageFile("first.png"), imageFile("second.png")], {
+      acceptPreview: false
+    });
+
+    const firstPreview = container.querySelector('img[alt="Large preview of first.png"]');
+    expect(firstPreview).toBeInstanceOf(HTMLImageElement);
+    expect((firstPreview as HTMLImageElement).src).toContain("blob:first.png");
+
+    await clickButtonLabel("Open larger preview for second.png");
+
+    const secondPreview = container.querySelector('img[alt="Large preview of second.png"]');
+    expect(secondPreview).toBeInstanceOf(HTMLImageElement);
+    expect((secondPreview as HTMLImageElement).src).toContain("blob:second.png");
+  });
+
+  it("adds later uploads to the current batch instead of replacing them", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+
+    await renderPackageWorkflow();
+    await chooseFiles([imageFile("first.png")]);
+    await chooseFiles([imageFile("second.png")]);
+
+    expect(container.textContent).toContain("first.png");
+    expect(container.textContent).toContain("second.png");
+    expect(container.textContent).toContain("2 total");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("shows JSON files as unsupported and keeps image uploads as applications", async () => {
+    vi.stubGlobal("fetch", vi.fn());
 
     await renderPackageWorkflow();
     await chooseFiles([jsonFile("application.json", "label.png")]);
 
-    expect(container.textContent).toContain("Incomplete Applications");
-    expect(container.textContent).toContain("1 total");
-    expect(container.textContent).toContain("1 json");
-    expect(container.textContent).toContain("Incomplete Application 1");
-    expect(container.textContent).toContain("Missing Image");
-    expect(container.textContent).not.toContain("application.json is waiting for label.png.");
+    expect(container.textContent).not.toContain("Incomplete Applications");
+    expect(container.textContent).toContain("application.json was not added");
     expect(fetch).not.toHaveBeenCalled();
 
     await chooseFiles([imageFile("label.png")]);
 
     expect(container.textContent).toContain("Applications");
-    expect(container.textContent).toContain("OLD TOM DISTILLERY");
-    expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:8000/verify", {
-      method: "POST",
-      body: expect.any(FormData),
-      signal: expect.any(AbortSignal)
-    });
+    expect(container.textContent).toContain("label.png");
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("filters applications and updates section counts from search text", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          summary: { passed: 2, needs_review: 0, total: 2 },
-          items: [
-            { index: 0, result: verificationResult(), error: null },
-            { index: 1, result: verificationResult(), error: null }
-          ]
-        })
-      })
+      vi.fn().mockResolvedValue({ ok: true, json: async () => verificationResult() })
     );
 
     await renderPackageWorkflow();
-    await chooseFiles([
-      jsonFile("first.json", "first.png"),
-      imageFile("first.png"),
-      jsonFile("second.json", "second.png", {
-        ...canonicalApplicationData,
-        brand_name: "SECOND BRAND"
-      }),
-      imageFile("second.png"),
-      jsonFile("waiting.json", "missing.png")
-    ]);
+    await chooseFiles([imageFile("first.png"), imageFile("second.png")]);
 
     await act(async () => {
       const search = container.querySelector('input[type="search"]');
@@ -528,63 +506,45 @@ describe("PackageWorkflow", () => {
     });
     await waitForAsyncUpdates();
 
-    expect(container.textContent).toContain("SECOND BRAND");
-    expect(container.textContent).not.toContain("OLD TOM DISTILLERY");
+    expect(container.textContent).toContain("second.png");
+    expect(container.textContent).not.toContain("first.png");
     expect(container.textContent).toContain("1 total");
-    expect(container.textContent).toContain("No Matching Incomplete Applications");
   });
 
-  it("uses incomplete header count buttons as filters", async () => {
+  it("does not show incomplete-application filters", async () => {
     await renderPackageWorkflow();
     await chooseFiles([jsonFile("waiting.json", "missing.png"), imageFile("lonely.png")]);
 
-    expect(container.textContent).toContain("2 total");
-    expect(container.textContent).toContain("1 json");
-    expect(container.textContent).toContain("1 images");
-
-    await clickButton("1 images");
-
-    expect(container.textContent).toContain("2 total");
-    expect(container.textContent).toContain("1 json");
-    expect(buttonWithText("2 total").getAttribute("aria-pressed")).toBe("false");
-    expect(buttonWithText("1 json").getAttribute("aria-pressed")).toBe("false");
-    expect(buttonWithText("1 images").getAttribute("aria-pressed")).toBe("true");
-    expect(container.textContent).not.toContain("Missing Image");
-    expect(container.textContent).toContain("Incomplete Application 1");
-    expect(container.textContent).toContain("Missing Application Data");
-    expect(container.textContent).not.toContain("lonely.png is waiting for a matching application JSON file.");
+    expect(container.textContent).toContain("1 total");
+    expect(container.textContent).toContain("lonely.png");
+    expect(container.textContent).toContain("waiting.json was not added");
+    expect(container.textContent).not.toContain("1 json");
+    expect(container.textContent).not.toContain("1 images");
   });
 
   it("expands advanced search and refines by alcohol content", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          summary: { passed: 2, needs_review: 0, total: 2 },
-          items: [
-            { index: 0, result: verificationResult(), error: null },
-            { index: 1, result: verificationResult(), error: null }
-          ]
-        })
-      })
-    );
+    vi.stubGlobal("fetch", vi.fn());
 
     await renderPackageWorkflow();
-    await chooseFiles([
-      jsonFile("lower.json", "lower.png", {
-        ...canonicalApplicationData,
-        abv: "12.5%",
-        brand_name: "LOWER ABV"
-      }),
-      imageFile("lower.png"),
-      jsonFile("higher.json", "higher.png", {
-        ...canonicalApplicationData,
-        abv: "45%",
-        brand_name: "HIGHER ABV"
-      }),
-      imageFile("higher.png")
-    ]);
+    await chooseFiles([imageFile("lower.png"), imageFile("higher.png")]);
+    await act(async () => {
+      packageButtonAt(0).click();
+    });
+    await fillApplicationData({
+      ...canonicalApplicationData,
+      abv: "12.5%",
+      brand_name: "LOWER ABV"
+    });
+    await clickButton("X");
+    await act(async () => {
+      packageButtonAt(1).click();
+    });
+    await fillApplicationData({
+      ...canonicalApplicationData,
+      abv: "45%",
+      brand_name: "HIGHER ABV"
+    });
+    await clickButton("X");
 
     await clickButton("Advanced Search");
 
@@ -611,7 +571,7 @@ describe("PackageWorkflow", () => {
     expect(container.textContent).toContain("1 total");
   });
 
-  it("calls /verify automatically when one application is uploaded", async () => {
+  it("calls /verify after application fields are entered and submitted", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -621,7 +581,7 @@ describe("PackageWorkflow", () => {
     );
 
     await renderPackageWorkflow();
-    await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
+    await uploadOpenFillAndVerify();
 
     expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:8000/verify", {
       method: "POST",
@@ -632,13 +592,13 @@ describe("PackageWorkflow", () => {
     expect(JSON.parse(String(readFormDataBody().get("application_data")))).toEqual(
       canonicalApplicationData
     );
-    expect(readFormDataBody().get("use_real_vision")).toBe("false");
+    expect(readFormDataBody().get("use_real_vision")).toBeNull();
     expect(readFormDataBody().get("openai_api_key")).toBeNull();
     expect(readFormDataBody().get("openai_model")).toBeNull();
-    expect(container.textContent).toContain("Passed");
+    expect(container.textContent).toContain("Approved");
   });
 
-  it("sends temporary OpenAI settings when OpenAI key mode is enabled", async () => {
+  it("does not call /verify/batch automatically for multiple applications", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -648,136 +608,51 @@ describe("PackageWorkflow", () => {
     );
 
     await renderPackageWorkflow();
-    await act(async () => {
-      const checkbox = container.querySelector('input[type="checkbox"]');
-      if (!(checkbox instanceof HTMLInputElement)) {
-        throw new Error("Missing OpenAI checkbox");
-      }
-      checkbox.click();
-    });
-    await act(async () => {
-      const apiKeyInput = Array.from(container.querySelectorAll("label")).find((label) =>
-        label.textContent?.includes("API Key")
-      )?.querySelector("input");
-      if (!(apiKeyInput instanceof HTMLInputElement)) {
-        throw new Error("Missing API key input");
-      }
-      const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-      valueSetter?.call(apiKeyInput, "sk-test");
-      apiKeyInput.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await clickButton("Proceed");
-    await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
+    await chooseFiles([imageFile("first.png"), imageFile("second.png")]);
 
-    expect(readFormDataBody().get("use_real_vision")).toBe("true");
-    expect(readFormDataBody().get("openai_api_key")).toBe("sk-test");
-    expect(readFormDataBody().get("openai_model")).toBe("gpt-4.1-mini");
-    expect(container.textContent).toContain("Real AI vision ready: gpt-4.1-mini");
-  });
-
-  it("rechecks existing applications with temporary OpenAI settings after enabling real vision", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => verificationResult()
-      })
-    );
-
-    await renderPackageWorkflow();
-    await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
-    expect(readFormDataBody(0).get("use_real_vision")).toBe("false");
+    expect(fetch).not.toHaveBeenCalled();
 
     await act(async () => {
-      const checkbox = container.querySelector('input[type="checkbox"]');
-      if (!(checkbox instanceof HTMLInputElement)) {
-        throw new Error("Missing OpenAI checkbox");
-      }
-      checkbox.click();
+      packageButtonAt(0).click();
     });
-    await act(async () => {
-      const apiKeyInput = Array.from(container.querySelectorAll("label")).find((label) =>
-        label.textContent?.includes("API Key")
-      )?.querySelector("input");
-      if (!(apiKeyInput instanceof HTMLInputElement)) {
-        throw new Error("Missing API key input");
-      }
-      const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-      valueSetter?.call(apiKeyInput, "sk-later-test");
-      apiKeyInput.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await clickButton("Proceed");
-    await waitForAsyncUpdates();
+    await fillApplicationData({ ...canonicalApplicationData, brand_name: "FIRST BRAND" });
+    await clickButton("VERIFY");
 
-    expect(fetch).toHaveBeenCalledTimes(2);
-    expect(readFormDataBody(1).get("use_real_vision")).toBe("true");
-    expect(readFormDataBody(1).get("openai_api_key")).toBe("sk-later-test");
-    expect(readFormDataBody(1).get("openai_model")).toBe("gpt-4.1-mini");
-  });
-
-  it("calls /verify/batch automatically for multiple applications and maps index results by record", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          summary: { passed: 1, needs_review: 1, total: 2 },
-          items: [
-            {
-              index: 0,
-              result: verificationResult({
-                overall_verdict: "NEEDS_REVIEW",
-                results: [
-                  {
-                    field: "brand_name",
-                    match_type: "fuzzy",
-                    expected: "FIRST BRAND",
-                    found: "WRONG BRAND",
-                    status: "FAIL",
-                    message: "Values do not match after fuzzy normalization."
-                  }
-                ]
-              }),
-              error: null
-            },
-            {
-              index: 1,
-              result: verificationResult(),
-              error: null
-            }
-          ]
-        })
-      })
-    );
-
-    await renderPackageWorkflow();
-    await chooseFiles([
-      imageFile("second.png"),
-      jsonFile("first.json", "first.png", {
-        ...canonicalApplicationData,
-        brand_name: "FIRST BRAND"
-      }),
-      imageFile("first.png"),
-      jsonFile("second.json", "second.png")
-    ]);
-
-    expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:8000/verify/batch", {
+    expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:8000/verify", {
       method: "POST",
       body: expect.any(FormData),
       signal: expect.any(AbortSignal)
     });
     const formData = readFormDataBody();
-    expect((formData.getAll("images")[0] as File).name).toBe("first.png");
-    expect((formData.getAll("images")[1] as File).name).toBe("second.png");
-    expect(formData.get("use_real_vision")).toBe("false");
+    expect((formData.get("image") as File).name).toBe("first.png");
+    expect(formData.get("use_real_vision")).toBeNull();
     expect(formData.get("openai_api_key")).toBeNull();
     expect(formData.get("openai_model")).toBeNull();
 
     const firstCard = container.textContent ?? "";
     expect(firstCard).toContain("FIRST BRAND");
-    expect(firstCard).toContain("Needs Review");
-    expect(firstCard).toContain("OLD TOM DISTILLERY");
-    expect(firstCard).toContain("Passed");
+    expect(firstCard).toContain("Approved");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks verification when numeric application fields do not include numbers", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+
+    await renderPackageWorkflow();
+    await chooseFiles([imageFile("label.png")]);
+    await act(async () => {
+      firstPackageButton().click();
+    });
+    await fillApplicationData({
+      ...canonicalApplicationData,
+      abv: "forty five percent",
+      net_contents: "standard bottle"
+    });
+    await clickButton("VERIFY");
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Alcohol Content with a number");
+    expect(container.textContent).toContain("Net Contents with a number");
   });
 
   it("opens detail view with brand header, image, read-only values, and field decision icons", async () => {
@@ -790,10 +665,7 @@ describe("PackageWorkflow", () => {
     );
 
     await renderPackageWorkflow();
-    await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
-    await act(async () => {
-      firstPackageButton().click();
-    });
+    await uploadOpenFillAndVerify();
 
     const image = container.querySelector('img[alt="Label image for OLD TOM DISTILLERY"]');
     expect(image).not.toBeNull();
@@ -806,16 +678,23 @@ describe("PackageWorkflow", () => {
     expect(container.textContent).toContain("Hover Mouse Over Image To Zoom In");
     expect(container.textContent).not.toContain("Backend Results");
     expect(container.textContent).not.toContain("AI Reasoning");
-    expect(container.textContent).not.toContain("label.png");
 
     const applicationBrand = container.querySelector('[aria-label="Application Value Brand Name"]');
+    const applicationAbv = container.querySelector('[aria-label="Application Value Alcohol Content"]');
+    const applicationNetContents = container.querySelector('[aria-label="Application Value Net Contents"]');
     const extractedBrand = container.querySelector('[aria-label="Extracted Value Brand Name"]');
-    expect(applicationBrand).toBeInstanceOf(HTMLParagraphElement);
+    expect(applicationBrand).toBeInstanceOf(HTMLInputElement);
+    expect(applicationAbv).toBeInstanceOf(HTMLInputElement);
+    expect(applicationNetContents).toBeInstanceOf(HTMLInputElement);
+    expect((applicationAbv as HTMLInputElement).inputMode).toBe("decimal");
+    expect((applicationNetContents as HTMLInputElement).inputMode).toBe("decimal");
+    expect((applicationAbv as HTMLInputElement).pattern).toContain("[0-9]");
+    expect((applicationNetContents as HTMLInputElement).pattern).toContain("[0-9]");
     expect(extractedBrand).toBeInstanceOf(HTMLParagraphElement);
     expect(extractedBrand?.textContent).toBe("Old Tom Distillery");
     expect(buttonWithText("X")).toBeInstanceOf(HTMLButtonElement);
     expect(container.querySelector('[aria-label="Fail Brand Name"]')).not.toBeNull();
-    expect(container.querySelector('[aria-label="Needs review Brand Name"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Needs review Brand Name"]')).toBeNull();
     expect(container.querySelector('[aria-label="Pass Brand Name"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="Brand Name comparison rule"]')).not.toBeNull();
     expect(container.textContent).toContain("same within 0.1 percentage points");
@@ -833,13 +712,10 @@ describe("PackageWorkflow", () => {
     );
 
     await renderPackageWorkflow();
-    await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
-    await act(async () => {
-      firstPackageButton().click();
-    });
+    await uploadOpenFillAndVerify();
 
     expect(container.querySelector("#data-title")).not.toBeNull();
-    await clickButtonLabel("Close detail view. Current status: Passed");
+    await clickButtonLabel("Close detail view. Current status: Approved");
     expect(container.querySelector("#data-title")).toBeNull();
   });
 
@@ -867,10 +743,7 @@ describe("PackageWorkflow", () => {
     );
 
     await renderPackageWorkflow();
-    await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
-    await act(async () => {
-      firstPackageButton().click();
-    });
+    await uploadOpenFillAndVerify();
 
     const dataPanel = container.querySelector(".data-panel");
     if (!(dataPanel instanceof HTMLElement)) {
@@ -878,23 +751,22 @@ describe("PackageWorkflow", () => {
     }
 
     expect(dataPanel.textContent).toContain("7 total");
-    expect(dataPanel.textContent).toContain("0 fail");
-    expect(dataPanel.textContent).toContain("1 needs review");
+    expect(dataPanel.textContent).toContain("1 fail");
     expect(dataPanel.textContent).toContain("6 passed");
 
-    const reviewFilter = Array.from(dataPanel.querySelectorAll("button")).find(
-      (button) => button.textContent === "1 needs review"
+    const failFilter = Array.from(dataPanel.querySelectorAll("button")).find(
+      (button) => button.textContent === "1 fail"
     );
-    if (!(reviewFilter instanceof HTMLButtonElement)) {
-      throw new Error("Missing review field filter");
+    if (!(failFilter instanceof HTMLButtonElement)) {
+      throw new Error("Missing fail field filter");
     }
 
     await act(async () => {
-      reviewFilter.click();
+      failFilter.click();
     });
     await waitForAsyncUpdates();
 
-    expect(reviewFilter.getAttribute("aria-pressed")).toBe("true");
+    expect(failFilter.getAttribute("aria-pressed")).toBe("true");
     expect(dataPanel.textContent).toContain("Brand Name");
     expect(dataPanel.textContent).not.toContain("Class Type");
   });
@@ -909,7 +781,7 @@ describe("PackageWorkflow", () => {
     );
 
     await renderPackageWorkflow();
-    await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
+    await chooseFiles([imageFile("label.png")]);
     await act(async () => {
       firstPackageButton().click();
     });
@@ -1088,7 +960,7 @@ describe("PackageWorkflow", () => {
     expect((labelImage as HTMLElement).style.transform).toMatch(/translate\(\d+(\.\d+)?px, 0px\) rotate\(5deg\)/);
   });
 
-  it("uses backend field results to enable review decision buttons", async () => {
+  it("shows needs review when any backend field result fails", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({
@@ -1111,82 +983,12 @@ describe("PackageWorkflow", () => {
     );
 
     await renderPackageWorkflow();
-    await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
-    await act(async () => {
-      firstPackageButton().click();
-    });
+    await uploadOpenFillAndVerify();
 
-    expect(buttonWithText("FAIL").getAttribute("aria-disabled")).toBe("false");
-    expect(buttonWithText("PASS").getAttribute("aria-disabled")).toBe("true");
-    await clickButton("FAIL");
-    expect(container.textContent).toContain("Fail");
-    expect(container.querySelector("#data-title")).toBeNull();
-  });
-
-  it("warns before overriding a grayed out pass decision", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () =>
-          verificationResult({
-            overall_verdict: "NEEDS_REVIEW",
-            results: [
-              {
-                field: "brand_name",
-                match_type: "fuzzy",
-                expected: "OLD TOM DISTILLERY",
-                found: "WRONG BRAND",
-                status: "FAIL",
-                message: "Values do not match after fuzzy normalization."
-              }
-            ]
-          })
-      })
-    );
-
-    await renderPackageWorkflow();
-    await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
-    await act(async () => {
-      firstPackageButton().click();
-    });
-
-    await clickButton("PASS");
-    expect(container.textContent).toContain("Pass this application anyway?");
     expect(container.textContent).toContain("Needs Review");
-    expect(container.textContent).toContain("Brand Name");
-    await clickButton("Cancel");
-    expect(container.querySelector("#data-title")).not.toBeNull();
-
-    await clickButton("PASS");
-    await clickButton("Proceed With Pass");
-    expect(container.textContent).toContain("Passed");
-    expect(container.querySelector("#data-title")).toBeNull();
-  });
-
-  it("warns before overriding a grayed out fail decision", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => verificationResult()
-      })
-    );
-
-    await renderPackageWorkflow();
-    await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
-    await act(async () => {
-      firstPackageButton().click();
-    });
-
-    expect(buttonWithText("FAIL").getAttribute("aria-disabled")).toBe("true");
-    await clickButton("FAIL");
-    expect(container.textContent).toContain("Fail this application anyway?");
-    expect(container.textContent).toContain("Pass");
-    expect(container.textContent).toContain("Brand Name");
-    await clickButton("Proceed With Fail");
-    expect(container.textContent).toContain("Fail");
-    expect(container.querySelector("#data-title")).toBeNull();
+    expect(container.textContent).toContain("fail");
+    expect(() => buttonWithText("FAIL")).toThrow("Missing button: FAIL");
+    expect(() => buttonWithText("PASS")).toThrow("Missing button: PASS");
   });
 
   it("does not open detail from card hover and closes detail when clicking outside", async () => {
@@ -1199,7 +1001,7 @@ describe("PackageWorkflow", () => {
     );
 
     await renderPackageWorkflow();
-    await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
+    await chooseFiles([imageFile("label.png")]);
     vi.useFakeTimers();
     await act(async () => {
       firstPackageButton().dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
@@ -1239,24 +1041,6 @@ describe("PackageWorkflow", () => {
                   expected: "OLD TOM DISTILLERY",
                   found: "Old Tom Distillery",
                   status: "FAIL",
-                  message: "Reviewer marked this field as needs review."
-                },
-                ...verificationResult().results.slice(1)
-              ]
-            })
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () =>
-            verificationResult({
-              overall_verdict: "NEEDS_REVIEW",
-              results: [
-                {
-                  field: "brand_name",
-                  match_type: "fuzzy",
-                  expected: "OLD TOM DISTILLERY",
-                  found: "Old Tom Distillery",
-                  status: "FAIL",
                   message: "Reviewer marked this field as fail."
                 },
                 ...verificationResult().results.slice(1)
@@ -1266,12 +1050,9 @@ describe("PackageWorkflow", () => {
     );
 
     await renderPackageWorkflow();
-    await chooseFiles([jsonFile("application.json", "label.png"), imageFile("label.png")]);
-    await act(async () => {
-      firstPackageButton().click();
-    });
+    await uploadOpenFillAndVerify();
 
-    await clickButtonLabel("Needs review Brand Name");
+    await clickButtonLabel("Fail Brand Name");
     expect(fetch).toHaveBeenLastCalledWith("http://127.0.0.1:8000/compare", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1279,60 +1060,9 @@ describe("PackageWorkflow", () => {
       signal: expect.any(AbortSignal)
     });
     expect(JSON.parse((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[1][1].body)).toMatchObject({
-      field_decisions: { brand_name: "review" }
-    });
-    expect(container.textContent).toContain("Needs Review");
-    await clickButtonLabel("Fail Brand Name");
-    expect(JSON.parse((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[2][1].body)).toMatchObject({
       field_decisions: { brand_name: "fail" }
     });
-    expect(container.textContent).toContain("Fail");
-  });
-
-  it("opens pretend submission warning and downloads one zip with applications and results", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => verificationResult()
-      })
-    );
-
-    await renderPackageWorkflow();
-    await chooseFiles([
-      jsonFile("application.json", "label.png"),
-      imageFile("label.png"),
-      jsonFile("waiting.json", "missing.png")
-    ]);
-    await clickButton("Submit");
-
-    expect(container.textContent).toContain("This is the pretend submission.");
-    expect(container.textContent).toContain("This will download the application documents with pass/fail attached.");
-    expect(container.textContent).toContain("Proceed Without Download");
-    expect(container.textContent).toContain("Proceed With Download");
-    await clickButton("Cancel");
-    expect(createdBlobs).toHaveLength(0);
-
-    await clickButton("Submit");
-    await clickButton("Proceed Without Download");
-    expect(createdBlobs).toHaveLength(0);
-
-    await clickButton("Submit");
-    await clickButton("Proceed With Download");
-    expect(createdBlobs).toHaveLength(1);
-    expect(createdBlobs[0].type).toBe("application/zip");
-    const bytes = new Uint8Array(await readBlobArrayBuffer(createdBlobs[0]));
-    expect(Array.from(bytes.slice(0, 4))).toEqual([0x50, 0x4b, 0x03, 0x04]);
-    const zipText = await readBlobText(createdBlobs[0]);
-    expect(zipText).toContain("applications/application.json");
-    expect(zipText).toContain("applications/label.png");
-    expect(zipText).toContain("applications/waiting.json");
-    expect(zipText).toContain("results/submission-results.json");
-    expect(zipText).toContain('"schema_version": "pretend-submission-results-v1"');
-    expect(zipText).toContain('"application_id": "application-1"');
-    expect(zipText).toContain('"status": "pass"');
-    expect(zipText).toContain('"application_id": "incomplete-application-1"');
-    expect(zipText).toContain('"status": "fail"');
+    expect(container.textContent).toContain("Needs Review");
   });
 
   it("exports pending items honestly", () => {
@@ -1355,9 +1085,8 @@ describe("PackageWorkflow", () => {
     ]);
 
     expect(exportJson.summary).toEqual({
-      failed: 0,
-      passed: 0,
       needs_review: 0,
+      passed: 0,
       pending: 1,
       total: 1
     });
@@ -1396,9 +1125,8 @@ describe("PackageWorkflow", () => {
 
     expect(exported.generated_at).toBe("2026-06-20T00:00:00.000Z");
     expect(exported.summary).toEqual({
-      failed: 0,
-      passed: 0,
       needs_review: 1,
+      passed: 0,
       pending: 0,
       total: 1
     });

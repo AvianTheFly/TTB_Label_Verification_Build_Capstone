@@ -18,8 +18,8 @@ Inputs:
 
 - `multipart/form-data` with repeated `images` file parts.
 - Repeated `application_data` JSON string parts.
-- Optional `use_real_vision` boolean string; false or omitted uses deterministic demo extraction fixtures, true uses the configured vision provider.
-- Optional multipart `openai_api_key` and `openai_model`; when `use_real_vision` is true and a key is provided, the key/model are used only for that batch request and are not persisted or logged.
+- Environment-configured `VisionService`; tests inject a mock service.
+- Provider credentials and model names must not be accepted from request fields. The frontend must never submit OpenAI API keys or provider-selection flags.
 - Items are paired by the order of provided multipart parts: first image with first application-data object, second image with second application-data object, and so on.
 - The frontend should submit only complete rows.
 
@@ -32,6 +32,7 @@ Outputs:
 
 - `POST /verify/batch`
 - Frontend batch upload view.
+- Batch image preview before selected images become application records.
 - Batch API client function.
 - Batch item error shape: `{ code, message, details }`, not the top-level API error envelope.
 
@@ -69,6 +70,7 @@ Batch processing uses a bounded async concurrency limit, default `3`. Batch tota
 - Concurrency limit is enforced or directly testable.
 - Item-level errors do not use the top-level error envelope shape.
 - Frontend shows progress, summary, and drill-down.
+- Frontend shows selected image previews and supports removing images before acceptance.
 
 ## 9. Exit Criteria
 

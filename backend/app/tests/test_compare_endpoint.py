@@ -75,6 +75,12 @@ def assert_error_envelope(response, code: str) -> None:
     assert isinstance(body["error"]["details"], dict)
 
 
+def assert_verification_result_literals(body: dict[str, Any]) -> None:
+    assert body["overall_verdict"] in {"APPROVED", "NEEDS_REVIEW"}
+    for result in body["results"]:
+        assert result["status"] in {"PASS", "FAIL"}
+
+
 def test_compare_matching_values_return_approved_without_vision_call() -> None:
     client = make_client(fail_if_vision_called=True)
 
@@ -86,6 +92,7 @@ def test_compare_matching_values_return_approved_without_vision_call() -> None:
 
     assert response.status_code == 200
     body = response.json()
+    assert_verification_result_literals(body)
     assert body["overall_verdict"] == "APPROVED"
     assert isinstance(body["latency_ms"], int)
     assert body["latency_ms"] >= 0
@@ -108,6 +115,7 @@ def test_compare_title_case_government_warning_returns_needs_review() -> None:
 
     assert response.status_code == 200
     body = response.json()
+    assert_verification_result_literals(body)
     assert body["overall_verdict"] == "NEEDS_REVIEW"
     by_field = {result["field"]: result for result in body["results"]}
     assert by_field["government_warning"]["status"] == "FAIL"
@@ -124,7 +132,9 @@ def test_compare_abv_normalization_works() -> None:
     )
 
     assert response.status_code == 200
-    by_field = {result["field"]: result for result in response.json()["results"]}
+    body = response.json()
+    assert_verification_result_literals(body)
+    by_field = {result["field"]: result for result in body["results"]}
     assert by_field["abv"]["status"] == "PASS"
     assert by_field["abv"]["match_type"] == "numeric"
 
@@ -139,7 +149,9 @@ def test_compare_net_contents_normalization_works() -> None:
     )
 
     assert response.status_code == 200
-    by_field = {result["field"]: result for result in response.json()["results"]}
+    body = response.json()
+    assert_verification_result_literals(body)
+    by_field = {result["field"]: result for result in body["results"]}
     assert by_field["net_contents"]["status"] == "PASS"
     assert by_field["net_contents"]["match_type"] == "unit"
 
@@ -154,7 +166,9 @@ def test_compare_country_synonym_normalization_works() -> None:
     )
 
     assert response.status_code == 200
-    by_field = {result["field"]: result for result in response.json()["results"]}
+    body = response.json()
+    assert_verification_result_literals(body)
+    by_field = {result["field"]: result for result in body["results"]}
     assert by_field["country_of_origin"]["status"] == "PASS"
     assert by_field["country_of_origin"]["match_type"] == "synonym"
 
@@ -178,6 +192,7 @@ def test_compare_allows_null_extracted_fields_and_returns_needs_review() -> None
 
     assert response.status_code == 200
     body = response.json()
+    assert_verification_result_literals(body)
     assert body["overall_verdict"] == "NEEDS_REVIEW"
     assert all(result["status"] == "FAIL" for result in body["results"])
     assert all(result["found"] is None for result in body["results"])
@@ -195,28 +210,11 @@ def test_compare_field_decision_pass_overrides_backend_failure() -> None:
 
     assert response.status_code == 200
     body = response.json()
+    assert_verification_result_literals(body)
     assert body["overall_verdict"] == "APPROVED"
     by_field = {result["field"]: result for result in body["results"]}
     assert by_field["brand_name"]["status"] == "PASS"
     assert by_field["brand_name"]["message"] == "Reviewer marked this field as pass."
-
-
-def test_compare_field_decision_review_overrides_backend_pass() -> None:
-    client = make_client(fail_if_vision_called=True)
-
-    response = post_compare(
-        client,
-        application_data=make_application_data(),
-        extracted_data=make_extracted_data(),
-        field_decisions={"brand_name": "review"},
-    )
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["overall_verdict"] == "NEEDS_REVIEW"
-    by_field = {result["field"]: result for result in body["results"]}
-    assert by_field["brand_name"]["status"] == "FAIL"
-    assert by_field["brand_name"]["message"] == "Reviewer marked this field as needs review."
 
 
 def test_compare_field_decision_fail_overrides_backend_pass() -> None:
@@ -231,6 +229,7 @@ def test_compare_field_decision_fail_overrides_backend_pass() -> None:
 
     assert response.status_code == 200
     body = response.json()
+    assert_verification_result_literals(body)
     assert body["overall_verdict"] == "NEEDS_REVIEW"
     by_field = {result["field"]: result for result in body["results"]}
     assert by_field["brand_name"]["status"] == "FAIL"

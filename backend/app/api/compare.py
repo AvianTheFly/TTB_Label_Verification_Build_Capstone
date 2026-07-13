@@ -5,10 +5,11 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Body
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from app.api.request_parsing import safe_model_errors
 from app.core.errors import ApiError
 from app.domain.comparison import CANONICAL_FIELDS, compare_label
 from app.domain.models import ApplicationData, ExtractedLabel, VerificationResult
-from app.services.verification import elapsed_ms
+from app.use_cases.timing import elapsed_ms
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["verification"])
@@ -26,7 +27,7 @@ class CompareExtractedData(BaseModel):
     government_warning: str | None
 
 
-ReviewerDecision = Literal["pass", "review", "fail"]
+ReviewerDecision = Literal["pass", "fail"]
 
 
 class CompareFieldDecisions(BaseModel):
@@ -72,7 +73,7 @@ async def compare_extracted_values(
                 "Application data and extracted data are missing required fields "
                 "or contain unsupported fields."
             ),
-            details={"field_errors": _safe_model_errors(exc.errors())},
+            details={"field_errors": safe_model_errors(exc.errors(), default_field="request")},
         ) from exc
 
     extracted_label = ExtractedLabel.model_validate(request.extracted_data.model_dump())
@@ -111,15 +112,6 @@ def _apply_reviewer_decisions(
                     }
                 )
             )
-        elif decision == "review":
-            updated_results.append(
-                field_result.model_copy(
-                    update={
-                        "status": "FAIL",
-                        "message": "Reviewer marked this field as needs review.",
-                    }
-                )
-            )
         elif decision == "fail":
             updated_results.append(
                 field_result.model_copy(
@@ -141,19 +133,3 @@ def _apply_reviewer_decisions(
         updated_results, key=lambda field_result: CANONICAL_FIELDS.index(field_result.field)
     )
     return VerificationResult(results=ordered_results, overall_verdict=overall_verdict)
-
-
-def _safe_model_errors(errors: list[dict[str, Any]]) -> list[dict[str, str]]:
-    safe_errors: list[dict[str, str]] = []
-    for error in errors:
-        loc = error.get("loc", ())
-        if not isinstance(loc, tuple | list):
-            loc = ()
-        safe_errors.append(
-            {
-                "field": ".".join(str(part) for part in loc) or "request",
-                "message": str(error.get("msg", "Invalid value.")),
-                "type": str(error.get("type", "validation_error")),
-            }
-        )
-    return safe_errors
