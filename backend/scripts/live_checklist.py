@@ -100,14 +100,23 @@ def main() -> int:
 
 
 def _default_image_path() -> Path:
-    return Path(__file__).resolve().parents[2] / "demo-data/inputs/northstar-riesling.png"
+    return _demo_input_path("northstar-riesling.png")
 
 
 def _default_application_data_path() -> Path:
-    return (
-        Path(__file__).resolve().parents[2]
-        / "demo-data/inputs/northstar-riesling.application.json"
-    )
+    return _demo_input_path("northstar-riesling.application.json")
+
+
+def _demo_input_path(filename: str, repo_root: Path | None = None) -> Path:
+    root = repo_root or Path(__file__).resolve().parents[2]
+    candidates = [
+        root / "demo-data" / "inputs" / filename,
+        root / "frontend" / "public" / "demo-data" / "inputs" / filename,
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
 
 
 def _verify_endpoint(url: str) -> str:

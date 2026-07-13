@@ -278,11 +278,12 @@ Single-run deployed check:
 
 ```bash
 cd backend
-uv run python scripts/live_checklist.py \
-  --url https://YOUR_BACKEND_ORIGIN \
-  --image ../demo-data/inputs/northstar-riesling.png \
-  --application-data ../demo-data/inputs/northstar-riesling.application.json
+uv run python scripts/live_checklist.py --url https://YOUR_BACKEND_ORIGIN
 ```
+
+By default, the script uses the bundled `northstar-riesling` sample from `demo-data/inputs`,
+falling back to `frontend/public/demo-data/inputs` if needed. Pass `--image` and
+`--application-data` to use a different sample.
 
 Expected output:
 
@@ -296,8 +297,6 @@ Latency measurement command for the later real-provider pass:
 cd backend
 uv run python scripts/live_checklist.py \
   --url https://YOUR_BACKEND_ORIGIN \
-  --image ../demo-data/inputs/northstar-riesling.png \
-  --application-data ../demo-data/inputs/northstar-riesling.application.json \
   --runs 20
 ```
 

@@ -635,6 +635,26 @@ describe("PackageWorkflow", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("blocks verification when numeric application fields do not include numbers", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+
+    await renderPackageWorkflow();
+    await chooseFiles([imageFile("label.png")]);
+    await act(async () => {
+      firstPackageButton().click();
+    });
+    await fillApplicationData({
+      ...canonicalApplicationData,
+      abv: "forty five percent",
+      net_contents: "standard bottle"
+    });
+    await clickButton("VERIFY");
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Alcohol Content with a number");
+    expect(container.textContent).toContain("Net Contents with a number");
+  });
+
   it("opens detail view with brand header, image, read-only values, and field decision icons", async () => {
     vi.stubGlobal(
       "fetch",
@@ -668,6 +688,8 @@ describe("PackageWorkflow", () => {
     expect(applicationNetContents).toBeInstanceOf(HTMLInputElement);
     expect((applicationAbv as HTMLInputElement).inputMode).toBe("decimal");
     expect((applicationNetContents as HTMLInputElement).inputMode).toBe("decimal");
+    expect((applicationAbv as HTMLInputElement).pattern).toContain("[0-9]");
+    expect((applicationNetContents as HTMLInputElement).pattern).toContain("[0-9]");
     expect(extractedBrand).toBeInstanceOf(HTMLParagraphElement);
     expect(extractedBrand?.textContent).toBe("Old Tom Distillery");
     expect(buttonWithText("X")).toBeInstanceOf(HTMLButtonElement);

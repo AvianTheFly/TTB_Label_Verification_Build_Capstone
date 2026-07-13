@@ -42,6 +42,16 @@ import {
 } from "./recordStatus";
 import type { AdvancedSearchFilters } from "./types";
 
+const NUMERIC_APPLICATION_FIELDS: Array<{
+  example: string;
+  label: string;
+  name: "abv" | "net_contents";
+}> = [
+  { name: "abv", label: "Alcohol Content", example: "45%" },
+  { name: "net_contents", label: "Net Contents", example: "750 mL" }
+];
+const HAS_NUMBER_RE = /\d+(?:\.\d+)?/;
+
 function errorMessageFor(error: unknown): string {
   if (error instanceof VerificationApiError) {
     return error.message;
@@ -228,6 +238,25 @@ export function PackageWorkflow() {
             ? {
                 ...candidate,
                 item_error: `Enter ${missingFields.map((field) => field.label).join(", ")} before verifying.`
+              }
+            : candidate
+        )
+      );
+      return;
+    }
+
+    const invalidNumericFields = NUMERIC_APPLICATION_FIELDS.filter(
+      (field) => !HAS_NUMBER_RE.test(record.application_data[field.name])
+    );
+    if (invalidNumericFields.length > 0) {
+      setRecords((current) =>
+        current.map((candidate) =>
+          candidate.package_id === packageId
+            ? {
+                ...candidate,
+                item_error: `Enter ${invalidNumericFields
+                  .map((field) => `${field.label} with a number, such as ${field.example}`)
+                  .join("; ")} before verifying.`
               }
             : candidate
         )
