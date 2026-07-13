@@ -173,6 +173,19 @@ def test_correct_all_caps_government_warning_passes() -> None:
     assert field_result.match_type == "exact"
 
 
+def test_government_warning_compares_application_to_extracted_not_canonical() -> None:
+    submitted_warning = "GOVERNMENT WARNING: Label-specific application text."
+    extracted_warning = "GOVERNMENT WARNING:\n\nLabel-specific   application text."
+    field_result = result_for_field(
+        make_application(government_warning=submitted_warning),
+        make_extracted(government_warning=extracted_warning),
+        "government_warning",
+    )
+
+    assert field_result.status == "PASS"
+    assert field_result.match_type == "exact"
+
+
 def test_misread_warning_failure_returns_extracted_warning_text_in_found() -> None:
     misread_warning = CANONICAL_GOVERNMENT_WARNING.replace("pregnancy", "prcgnancy")
     field_result = result_for_field(
@@ -183,6 +196,8 @@ def test_misread_warning_failure_returns_extracted_warning_text_in_found() -> No
 
     assert field_result.status == "FAIL"
     assert field_result.found == misread_warning
+    assert "AI detected:" in field_result.message
+    assert misread_warning in field_result.message
 
 
 def test_government_warning_does_not_use_fuzzy_matching() -> None:
