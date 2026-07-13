@@ -178,6 +178,21 @@ def test_preprocess_keeps_smaller_original_when_resize_is_not_needed() -> None:
     assert processed.processed_size_bytes == len(original)
 
 
+def test_preprocess_reencodes_when_original_exceeds_threshold() -> None:
+    original = make_image_bytes(size=(900, 1300), image_format="PNG")
+
+    processed = preprocess_image(
+        original,
+        "image/png",
+        reencode_threshold_bytes=1,
+    )
+
+    assert processed.content_type == "image/jpeg"
+    assert processed.processed_size_bytes > 0
+    assert processed.processed_width == 900
+    assert processed.processed_height == 1300
+
+
 def test_openai_provider_reads_model_and_timeout_from_settings() -> None:
     settings = Settings(
         _env_file=None,

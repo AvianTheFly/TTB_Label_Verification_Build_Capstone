@@ -30,6 +30,7 @@ async def verify_label_image(
         max_upload_mb=settings.max_upload_mb,
         max_dimension_px=settings.image_max_dimension,
         jpeg_quality=settings.image_jpeg_quality,
+        reencode_threshold_bytes=settings.image_reencode_threshold_bytes,
     )
     preprocessing_ms = elapsed_ms(preprocess_start)
 

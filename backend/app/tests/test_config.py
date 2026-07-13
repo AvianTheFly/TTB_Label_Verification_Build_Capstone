@@ -42,6 +42,7 @@ def test_production_safe_defaults_use_real_provider() -> None:
     assert settings.openai_max_output_tokens == 500
     assert settings.image_max_dimension == 1600
     assert settings.image_jpeg_quality == 60
+    assert settings.image_reencode_threshold_bytes == 500_000
 
 
 def test_openai_timeout_cannot_exceed_latency_budget() -> None:
@@ -62,6 +63,9 @@ def test_image_preprocess_knobs_are_validated() -> None:
 
     with pytest.raises(ValueError):
         Settings(_env_file=None, image_jpeg_quality=99)
+
+    with pytest.raises(ValueError):
+        Settings(_env_file=None, image_reencode_threshold_bytes=-1)
 
 
 def test_openai_image_detail_allows_provider_supported_values() -> None:

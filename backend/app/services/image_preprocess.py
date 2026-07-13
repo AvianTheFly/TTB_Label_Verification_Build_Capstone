@@ -16,6 +16,7 @@ SUPPORTED_INPUT_CONTENT_TYPES = frozenset(
 OUTPUT_CONTENT_TYPE = "image/jpeg"
 DEFAULT_MAX_DIMENSION_PX = 1600
 DEFAULT_JPEG_QUALITY = 85
+DEFAULT_REENCODE_THRESHOLD_BYTES = 500_000
 
 ImagePreprocessCategory = Literal["unsupported_file_type", "file_too_large", "invalid_image"]
 
@@ -49,6 +50,7 @@ def preprocess_image(
     max_upload_mb: int = 10,
     max_dimension_px: int = DEFAULT_MAX_DIMENSION_PX,
     jpeg_quality: int = DEFAULT_JPEG_QUALITY,
+    reencode_threshold_bytes: int = DEFAULT_REENCODE_THRESHOLD_BYTES,
 ) -> PreprocessedImage:
     normalized_content_type = _normalize_content_type(content_type)
     if normalized_content_type not in SUPPORTED_INPUT_CONTENT_TYPES:
@@ -82,29 +84,28 @@ def preprocess_image(
             requires_composite = image.mode in {"RGBA", "LA"} or (
                 image.mode == "P" and "transparency" in image.info
             )
-            if requires_composite:
-                image = _composite_on_white(image)
-            else:
-                image = image.convert("RGB")
-
             resized = max(image.size) > max_dimension_px
-            if resized:
-                image.thumbnail(
-                    (max_dimension_px, max_dimension_px),
-                    Image.Resampling.LANCZOS,
-                )
+            should_reencode = (
+                resized or requires_composite or len(image_bytes) > reencode_threshold_bytes
+            )
 
-            output = BytesIO()
-            image.save(output, format="JPEG", quality=jpeg_quality, optimize=True)
-            processed = output.getvalue()
-            processed_content_type = OUTPUT_CONTENT_TYPE
+            if should_reencode:
+                if requires_composite:
+                    image = _composite_on_white(image)
+                else:
+                    image = image.convert("RGB")
 
-            if (
-                not resized
-                and not requires_composite
-                and normalized_content_type in SUPPORTED_INPUT_CONTENT_TYPES
-                and len(image_bytes) <= len(processed)
-            ):
+                if resized:
+                    image.thumbnail(
+                        (max_dimension_px, max_dimension_px),
+                        Image.Resampling.LANCZOS,
+                    )
+
+                output = BytesIO()
+                image.save(output, format="JPEG", quality=jpeg_quality, optimize=True)
+                processed = output.getvalue()
+                processed_content_type = OUTPUT_CONTENT_TYPE
+            else:
                 processed = image_bytes
                 processed_content_type = normalized_content_type
     except ImagePreprocessError:

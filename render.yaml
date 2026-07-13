@@ -26,6 +26,8 @@ services:
         value: "1600"
       - key: IMAGE_JPEG_QUALITY
         value: "60"
+      - key: IMAGE_REENCODE_THRESHOLD_BYTES
+        value: "500000"
       - key: VISION_PROVIDER
         value: openai
       - key: VISION_MODEL
