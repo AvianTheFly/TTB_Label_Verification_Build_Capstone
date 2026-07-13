@@ -77,7 +77,7 @@ Request: `application/json`
 
 - `application_data`: JSON object containing the seven canonical application fields.
 - `extracted_data`: JSON object containing the seven canonical extracted fields. Values may be strings or `null`; missing fields and extra fields are invalid.
-- `field_decisions`: optional JSON object containing reviewer overrides by canonical field. Values must be `pass`, `review`, or `fail`.
+- `field_decisions`: optional JSON object containing reviewer overrides by canonical field. Values must be `pass` or `fail`.
 
 Request body:
 
@@ -103,7 +103,7 @@ Request body:
   },
   "field_decisions": {
     "brand_name": "pass",
-    "government_warning": "review"
+    "government_warning": "fail"
   }
 }
 ```
@@ -134,7 +134,7 @@ Rules:
 - The backend remains the sole owner of comparison logic. The frontend must not reimplement PASS/FAIL, normalization, fuzzy comparison, ABV parsing, net contents parsing, country synonyms, exact government warning comparison, or verdict rules.
 - `extracted_data` must use exactly the seven canonical fields. Provider metadata such as `raw_text` or confidence scores is not accepted by this endpoint.
 - `field_decisions` is optional and may include any subset of the seven canonical fields. Extra fields and unknown decision values are invalid.
-- Reviewer decisions are applied after backend comparison. `pass` forces that field result to `PASS`; `review` and `fail` force that field result to `FAIL` with a reviewer-decision message.
+- Reviewer decisions are applied after backend comparison. `pass` forces that field result to `PASS`; `fail` forces that field result to `FAIL` with a reviewer-decision message.
 - `overall_verdict` is `APPROVED` only when all fields pass.
 - Any field failure returns `NEEDS_REVIEW`.
 - Government warning failures must include the submitted extracted warning text in `found`; if the reviewer submits `null`, `found` is `null`.

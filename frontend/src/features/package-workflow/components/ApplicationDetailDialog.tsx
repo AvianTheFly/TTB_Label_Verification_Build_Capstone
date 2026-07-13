@@ -1,7 +1,7 @@
 import type { RefObject } from "react";
 
 import type { CanonicalLabelField, FieldReviewDecision } from "../../../types/api";
-import type { ApplicationPackageRecord, VisibleStatus } from "../packageWorkflowUtils";
+import type { ApplicationPackageRecord } from "../packageWorkflowUtils";
 import { applicationNumber, cardStatusClass } from "../recordStatus";
 import { DataPanel } from "./DataPanel";
 import { ZoomableLabelImage } from "./ZoomableLabelImage";
@@ -22,7 +22,6 @@ interface ApplicationDetailDialogProps {
     decision: FieldReviewDecision
   ) => void;
   onPassClick: (record: ApplicationPackageRecord) => void;
-  onSetRecordStatus: (packageId: string, status: VisibleStatus) => void;
   onVerify: (packageId: string) => void;
   record: ApplicationPackageRecord;
   selectedCanFail: boolean;
@@ -37,7 +36,6 @@ export function ApplicationDetailDialog({
   onFailClick,
   onFieldDecision,
   onPassClick,
-  onSetRecordStatus,
   onVerify,
   record,
   selectedCanFail,
@@ -117,14 +115,14 @@ export function ApplicationDetailDialog({
           </div>
         )}
 
-        <div className="review-actions" aria-label="Review decision">
+        <div className="decision-actions" aria-label="Application decision">
           <button
-            className="decision-button decision-button--review"
+            className="decision-button decision-button--verify"
             disabled={isChecking}
             onClick={() => onVerify(record.package_id)}
             type="button"
           >
-            {isChecking ? "VERIFYING..." : "SUBMIT / VERIFY"}
+            {isChecking ? "VERIFYING..." : "VERIFY"}
           </button>
           <button
             aria-disabled={!selectedCanFail}
@@ -135,13 +133,6 @@ export function ApplicationDetailDialog({
             type="button"
           >
             FAIL
-          </button>
-          <button
-            className="decision-button decision-button--review"
-            onClick={() => onSetRecordStatus(record.package_id, "Needs Review")}
-            type="button"
-          >
-            NEEDS REVIEW
           </button>
           <button
             aria-disabled={!selectedCanPass}

@@ -3,7 +3,7 @@ interface SectionStatsProps {
     active: boolean;
     filterKey: string;
     label: string;
-    tone: "neutral" | "fail" | "review" | "passed" | "pending";
+    tone: "neutral" | "fail" | "passed" | "pending";
     value: number;
   }>;
   onToggle: (filterKey: string) => void;
@@ -28,4 +28,3 @@ export function SectionStats({ items, onToggle }: SectionStatsProps) {
     </div>
   );
 }
-

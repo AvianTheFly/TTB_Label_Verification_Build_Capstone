@@ -1,8 +1,5 @@
 import type { CanonicalLabelField, FieldReviewDecision } from "../../types/api";
-import type {
-  ApplicationPackageRecord,
-  IncompleteApplicationRecord
-} from "./packageWorkflowUtils";
+import type { ApplicationPackageRecord } from "./packageWorkflowUtils";
 
 export type IncompleteFilter = "json" | "image";
 export type AbvOperator = "any" | "lt" | "eq" | "gt";
@@ -37,18 +34,10 @@ export type PackageRecordKey = Pick<
 
 export interface ApplicationSummary {
   fail: number;
-  needsReview: number;
   passed: number;
   total: number;
 }
 
-export interface IncompleteSummary {
-  images: number;
-  json: number;
-  total: number;
-}
-
 export type PackageCollections = {
-  incompleteRecords: IncompleteApplicationRecord[];
   records: ApplicationPackageRecord[];
 };

@@ -17,13 +17,12 @@ import { ApplicationsSection } from "./components/ApplicationsSection";
 import { SearchPanel } from "./components/SearchPanel";
 import { UploadDropSurface } from "./components/UploadDropSurface";
 import { WorkflowHeader } from "./components/WorkflowHeader";
-import { ReviewOverrideDialog, SubmitWarningDialog } from "./components/WorkflowDialogs";
+import { ReviewOverrideDialog } from "./components/WorkflowDialogs";
 import { createPreviewUrl, mergeFilesByName, revokePreviewUrl } from "./filePreviews";
 import {
   ApplicationPackageRecord,
   PackageValidationError,
   VisibleStatus,
-  buildPretendSubmissionZip,
   emptyExtractedData,
   extractedDataFromResult,
   parseApplicationPackages,
@@ -38,8 +37,8 @@ import {
   buildReviewOverrideWarning,
   canMarkApplicationFail,
   canMarkApplicationPass,
-  promoteReviewFieldsToFail,
   recordKey,
+  resolvedFieldDecisions,
   statusFromFieldDecisions,
   summarizeApplications
 } from "./recordStatus";
@@ -69,13 +68,11 @@ export function PackageWorkflow() {
   const [isChecking, setIsChecking] = useState(false);
   const [checkError, setCheckError] = useState<string | null>(null);
   const [reviewOverrideWarning, setReviewOverrideWarning] = useState<ReviewOverrideWarning | null>(null);
-  const [isSubmitWarningOpen, setIsSubmitWarningOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false);
   const [statusFilters, setStatusFilters] = useState<Record<VisibleStatus, boolean>>({
     "Pending Check": true,
     Passed: true,
-    "Needs Review": true,
     Fail: true
   });
   const [advancedFilters, setAdvancedFilters] = useState<AdvancedSearchFilters>({
@@ -233,7 +230,7 @@ export function PackageWorkflow() {
       setRecords((current) =>
         current.map((candidate) =>
           candidate.package_id === packageId
-            ? { ...candidate, item_error: message, status: "Needs Review" }
+            ? { ...candidate, item_error: message, status: "Fail" }
             : candidate
         )
       );
@@ -388,28 +385,9 @@ export function PackageWorkflow() {
       return;
     }
 
-    const fieldDecisions = promoteReviewFieldsToFail(record);
+    const fieldDecisions = resolvedFieldDecisions(record);
     await applyBackendFieldDecisions(record, fieldDecisions);
     closeDetail();
-  }
-
-  async function downloadPretendSubmission() {
-    const archive = await buildPretendSubmissionZip(records, []);
-    const url = URL.createObjectURL(archive);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "pretend-submission.zip";
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function proceedWithoutDownload() {
-    setIsSubmitWarningOpen(false);
-  }
-
-  async function proceedWithDownload() {
-    await downloadPretendSubmission();
-    setIsSubmitWarningOpen(false);
   }
 
   function downloadDemoData() {
@@ -426,7 +404,6 @@ export function PackageWorkflow() {
         return {
           "Pending Check": !allActive,
           Passed: !allActive,
-          "Needs Review": !allActive,
           Fail: !allActive
         };
       }
@@ -435,7 +412,6 @@ export function PackageWorkflow() {
         return {
           "Pending Check": status === "Pending Check",
           Passed: status === "Passed",
-          "Needs Review": status === "Needs Review",
           Fail: status === "Fail"
         };
       }
@@ -463,8 +439,6 @@ export function PackageWorkflow() {
         <WorkflowHeader
           isChecking={isChecking}
           onDownloadDemoData={downloadDemoData}
-          onSubmitClick={() => setIsSubmitWarningOpen(true)}
-          recordCount={records.length}
         />
 
         <UploadDropSurface
@@ -507,7 +481,6 @@ export function PackageWorkflow() {
             onApplicationDataChange={updateApplicationData}
             onFieldDecision={setFieldDecision}
             onPassClick={handlePassClick}
-            onSetRecordStatus={setRecordStatus}
             onVerify={verifyApplication}
             record={selectedRecord}
             selectedCanFail={selectedCanFail}
@@ -520,14 +493,6 @@ export function PackageWorkflow() {
             onCancel={() => setReviewOverrideWarning(null)}
             onConfirm={confirmReviewOverride}
             warning={reviewOverrideWarning}
-          />
-        )}
-
-        {isSubmitWarningOpen && (
-          <SubmitWarningDialog
-            onCancel={() => setIsSubmitWarningOpen(false)}
-            onProceedWithDownload={() => void proceedWithDownload()}
-            onProceedWithoutDownload={proceedWithoutDownload}
           />
         )}
 

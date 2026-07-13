@@ -44,13 +44,6 @@ export function ApplicationsSection({
               tone: "fail"
             },
             {
-              active: statusFilters["Needs Review"],
-              filterKey: "Needs Review",
-              label: "needs review",
-              value: summary.needsReview,
-              tone: "review"
-            },
-            {
               active: statusFilters.Passed,
               filterKey: "Passed",
               label: "passed",

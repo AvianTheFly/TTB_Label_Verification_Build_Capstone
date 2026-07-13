@@ -1,15 +1,11 @@
 interface WorkflowHeaderProps {
   isChecking: boolean;
   onDownloadDemoData: () => void;
-  onSubmitClick: () => void;
-  recordCount: number;
 }
 
 export function WorkflowHeader({
   isChecking,
-  onDownloadDemoData,
-  onSubmitClick,
-  recordCount
+  onDownloadDemoData
 }: WorkflowHeaderProps) {
   return (
     <div className="page-heading page-heading--with-actions">
@@ -25,14 +21,6 @@ export function WorkflowHeader({
         )}
         <button className="secondary-button" onClick={onDownloadDemoData} type="button">
           Download Demo Data
-        </button>
-        <button
-          className="secondary-button"
-          disabled={recordCount === 0}
-          onClick={onSubmitClick}
-          type="button"
-        >
-          Submit
         </button>
       </div>
     </div>

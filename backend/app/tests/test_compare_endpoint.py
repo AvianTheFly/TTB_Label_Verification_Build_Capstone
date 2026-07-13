@@ -201,24 +201,6 @@ def test_compare_field_decision_pass_overrides_backend_failure() -> None:
     assert by_field["brand_name"]["message"] == "Reviewer marked this field as pass."
 
 
-def test_compare_field_decision_review_overrides_backend_pass() -> None:
-    client = make_client(fail_if_vision_called=True)
-
-    response = post_compare(
-        client,
-        application_data=make_application_data(),
-        extracted_data=make_extracted_data(),
-        field_decisions={"brand_name": "review"},
-    )
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["overall_verdict"] == "NEEDS_REVIEW"
-    by_field = {result["field"]: result for result in body["results"]}
-    assert by_field["brand_name"]["status"] == "FAIL"
-    assert by_field["brand_name"]["message"] == "Reviewer marked this field as needs review."
-
-
 def test_compare_field_decision_fail_overrides_backend_pass() -> None:
     client = make_client(fail_if_vision_called=True)
 
