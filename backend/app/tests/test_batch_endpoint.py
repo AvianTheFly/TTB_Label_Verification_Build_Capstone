@@ -92,6 +92,12 @@ def assert_error_envelope(response, code: str) -> None:
     assert isinstance(body["error"]["details"], dict)
 
 
+def assert_verification_result_literals(result: dict[str, Any]) -> None:
+    assert result["overall_verdict"] in {"APPROVED", "NEEDS_REVIEW"}
+    for field_result in result["results"]:
+        assert field_result["status"] in {"PASS", "FAIL"}
+
+
 def test_successful_batch_with_three_passing_labels() -> None:
     service = FakeVisionService(results=[make_extracted_label() for _ in range(3)])
     client = make_client(service)
@@ -108,6 +114,8 @@ def test_successful_batch_with_three_passing_labels() -> None:
     assert len(body["items"]) == 3
     assert [item["index"] for item in body["items"]] == [0, 1, 2]
     assert all(item["error"] is None for item in body["items"])
+    for item in body["items"]:
+        assert_verification_result_literals(item["result"])
     assert all(item["result"]["overall_verdict"] == "APPROVED" for item in body["items"])
     assert all(isinstance(item["result"]["latency_ms"], int) for item in body["items"])
     assert len(service.calls) == 3
@@ -131,6 +139,8 @@ def test_batch_can_mix_approved_and_needs_review_labels() -> None:
 
     assert response.status_code == 200
     body = response.json()
+    for item in body["items"]:
+        assert_verification_result_literals(item["result"])
     assert body["summary"] == {"passed": 2, "needs_review": 1, "total": 3}
     assert body["items"][1]["result"]["overall_verdict"] == "NEEDS_REVIEW"
     failed = [
@@ -165,6 +175,8 @@ def test_partial_extraction_counts_as_needs_review_in_batch_summary() -> None:
     body = response.json()
     assert body["summary"] == {"passed": 1, "needs_review": 1, "total": 2}
     assert body["items"][1]["error"] is None
+    assert_verification_result_literals(body["items"][0]["result"])
+    assert_verification_result_literals(body["items"][1]["result"])
     assert body["items"][1]["result"]["overall_verdict"] == "NEEDS_REVIEW"
     failed_fields = {
         result["field"]
@@ -208,6 +220,7 @@ def test_more_application_data_parts_than_images_creates_trailing_item_error() -
 
     assert response.status_code == 200
     body = response.json()
+    assert_verification_result_literals(body["items"][0]["result"])
     assert body["summary"] == {"passed": 1, "needs_review": 1, "total": 2}
     assert body["items"][1]["error"]["code"] == "validation_error"
     assert body["items"][1]["error"]["details"]["field"] == "image"
@@ -228,6 +241,7 @@ def test_more_images_than_application_data_parts_creates_trailing_item_error() -
 
     assert response.status_code == 200
     body = response.json()
+    assert_verification_result_literals(body["items"][0]["result"])
     assert body["summary"] == {"passed": 1, "needs_review": 1, "total": 2}
     assert body["items"][1]["error"]["code"] == "validation_error"
     assert body["items"][1]["error"]["details"]["field"] == "application_data"
@@ -307,6 +321,8 @@ def test_batch_concurrency_is_bounded(monkeypatch) -> None:
 
     assert response.status_code == 200
     assert response.json()["summary"] == {"passed": 5, "needs_review": 0, "total": 5}
+    for item in response.json()["items"]:
+        assert_verification_result_literals(item["result"])
     assert service.calls == 5
     assert service.max_active == 2
     get_settings.cache_clear()
@@ -323,7 +339,9 @@ def test_batch_preserves_exact_canonical_field_names() -> None:
     )
 
     assert response.status_code == 200
-    result_fields = {result["field"] for result in response.json()["items"][0]["result"]["results"]}
+    body = response.json()
+    assert_verification_result_literals(body["items"][0]["result"])
+    result_fields = {result["field"] for result in body["items"][0]["result"]["results"]}
     assert result_fields == set(make_application_data())
 
 
@@ -357,5 +375,8 @@ def test_batch_submitted_openai_fields_do_not_override_configured_vision_service
     )
 
     assert response.status_code == 200
-    assert response.json()["summary"] == {"passed": 2, "needs_review": 0, "total": 2}
+    body = response.json()
+    assert body["summary"] == {"passed": 2, "needs_review": 0, "total": 2}
+    for item in body["items"]:
+        assert_verification_result_literals(item["result"])
     assert len(configured_service.calls) == 2

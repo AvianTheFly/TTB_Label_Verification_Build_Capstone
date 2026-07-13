@@ -167,6 +167,36 @@ def test_warning_failure_surfaces_extracted_government_warning_text() -> None:
     assert extracted_warning in warning_result["message"]
 
 
+def test_warning_failure_message_surfaces_normalized_extracted_text() -> None:
+    extracted_warning = (
+        "GOVERNMENT WARNING: (1) According to the Surgeon General, women should\n\n"
+        "not drink alcoholic beverages because of OCR drift."
+    )
+    normalized_warning = (
+        "GOVERNMENT WARNING: (1) According to the Surgeon General, women should "
+        "not drink alcoholic beverages because of OCR drift."
+    )
+    client, _ = make_client(
+        FakeVisionService(result=make_extracted_label(government_warning=extracted_warning))
+    )
+
+    response = post_verify(
+        client,
+        application_data=make_application_data(),
+        image_bytes=make_image_bytes(),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert_verification_result_literals(body)
+    warning_result = next(
+        result for result in body["results"] if result["field"] == "government_warning"
+    )
+    assert warning_result["status"] == "FAIL"
+    assert warning_result["found"] == extracted_warning
+    assert normalized_warning in warning_result["message"]
+
+
 def test_missing_extracted_government_warning_needs_review_with_found_null() -> None:
     client, _ = make_client(
         FakeVisionService(result=make_extracted_label(government_warning=None))
@@ -424,7 +454,9 @@ def test_submitted_openai_fields_do_not_override_configured_vision_service(monke
     )
 
     assert response.status_code == 200
-    assert response.json()["overall_verdict"] == "APPROVED"
+    body = response.json()
+    assert_verification_result_literals(body)
+    assert body["overall_verdict"] == "APPROVED"
     assert len(configured_service.calls) == 1
 
 

@@ -186,6 +186,33 @@ def test_government_warning_compares_application_to_extracted_not_canonical() ->
     assert field_result.match_type == "exact"
 
 
+def test_non_statute_government_warning_passes_when_application_and_extracted_match() -> None:
+    non_statute_warning = "GOVERNMENT WARNING: Short label-specific warning."
+    field_result = result_for_field(
+        make_application(government_warning=non_statute_warning),
+        make_extracted(government_warning=non_statute_warning),
+        "government_warning",
+    )
+
+    assert field_result.status == "PASS"
+    assert field_result.match_type == "exact"
+
+
+def test_canonical_government_warning_passes_with_extra_extracted_spaces() -> None:
+    extracted_warning = CANONICAL_GOVERNMENT_WARNING.replace(
+        "According to the Surgeon General",
+        "According  to  the  Surgeon  General",
+    )
+    field_result = result_for_field(
+        make_application(),
+        make_extracted(government_warning=extracted_warning),
+        "government_warning",
+    )
+
+    assert field_result.status == "PASS"
+    assert field_result.match_type == "exact"
+
+
 def test_misread_warning_failure_returns_extracted_warning_text_in_found() -> None:
     misread_warning = CANONICAL_GOVERNMENT_WARNING.replace("pregnancy", "prcgnancy")
     field_result = result_for_field(
