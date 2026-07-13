@@ -1,4 +1,3 @@
-import asyncio
 import base64
 import json
 import logging
@@ -10,10 +9,12 @@ from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 from app.domain.models import ExtractedLabel
 from app.services.image_preprocess import PreprocessedImage
 from app.use_cases.timing import elapsed_ms
+from app.use_cases.timeout import run_with_timeout
 
 DEFAULT_OPENAI_VISION_MODEL = "gpt-4.1-mini"
-DEFAULT_OPENAI_TIMEOUT_SECONDS = 4.2
+DEFAULT_OPENAI_TIMEOUT_SECONDS = 30.0
 DEFAULT_OPENAI_IMAGE_DETAIL = "low"
+DEFAULT_OPENAI_MAX_OUTPUT_TOKENS = 500
 
 logger = logging.getLogger(__name__)
 
@@ -119,11 +120,13 @@ class OpenAIVisionService:
         model: str | None = None,
         timeout_seconds: float = DEFAULT_OPENAI_TIMEOUT_SECONDS,
         image_detail: str = DEFAULT_OPENAI_IMAGE_DETAIL,
+        max_output_tokens: int = DEFAULT_OPENAI_MAX_OUTPUT_TOKENS,
         client: Any | None = None,
     ) -> None:
         self._model = model or DEFAULT_OPENAI_VISION_MODEL
         self._timeout_seconds = timeout_seconds
         self._image_detail = image_detail
+        self._max_output_tokens = max_output_tokens
         self._client = client
         self._api_key = api_key
 
@@ -134,6 +137,11 @@ class OpenAIVisionService:
             model=settings.vision_model or DEFAULT_OPENAI_VISION_MODEL,
             timeout_seconds=settings.openai_timeout_seconds,
             image_detail=settings.openai_image_detail,
+            max_output_tokens=getattr(
+                settings,
+                "openai_max_output_tokens",
+                DEFAULT_OPENAI_MAX_OUTPUT_TOKENS,
+            ),
         )
 
     async def extract_label(self, image: PreprocessedImage) -> ExtractedLabel:
@@ -146,7 +154,7 @@ class OpenAIVisionService:
 
         try:
             provider_start = perf_counter()
-            response = await asyncio.wait_for(
+            response = await run_with_timeout(
                 client.responses.create(
                     model=self._model,
                     input=[
@@ -170,12 +178,13 @@ class OpenAIVisionService:
                             "schema": STRUCTURED_OUTPUT_SCHEMA,
                         }
                     },
+                    max_output_tokens=self._max_output_tokens,
                     store=False,
                 ),
-                timeout=self._timeout_seconds,
+                self._timeout_seconds,
             )
             provider_call_ms = elapsed_ms(provider_start)
-        except (asyncio.TimeoutError, TimeoutError) as exc:
+        except TimeoutError as exc:
             raise VisionServiceError(
                 "provider_timeout",
                 "The vision provider timed out while reading the label.",
@@ -203,7 +212,7 @@ class OpenAIVisionService:
                 "openai_vision_timing client_build_ms=%s image_encode_ms=%s provider_call_ms=%s "
                 "payload_extract_ms=%s payload_parse_ms=%s total_provider_ms=%s "
                 "original_size_bytes=%s processed_size_bytes=%s original_pixels=%sx%s "
-                "processed_pixels=%sx%s model=%s image_detail=%s"
+                "processed_pixels=%sx%s model=%s image_detail=%s max_output_tokens=%s"
             ),
             client_build_ms,
             image_encode_ms,
@@ -219,6 +228,7 @@ class OpenAIVisionService:
             image.processed_height,
             self._model,
             self._image_detail,
+            self._max_output_tokens,
             extra={
                 "client_build_ms": client_build_ms,
                 "image_encode_ms": image_encode_ms,
@@ -234,6 +244,7 @@ class OpenAIVisionService:
                 "processed_height": image.processed_height,
                 "model": self._model,
                 "image_detail": self._image_detail,
+                "max_output_tokens": self._max_output_tokens,
             },
         )
         return extracted_label

@@ -64,8 +64,10 @@ Runtime provider selection is environment-backed:
 - `VISION_PROVIDER=fake` is reserved for tests and explicit local development.
 
 Image preprocessing is configurable through `IMAGE_MAX_DIMENSION` and `IMAGE_JPEG_QUALITY`.
-OpenAI calls use `OPENAI_TIMEOUT_SECONDS`, capped at 4.5 seconds to preserve the single-label
-latency budget.
+OpenAI calls use `OPENAI_TIMEOUT_SECONDS`, capped at 60 seconds as a safety limit while the
+API logs whether the measured single-label request exceeds the 5-second target.
+`OPENAI_IMAGE_DETAIL` defaults to `low`, and `OPENAI_MAX_OUTPUT_TOKENS` caps the structured
+response size for latency control.
 
 Safe categories include:
 

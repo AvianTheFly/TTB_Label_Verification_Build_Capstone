@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from time import perf_counter
 from typing import Annotated
@@ -47,33 +46,41 @@ async def verify_label(
                 "upload_size_bytes": len(image_bytes),
             },
         )
-        remaining_budget_seconds = settings.single_label_timeout_seconds - (
-            perf_counter() - start
+        result = await verify_label_image(
+            application=application,
+            image_bytes=image_bytes,
+            content_type=image.content_type or "",
+            filename=image.filename,
+            vision_service=vision_service,
+            settings=settings,
         )
-        if remaining_budget_seconds <= 0:
-            raise _verification_timeout_error(settings.single_label_timeout_seconds)
 
-        try:
-            result = await asyncio.wait_for(
-                verify_label_image(
-                    application=application,
-                    image_bytes=image_bytes,
-                    content_type=image.content_type or "",
-                    filename=image.filename,
-                    vision_service=vision_service,
-                    settings=settings,
-                ),
-                timeout=remaining_budget_seconds,
+        latency_budget_ms = int(settings.single_label_timeout_seconds * 1000)
+        latency_budget_exceeded = result.latency_ms > latency_budget_ms
+        if latency_budget_exceeded:
+            logger.warning(
+                "verify_latency_budget_exceeded latency_ms=%s latency_budget_ms=%s",
+                result.latency_ms,
+                latency_budget_ms,
+                extra={
+                    "latency_ms": result.latency_ms,
+                    "latency_budget_ms": latency_budget_ms,
+                },
             )
-        except asyncio.TimeoutError as exc:
-            raise _verification_timeout_error(settings.single_label_timeout_seconds) from exc
 
         logger.info(
-            "verify_request_completed latency_ms=%s overall_verdict=%s",
+            (
+                "verify_request_completed latency_ms=%s latency_budget_ms=%s "
+                "latency_budget_exceeded=%s overall_verdict=%s"
+            ),
             result.latency_ms,
+            latency_budget_ms,
+            latency_budget_exceeded,
             result.overall_verdict,
             extra={
                 "latency_ms": result.latency_ms,
+                "latency_budget_ms": latency_budget_ms,
+                "latency_budget_exceeded": latency_budget_exceeded,
                 "overall_verdict": result.overall_verdict,
             },
         )
@@ -105,13 +112,4 @@ def _log_request_failure(
             "error_code": api_error.code,
             "vision_category": vision_category,
         },
-    )
-
-
-def _verification_timeout_error(timeout_seconds: float) -> ApiError:
-    return ApiError(
-        status_code=504,
-        code="vision_timeout",
-        message="The label check took too long. Please try again.",
-        details={"latency_budget_ms": int(timeout_seconds * 1000)},
     )
