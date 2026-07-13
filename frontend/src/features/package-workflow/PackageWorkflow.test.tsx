@@ -340,10 +340,10 @@ describe("PackageWorkflow", () => {
 
     expect(container.querySelector('[data-testid="package-upload-area"]')).not.toBeNull();
     expect(fileInput().accept).toBe("image/*");
-    expect(container.textContent).toContain("Choose Files");
-    expect(container.textContent).toContain("Download Demo Data");
+    expect(container.textContent).toContain("Choose Images");
+    expect(container.textContent).toContain("Demo Data");
     expect(container.textContent).not.toContain("Submit");
-    expect(container.textContent).toContain("Drop Label Images");
+    expect(container.textContent).toContain("Upload Labels");
     expect(container.textContent).toContain("Applications");
     expect(container.textContent).not.toContain("Incomplete Applications");
     expect(container.textContent).not.toContain("Use OPENAI KEY");
@@ -374,7 +374,7 @@ describe("PackageWorkflow", () => {
     }) as typeof document.createElement);
 
     await renderPackageWorkflow();
-    await clickButton("Download Demo Data");
+    await clickButton("Demo Data");
 
     expect(anchors).toHaveLength(1);
     expect(anchors[0].download).toBe("demo-inputs.zip");
@@ -473,7 +473,7 @@ describe("PackageWorkflow", () => {
       abv: "12.5%",
       brand_name: "LOWER ABV"
     });
-    await clickButton("X");
+    await clickButton("Close");
     await act(async () => {
       packageButtonAt(1).click();
     });
@@ -482,9 +482,9 @@ describe("PackageWorkflow", () => {
       abv: "45%",
       brand_name: "HIGHER ABV"
     });
-    await clickButton("X");
+    await clickButton("Close");
 
-    await clickButton("Advanced Search");
+    await clickButton("Filters");
 
     await act(async () => {
       const abvLabel = Array.from(container.querySelectorAll("label")).find((label) =>
@@ -630,7 +630,7 @@ describe("PackageWorkflow", () => {
     expect((applicationNetContents as HTMLInputElement).pattern).toContain("[0-9]");
     expect(extractedBrand).toBeInstanceOf(HTMLParagraphElement);
     expect(extractedBrand?.textContent).toBe("Old Tom Distillery");
-    expect(buttonWithText("X")).toBeInstanceOf(HTMLButtonElement);
+    expect(buttonWithText("Close")).toBeInstanceOf(HTMLButtonElement);
     expect(container.querySelector('[aria-label="Fail Brand Name"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="Needs review Brand Name"]')).toBeNull();
     expect(container.querySelector('[aria-label="Pass Brand Name"]')).not.toBeNull();
@@ -653,7 +653,7 @@ describe("PackageWorkflow", () => {
     await uploadOpenFillAndVerify();
 
     expect(container.querySelector("#data-title")).not.toBeNull();
-    await clickButtonLabel("Close detail view. Current status: Approved");
+    await clickButtonLabel("Close detail view");
     expect(container.querySelector("#data-title")).toBeNull();
   });
 

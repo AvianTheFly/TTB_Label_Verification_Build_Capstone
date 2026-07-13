@@ -67,7 +67,10 @@ export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: 
   return (
     <section className="data-panel" aria-labelledby="data-title">
       <div className="data-panel__header">
-        <h3 id="data-title">Data</h3>
+        <div className="data-panel__title">
+          <h3 id="data-title">Application Data</h3>
+          <p>{visibleFields.length} fields shown</p>
+        </div>
         <SectionStats
           items={[
             {
@@ -116,6 +119,9 @@ export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: 
               <div className="data-row__heading">
                 <div className="data-row__title">
                   <h4>{field.label}</h4>
+                  <span className={`data-row__status data-row__status--${selectedDecision}`}>
+                    {selectedDecision === "pass" ? "Pass" : "Review"}
+                  </span>
                   <button
                     aria-label={`${field.label} comparison rule`}
                     className="field-info-button"
@@ -184,6 +190,9 @@ export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: 
                   </p>
                 </div>
               </div>
+              {fieldResult?.message && (
+                <p className="data-row__message">{fieldResult.message}</p>
+              )}
             </div>
           );
         })}
