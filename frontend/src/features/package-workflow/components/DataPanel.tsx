@@ -358,14 +358,19 @@ function RichWarningTextarea({
     const isFocused = document.activeElement === editor;
     const textAlreadyCurrent = editor.textContent === value;
     const boldStateUnchanged = previous?.isLeadInBold === isLeadInBold;
+    const htmlAlreadyCurrent = editor.innerHTML === nextHtml;
 
-    if (isFocused && textAlreadyCurrent && boldStateUnchanged) {
+    if (isFocused && textAlreadyCurrent && boldStateUnchanged && htmlAlreadyCurrent) {
       lastRenderedRef.current = { isLeadInBold, value };
       return;
     }
 
-    if (editor.innerHTML !== nextHtml) {
+    if (!htmlAlreadyCurrent) {
+      const caretOffset = isFocused ? selectionTextOffset(editor) : null;
       editor.innerHTML = nextHtml;
+      if (caretOffset !== null) {
+        restoreCaretAtTextOffset(editor, caretOffset);
+      }
     }
     lastRenderedRef.current = { isLeadInBold, value };
   }, [isLeadInBold, value]);
@@ -418,6 +423,52 @@ function escapeHtml(value: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+}
+
+function selectionTextOffset(container: HTMLElement): number | null {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return null;
+  }
+
+  const range = selection.getRangeAt(0);
+  if (!container.contains(range.endContainer)) {
+    return null;
+  }
+
+  const precedingText = range.cloneRange();
+  precedingText.selectNodeContents(container);
+  precedingText.setEnd(range.endContainer, range.endOffset);
+  return precedingText.toString().length;
+}
+
+function restoreCaretAtTextOffset(container: HTMLElement, offset: number) {
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  let remainingOffset = offset;
+  let currentNode = walker.nextNode();
+
+  while (currentNode) {
+    const textLength = currentNode.textContent?.length ?? 0;
+    if (remainingOffset <= textLength) {
+      setCaret(currentNode, remainingOffset);
+      return;
+    }
+
+    remainingOffset -= textLength;
+    currentNode = walker.nextNode();
+  }
+
+  setCaret(container, container.childNodes.length);
+}
+
+function setCaret(node: Node, offset: number) {
+  const range = document.createRange();
+  range.setStart(node, offset);
+  range.collapse(true);
+
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
 }
 
 interface FieldDecisionButtonProps {

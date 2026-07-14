@@ -273,6 +273,36 @@ function placeCaretAtEnd(element: HTMLElement) {
   selection?.addRange(range);
 }
 
+async function focusRichWarningAtEnd(label: string) {
+  const input = container.querySelector(`[aria-label="${label}"]`);
+  if (!(input instanceof HTMLElement)) {
+    throw new Error(`Missing field: ${label}`);
+  }
+
+  await act(async () => {
+    input.focus();
+    placeCaretAtEnd(input);
+  });
+  return input;
+}
+
+function currentSelectionTextOffset(element: HTMLElement): number | null {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return null;
+  }
+
+  const range = selection.getRangeAt(0);
+  if (!element.contains(range.endContainer)) {
+    return null;
+  }
+
+  const precedingText = range.cloneRange();
+  precedingText.selectNodeContents(element);
+  precedingText.setEnd(range.endContainer, range.endOffset);
+  return precedingText.toString().length;
+}
+
 async function typeRichWarningText(label: string, text: string) {
   const input = container.querySelector(`[aria-label="${label}"]`);
   if (!(input instanceof HTMLElement)) {
@@ -808,6 +838,26 @@ describe("PackageWorkflow", () => {
     expect(extractedWarning?.textContent).toBe("54321");
   });
 
+  it("keeps the caret in place when marking application warning text bold", async () => {
+    mockWorkflowFetch();
+
+    await renderPackageWorkflow();
+    await uploadOpenFillAndVerify();
+
+    const applicationWarningBeforeBold = await focusRichWarningAtEnd(
+      "Application Value Government Warning"
+    );
+    await pressCtrlB("Application Value Government Warning");
+
+    const applicationWarning = container.querySelector(
+      '[aria-label="Application Value Government Warning"]'
+    );
+    expect(applicationWarning?.innerHTML).toContain("<strong>GOVERNMENT WARNING:</strong>");
+    expect(currentSelectionTextOffset(applicationWarningBeforeBold)).toBe(
+      applicationWarningBeforeBold.textContent?.length
+    );
+  });
+
   it("lets reviewers mark warning text bold with ctrl b and sends extracted formatting", async () => {
     mockWorkflowFetch(
       verificationResult(),
@@ -821,17 +871,18 @@ describe("PackageWorkflow", () => {
     await renderPackageWorkflow();
     await uploadOpenFillAndVerify();
 
-    await pressCtrlB("Application Value Government Warning");
+    const extractedWarningBeforeBold = await focusRichWarningAtEnd(
+      "Extracted Value Government Warning"
+    );
     await pressCtrlB("Extracted Value Government Warning");
+    expect(currentSelectionTextOffset(extractedWarningBeforeBold)).toBe(
+      extractedWarningBeforeBold.textContent?.length
+    );
     await blurField("Extracted Value Government Warning");
 
-    const applicationWarning = container.querySelector(
-      '[aria-label="Application Value Government Warning"]'
-    );
     const extractedWarning = container.querySelector(
       '[aria-label="Extracted Value Government Warning"]'
     );
-    expect(applicationWarning?.innerHTML).toContain("<strong>GOVERNMENT WARNING:</strong>");
     expect(extractedWarning?.innerHTML).toContain("<strong>GOVERNMENT WARNING:</strong>");
     expect(fetch).toHaveBeenLastCalledWith("http://127.0.0.1:8000/compare", {
       method: "POST",
@@ -839,7 +890,8 @@ describe("PackageWorkflow", () => {
       body: expect.any(String),
       signal: expect.any(AbortSignal)
     });
-    expect(JSON.parse((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[1][1].body)).toMatchObject({
+    const fetchCalls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    expect(JSON.parse(fetchCalls[fetchCalls.length - 1][1].body)).toMatchObject({
       extracted_formatting: {
         government_warning_lead_in_bold: true
       }
