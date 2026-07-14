@@ -17,7 +17,7 @@ services:
       - key: SERVICE_SLUG
         value: ttb-label-verification
       - key: BACKEND_CORS_ORIGINS
-        value: https://fed-stack-capstone.vercel.app
+        value: https://ttb-label-verification-build-capsto.vercel.app
       - key: MAX_UPLOAD_MB
         value: "10"
       - key: MAX_BATCH_ITEMS

@@ -1,8 +1,8 @@
 # TTB Label Verification
 
-Live frontend: https://fed-stack-capstone.vercel.app/
+Live frontend: https://ttb-label-verification-build-capsto.vercel.app/
 
-Live backend health: https://ttb-label-verification-api-0i68.onrender.com/health
+Live backend: https://ttb-label-verification-api-0i68.onrender.com
 
 Public repository: https://github.com/AvianTheFly/TTB_Label_Verification_Build_Capstone
 
@@ -30,6 +30,18 @@ database.
 
 The first screen is the actual verification tool, not a marketing page. Manual deployed checks for
 single-label, batch, and accessibility/UX were recorded as passed before final submission cleanup.
+
+## Notable UI Extras
+
+These features are outside the core backend comparison requirement but make manual review faster:
+
+- Hover-to-zoom label inspection with a magnified image pane.
+- Rotate buttons for tilted label photos.
+- Drag/pan image positioning for closer inspection.
+- Lock/freeze zoom position while comparing text.
+- Search and advanced filters for finding applications in a batch.
+- Status count buttons for filtering applications and individual fields by pass/review state.
+- Pass/review field decision buttons for reviewer overrides after human inspection.
 
 ## Canonical Fields
 
@@ -297,7 +309,7 @@ Final local verification from cleanup:
 - backend ruff passed
 - backend tests passed: `131 passed`
 - frontend typecheck passed
-- frontend tests passed: `35 passed`
+- frontend tests passed: `38 passed`
 - frontend production build passed
 - deployed backend `/health` returned `ok`
 - deployed frontend returned HTTP 200
@@ -314,7 +326,7 @@ Backend deployment requirements:
 - Python 3.12.
 - `VISION_PROVIDER=openai`.
 - `OPENAI_API_KEY` set only in Render environment variables.
-- `BACKEND_CORS_ORIGINS=https://fed-stack-capstone.vercel.app`.
+- `BACKEND_CORS_ORIGINS=https://ttb-label-verification-build-capsto.vercel.app`.
 
 Frontend deployment requirements:
 
