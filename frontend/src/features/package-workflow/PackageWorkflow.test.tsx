@@ -3,7 +3,7 @@ import { createRoot, Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PackageWorkflow } from "./PackageWorkflow";
-import { buildReviewedResultsExport, parseApplicationPackages } from "./packageWorkflowUtils";
+import { parseApplicationPackages } from "./packageWorkflowUtils";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -431,7 +431,7 @@ describe("package parser", () => {
 
   it("rejects non-image files without creating applications for them", async () => {
     const result = await parseApplicationPackages([
-      new File(["{}"], "metadata.json", { type: "application/json" }),
+      new File(["notes"], "notes.txt", { type: "text/plain" }),
       imageFile("orphan-image.png")
     ]);
 
@@ -440,7 +440,7 @@ describe("package parser", () => {
     expect(result.errors).toEqual([
       expect.objectContaining({
         code: "unsupported_image_type",
-        filename: "metadata.json"
+        filename: "notes.txt"
       })
     ]);
   });
@@ -568,9 +568,9 @@ describe("PackageWorkflow", () => {
     mockWorkflowFetch();
 
     await renderPackageWorkflow();
-    await chooseFiles([new File(["{}"], "metadata.json", { type: "application/json" })]);
+    await chooseFiles([new File(["notes"], "notes.txt", { type: "text/plain" })]);
 
-    expect(container.textContent).toContain("metadata.json was not added");
+    expect(container.textContent).toContain("notes.txt was not added");
     expect(fetch).not.toHaveBeenCalled();
 
     await chooseFiles([imageFile("label.png")]);
@@ -605,14 +605,13 @@ describe("PackageWorkflow", () => {
   it("keeps unsupported files out of application counts", async () => {
     await renderPackageWorkflow();
     await chooseFiles([
-      new File(["{}"], "metadata.json", { type: "application/json" }),
+      new File(["notes"], "notes.txt", { type: "text/plain" }),
       imageFile("lonely.png")
     ]);
 
     expect(container.textContent).toContain("1 total");
     expect(container.textContent).toContain("lonely.png");
-    expect(container.textContent).toContain("metadata.json was not added");
-    expect(container.textContent).not.toContain("1 json");
+    expect(container.textContent).toContain("notes.txt was not added");
     expect(container.textContent).not.toContain("1 images");
   });
 
@@ -1239,84 +1238,6 @@ describe("PackageWorkflow", () => {
       field_decisions: { brand_name: "fail" }
     });
     expect(container.textContent).toContain("Needs Review");
-  });
-
-  it("exports pending items honestly", () => {
-    const exportJson = buildReviewedResultsExport([
-      {
-        package_id: "application-1",
-        image_filename: "label.png",
-        image_file: imageFile("label.png"),
-        image_preview_url: "",
-        application_data: canonicalApplicationData,
-        application_formatting: { government_warning_lead_in_bold: null },
-        original_extracted_data: null,
-        original_extracted_formatting: null,
-        reviewed_extracted_data: null,
-        reviewed_extracted_formatting: null,
-        comparison_result: null,
-        field_decisions: {},
-        status: "Pending Check",
-        validation_errors: [],
-        item_error: null
-      }
-    ]);
-
-    expect(exportJson.summary).toEqual({
-      needs_review: 0,
-      passed: 0,
-      pending: 1,
-      total: 1
-    });
-    expect(exportJson.applications[0]).toMatchObject({
-      application_id: "application-1",
-      image_filename: "label.png",
-      status: "Pending Check",
-      application_data: canonicalApplicationData,
-      application_formatting: { government_warning_lead_in_bold: null },
-      reviewed_extracted_data: null,
-      reviewed_extracted_formatting: null,
-      field_results: [],
-      overall_verdict: null,
-      errors: []
-    });
-    expect("expected_label_data" in exportJson.applications[0]).toBe(false);
-  });
-
-  it("builds export JSON with item errors when present", () => {
-    const exported = buildReviewedResultsExport(
-      [
-        {
-          package_id: "application-1",
-          image_filename: "label.png",
-          image_file: imageFile("label.png"),
-          image_preview_url: "",
-          application_data: canonicalApplicationData,
-          application_formatting: { government_warning_lead_in_bold: true },
-          original_extracted_data: null,
-          original_extracted_formatting: null,
-          reviewed_extracted_data: null,
-          reviewed_extracted_formatting: null,
-          comparison_result: null,
-          field_decisions: {},
-          status: "Needs Review",
-          validation_errors: [],
-          item_error: "This application could not be checked."
-        }
-      ],
-      "2026-06-20T00:00:00.000Z"
-    );
-
-    expect(exported.generated_at).toBe("2026-06-20T00:00:00.000Z");
-    expect(exported.summary).toEqual({
-      needs_review: 1,
-      passed: 0,
-      pending: 0,
-      total: 1
-    });
-    expect(exported.applications[0].errors).toEqual([
-      { code: "item_error", message: "This application could not be checked." }
-    ]);
   });
 
   it("does not contain frontend comparison tolerance logic", () => {

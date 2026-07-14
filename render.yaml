@@ -35,6 +35,6 @@ services:
       - key: VISION_MODEL
         value: gpt-5.4-nano
       - key: OPENAI_TIMEOUT_SECONDS
-        value: "30"
+        value: "4.5"
       - key: OPENAI_API_KEY
         sync: false

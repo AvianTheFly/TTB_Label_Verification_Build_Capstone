@@ -47,11 +47,6 @@ def main() -> int:
         help="Backend base URL or full /verify URL, for example https://example.com/verify.",
     )
     parser.add_argument("--image", type=Path, default=_default_image_path())
-    parser.add_argument(
-        "--application-data",
-        type=Path,
-        help="Optional JSON file containing exactly the seven canonical application fields.",
-    )
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--max-latency-ms", type=int, default=5000)
     parser.add_argument(
@@ -74,15 +69,10 @@ def main() -> int:
         return 2
 
     try:
-        application_data = (
-            _load_application_data(args.application_data.resolve())
-            if args.application_data
-            else DEFAULT_APPLICATION_DATA
-        )
         results = []
         round_trip_ms = []
         for _ in range(args.runs):
-            body, content_type = _multipart_body(image_path, application_data)
+            body, content_type = _multipart_body(image_path, DEFAULT_APPLICATION_DATA)
             started = time.perf_counter()
             response_body = _post(endpoint, body, content_type, timeout=args.timeout)
             elapsed_ms = round((time.perf_counter() - started) * 1000)
@@ -140,14 +130,6 @@ def _verify_endpoint(url: str) -> str:
     if parsed.path.rstrip("/").endswith("/verify"):
         return url
     return urljoin(url.rstrip("/") + "/", "verify")
-
-
-def _load_application_data(path: Path) -> dict[str, str]:
-    payload = json.loads(path.read_text(encoding="utf-8-sig"))
-    application_data = payload.get("application_data", payload)
-    if set(application_data) != CANONICAL_FIELDS:
-        raise ValueError("application data must contain exactly the seven canonical fields")
-    return application_data
 
 
 def _multipart_body(image_path: Path, application_data: dict[str, str]) -> tuple[bytes, str]:
