@@ -7,7 +7,13 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from app.api.request_parsing import safe_model_errors
 from app.core.errors import ApiError
-from app.domain.models import ApplicationData, ExtractedLabel, ReviewerDecision, VerificationResult
+from app.domain.models import (
+    ApplicationData,
+    ExtractedLabel,
+    LabelFormatting,
+    ReviewerDecision,
+    VerificationResult,
+)
 from app.use_cases.recomparison import compare_reviewed_extraction
 from app.use_cases.timing import elapsed_ms
 
@@ -44,6 +50,7 @@ class CompareRequest(BaseModel):
 
     application_data: ApplicationData
     extracted_data: CompareExtractedData
+    extracted_formatting: LabelFormatting | None = None
     field_decisions: CompareFieldDecisions | None = None
 
 
@@ -73,7 +80,16 @@ async def compare_extracted_values(
             details={"field_errors": safe_model_errors(exc.errors(), default_field="request")},
         ) from exc
 
-    extracted_label = ExtractedLabel.model_validate(request.extracted_data.model_dump())
+    extracted_label = ExtractedLabel.model_validate(
+        {
+            **request.extracted_data.model_dump(),
+            **(
+                request.extracted_formatting.model_dump()
+                if request.extracted_formatting is not None
+                else {}
+            ),
+        }
+    )
     reviewer_decisions = (
         request.field_decisions.model_dump(exclude_none=True)
         if request.field_decisions is not None

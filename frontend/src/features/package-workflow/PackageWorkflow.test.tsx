@@ -29,6 +29,9 @@ function verificationResult(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     overall_verdict: "APPROVED",
     latency_ms: 42,
+    extracted_formatting: {
+      government_warning_lead_in_bold: null
+    },
     results: [
       {
         field: "brand_name",
@@ -208,8 +211,19 @@ async function clickButtonLabel(label: string) {
 async function changeField(label: string, value: string) {
   await act(async () => {
     const input = container.querySelector(`[aria-label="${label}"]`);
-    if (!(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement)) {
+    if (
+      !(
+        input instanceof HTMLInputElement ||
+        input instanceof HTMLTextAreaElement ||
+        input instanceof HTMLElement
+      )
+    ) {
       throw new Error(`Missing field: ${label}`);
+    }
+    if (input instanceof HTMLElement && input.getAttribute("contenteditable") === "true") {
+      input.textContent = value;
+      input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      return;
     }
     const prototype =
       input instanceof HTMLTextAreaElement
@@ -224,12 +238,112 @@ async function changeField(label: string, value: string) {
 async function blurField(label: string) {
   await act(async () => {
     const input = container.querySelector(`[aria-label="${label}"]`);
-    if (!(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement)) {
+    if (!(input instanceof HTMLElement)) {
       throw new Error(`Missing field: ${label}`);
     }
     input.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
   });
   await waitForAsyncUpdates();
+}
+
+async function pressCtrlB(label: string) {
+  await act(async () => {
+    const input = container.querySelector(`[aria-label="${label}"]`);
+    if (!(input instanceof HTMLElement)) {
+      throw new Error(`Missing field: ${label}`);
+    }
+    input.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        bubbles: true,
+        ctrlKey: true,
+        key: "b"
+      })
+    );
+  });
+  await waitForAsyncUpdates();
+}
+
+function placeCaretAtEnd(element: HTMLElement) {
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.collapse(false);
+
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+async function focusRichWarningAtEnd(label: string) {
+  const input = container.querySelector(`[aria-label="${label}"]`);
+  if (!(input instanceof HTMLElement)) {
+    throw new Error(`Missing field: ${label}`);
+  }
+
+  await act(async () => {
+    input.focus();
+    placeCaretAtEnd(input);
+  });
+  return input;
+}
+
+function currentSelectionTextOffset(element: HTMLElement): number | null {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return null;
+  }
+
+  const range = selection.getRangeAt(0);
+  if (!element.contains(range.endContainer)) {
+    return null;
+  }
+
+  const precedingText = range.cloneRange();
+  precedingText.selectNodeContents(element);
+  precedingText.setEnd(range.endContainer, range.endOffset);
+  return precedingText.toString().length;
+}
+
+async function typeRichWarningText(label: string, text: string) {
+  const input = container.querySelector(`[aria-label="${label}"]`);
+  if (!(input instanceof HTMLElement)) {
+    throw new Error(`Missing field: ${label}`);
+  }
+
+  await act(async () => {
+    input.focus();
+    input.textContent = "";
+    placeCaretAtEnd(input);
+  });
+
+  for (const character of text) {
+    await act(async () => {
+      const selection = window.getSelection();
+      const range =
+        selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : document.createRange();
+
+      if (!selection || selection.rangeCount === 0) {
+        range.selectNodeContents(input);
+        range.collapse(false);
+      }
+
+      range.deleteContents();
+      const textNode = document.createTextNode(character);
+      range.insertNode(textNode);
+      range.setStartAfter(textNode);
+      range.collapse(true);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+
+      input.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          data: character,
+          inputType: "insertText"
+        })
+      );
+    });
+    await waitForAsyncUpdates();
+  }
 }
 
 async function fillApplicationData(data = canonicalApplicationData) {
@@ -684,7 +798,7 @@ describe("PackageWorkflow", () => {
     expect(container.querySelector('[aria-label="Brand Name comparison rule"]')).not.toBeNull();
     expect(container.textContent).toContain("same within 0.1 percentage points");
     expect(container.textContent).toContain("same within 1 mL");
-    expect(container.textContent).toContain("AI can have a hard time confirming");
+    expect(container.textContent).toContain("Uncertain bold styling still needs a person to check");
   });
 
   it("keeps edited AI detected text when detail is reopened", async () => {
@@ -703,6 +817,103 @@ describe("PackageWorkflow", () => {
     const extractedBrand = container.querySelector('[aria-label="Extracted Value Brand Name"]');
     expect(extractedBrand).toBeInstanceOf(HTMLTextAreaElement);
     expect((extractedBrand as HTMLTextAreaElement).value).toBe("Reviewed Brand Text");
+  });
+
+  it("keeps previous field decisions visible while editing application data", async () => {
+    mockWorkflowFetch();
+
+    await renderPackageWorkflow();
+    await uploadOpenFillAndVerify();
+
+    const failSummary = container.querySelector(".data-panel .section-stat--fail");
+    const passSummary = container.querySelector(".data-panel .section-stat--passed");
+    expect(failSummary?.textContent).toContain("0 fail");
+    expect(passSummary?.textContent).toContain("7 passed");
+
+    await changeField("Application Value Class / Type", "Kentucky Bourbon");
+
+    expect(failSummary?.textContent).toContain("0 fail");
+    expect(passSummary?.textContent).toContain("7 passed");
+    expect(container.querySelectorAll(".data-row--pass")).toHaveLength(7);
+  });
+
+  it("preserves typed order in rich government warning fields", async () => {
+    mockWorkflowFetch();
+
+    await renderPackageWorkflow();
+    await uploadOpenFillAndVerify();
+
+    await typeRichWarningText("Application Value Government Warning", "54321");
+    await typeRichWarningText("Extracted Value Government Warning", "54321");
+
+    const applicationWarning = container.querySelector(
+      '[aria-label="Application Value Government Warning"]'
+    );
+    const extractedWarning = container.querySelector(
+      '[aria-label="Extracted Value Government Warning"]'
+    );
+    expect(applicationWarning?.textContent).toBe("54321");
+    expect(extractedWarning?.textContent).toBe("54321");
+  });
+
+  it("keeps the caret in place when marking application warning text bold", async () => {
+    mockWorkflowFetch();
+
+    await renderPackageWorkflow();
+    await uploadOpenFillAndVerify();
+
+    const applicationWarningBeforeBold = await focusRichWarningAtEnd(
+      "Application Value Government Warning"
+    );
+    await pressCtrlB("Application Value Government Warning");
+
+    const applicationWarning = container.querySelector(
+      '[aria-label="Application Value Government Warning"]'
+    );
+    expect(applicationWarning?.innerHTML).toContain("<strong>GOVERNMENT WARNING:</strong>");
+    expect(currentSelectionTextOffset(applicationWarningBeforeBold)).toBe(
+      applicationWarningBeforeBold.textContent?.length
+    );
+  });
+
+  it("lets reviewers mark warning text bold with ctrl b and sends extracted formatting", async () => {
+    mockWorkflowFetch(
+      verificationResult(),
+      verificationResult({
+        extracted_formatting: {
+          government_warning_lead_in_bold: true
+        }
+      })
+    );
+
+    await renderPackageWorkflow();
+    await uploadOpenFillAndVerify();
+
+    const extractedWarningBeforeBold = await focusRichWarningAtEnd(
+      "Extracted Value Government Warning"
+    );
+    await pressCtrlB("Extracted Value Government Warning");
+    expect(currentSelectionTextOffset(extractedWarningBeforeBold)).toBe(
+      extractedWarningBeforeBold.textContent?.length
+    );
+    await blurField("Extracted Value Government Warning");
+
+    const extractedWarning = container.querySelector(
+      '[aria-label="Extracted Value Government Warning"]'
+    );
+    expect(extractedWarning?.innerHTML).toContain("<strong>GOVERNMENT WARNING:</strong>");
+    expect(fetch).toHaveBeenLastCalledWith("http://127.0.0.1:8000/compare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: expect.any(String),
+      signal: expect.any(AbortSignal)
+    });
+    const fetchCalls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    expect(JSON.parse(fetchCalls[fetchCalls.length - 1][1].body)).toMatchObject({
+      extracted_formatting: {
+        government_warning_lead_in_bold: true
+      }
+    });
   });
 
   it("closes detail when the status button is clicked", async () => {
@@ -1038,8 +1249,11 @@ describe("PackageWorkflow", () => {
         image_file: imageFile("label.png"),
         image_preview_url: "",
         application_data: canonicalApplicationData,
+        application_formatting: { government_warning_lead_in_bold: null },
         original_extracted_data: null,
+        original_extracted_formatting: null,
         reviewed_extracted_data: null,
+        reviewed_extracted_formatting: null,
         comparison_result: null,
         field_decisions: {},
         status: "Pending Check",
@@ -1059,7 +1273,9 @@ describe("PackageWorkflow", () => {
       image_filename: "label.png",
       status: "Pending Check",
       application_data: canonicalApplicationData,
+      application_formatting: { government_warning_lead_in_bold: null },
       reviewed_extracted_data: null,
+      reviewed_extracted_formatting: null,
       field_results: [],
       overall_verdict: null,
       errors: []
@@ -1076,8 +1292,11 @@ describe("PackageWorkflow", () => {
           image_file: imageFile("label.png"),
           image_preview_url: "",
           application_data: canonicalApplicationData,
+          application_formatting: { government_warning_lead_in_bold: true },
           original_extracted_data: null,
+          original_extracted_formatting: null,
           reviewed_extracted_data: null,
+          reviewed_extracted_formatting: null,
           comparison_result: null,
           field_decisions: {},
           status: "Needs Review",

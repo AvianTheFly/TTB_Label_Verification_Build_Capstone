@@ -6,6 +6,7 @@ import type {
   ExtractedData,
   ExtractedLabelResponse,
   FieldDecisionOverrides,
+  LabelFormatting,
   VerificationResult
 } from "../types/api";
 
@@ -259,6 +260,7 @@ export async function extractLabelText(image: File): Promise<ExtractedData> {
 export async function compareExtractedData(
   applicationData: ApplicationData,
   extractedData: ExtractedData,
+  extractedFormatting?: LabelFormatting | null,
   fieldDecisions?: FieldDecisionOverrides
 ): Promise<VerificationResult> {
   return requestVerification<VerificationResult>("/compare", {
@@ -269,6 +271,7 @@ export async function compareExtractedData(
     body: JSON.stringify({
       application_data: applicationData,
       extracted_data: extractedData,
+      ...(extractedFormatting ? { extracted_formatting: extractedFormatting } : {}),
       ...(fieldDecisions ? { field_decisions: fieldDecisions } : {})
     })
   });

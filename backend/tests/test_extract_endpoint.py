@@ -19,7 +19,7 @@ def make_image_bytes(image_format: str = "PNG") -> bytes:
     return output.getvalue()
 
 
-def make_extracted_label(**overrides: str | None) -> ExtractedLabel:
+def make_extracted_label(**overrides: object) -> ExtractedLabel:
     data = {
         "brand_name": "Old Tom Distillery",
         "class_type": "Kentucky Straight Bourbon Whiskey",
@@ -41,7 +41,7 @@ def make_client(fake_service: Any) -> TestClient:
 
 
 def test_extract_returns_ai_detected_label_fields_without_application_data() -> None:
-    service = FakeVisionService(result=make_extracted_label())
+    service = FakeVisionService(result=make_extracted_label(government_warning_lead_in_bold=True))
     client = make_client(service)
 
     response = client.post(
@@ -54,6 +54,7 @@ def test_extract_returns_ai_detected_label_fields_without_application_data() -> 
     assert body["brand_name"] == "Old Tom Distillery"
     assert body["abv"] == "45% Alc./Vol. (90 Proof)"
     assert body["government_warning"] == CANONICAL_GOVERNMENT_WARNING
+    assert body["government_warning_lead_in_bold"] is True
     assert "overall_verdict" not in body
     assert len(service.calls) == 1
 

@@ -2,12 +2,15 @@ import type {
   CanonicalLabelField,
   ExtractedData,
   FieldDecisionOverrides,
+  LabelFormatting,
   VerificationResult
 } from "../../types/api";
 import { createPreviewUrl } from "./filePreviews";
 import {
   ApplicationPackageRecord,
   emptyExtractedData,
+  emptyLabelFormatting,
+  extractedFormattingFromResult,
   extractedDataFromResult,
   statusFromResult
 } from "./packageWorkflowUtils";
@@ -37,7 +40,9 @@ export function mergeParsedRecords(
         ? createPreviewUrl(record.image_file)
         : existing.image_preview_url,
       original_extracted_data: imageChanged ? null : existing.original_extracted_data,
+      original_extracted_formatting: imageChanged ? null : existing.original_extracted_formatting,
       reviewed_extracted_data: imageChanged ? null : existing.reviewed_extracted_data,
+      reviewed_extracted_formatting: imageChanged ? null : existing.reviewed_extracted_formatting,
       comparison_result: imageChanged ? null : existing.comparison_result,
       field_decisions: imageChanged ? {} : existing.field_decisions,
       status: imageChanged ? "Pending Check" : existing.status,
@@ -71,9 +76,30 @@ export function updateApplicationField(
       ...record.application_data,
       [field]: value
     },
-    comparison_result: null,
-    field_decisions: {},
-    status: "Pending Check",
+    comparison_result: record.comparison_result
+      ? {
+          ...record.comparison_result,
+          results: record.comparison_result.results.map((fieldResult) =>
+            fieldResult.field === field
+              ? {
+                  ...fieldResult,
+                  expected: value
+                }
+              : fieldResult
+          )
+        }
+      : record.comparison_result,
+    item_error: null
+  };
+}
+
+export function updateApplicationFormatting(
+  record: ApplicationPackageRecord,
+  formatting: LabelFormatting
+): ApplicationPackageRecord {
+  return {
+    ...record,
+    application_formatting: formatting,
     item_error: null
   };
 }
@@ -108,15 +134,34 @@ export function updateExtractedField(
   };
 }
 
+export function updateExtractedFormatting(
+  record: ApplicationPackageRecord,
+  formatting: LabelFormatting
+): ApplicationPackageRecord {
+  return {
+    ...record,
+    reviewed_extracted_formatting: formatting,
+    comparison_result: record.comparison_result
+      ? {
+          ...record.comparison_result,
+          extracted_formatting: formatting
+        }
+      : record.comparison_result
+  };
+}
+
 export function applyVerificationResult(
   record: ApplicationPackageRecord,
   result: VerificationResult
 ): ApplicationPackageRecord {
   const extractedData = extractedDataFromResult(result);
+  const extractedFormatting = extractedFormattingFromResult(result);
   return {
     ...record,
     original_extracted_data: record.original_extracted_data ?? extractedData,
+    original_extracted_formatting: record.original_extracted_formatting ?? extractedFormatting,
     reviewed_extracted_data: extractedData,
+    reviewed_extracted_formatting: extractedFormatting,
     comparison_result: result,
     field_decisions: {},
     status: statusFromResult(result),
@@ -131,6 +176,8 @@ export function applyComparisonResult(
 ): ApplicationPackageRecord {
   return {
     ...record,
+    reviewed_extracted_formatting:
+      result.extracted_formatting ?? record.reviewed_extracted_formatting ?? emptyLabelFormatting(),
     field_decisions: fieldDecisions,
     comparison_result: result,
     status: statusFromFieldDecisions(

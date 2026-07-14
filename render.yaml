@@ -8,6 +8,8 @@ services:
     envVars:
       - key: APP_ENV
         value: production
+      - key: PYTHON_VERSION
+        value: 3.12.11
       - key: APP_NAME
         value: TTB Label Verification
       - key: APP_VERSION
@@ -15,7 +17,7 @@ services:
       - key: SERVICE_SLUG
         value: ttb-label-verification
       - key: BACKEND_CORS_ORIGINS
-        value: https://fed-stack-capstone.vercel.app
+        value: https://ttb-label-verification-build-capsto.vercel.app
       - key: MAX_UPLOAD_MB
         value: "10"
       - key: MAX_BATCH_ITEMS

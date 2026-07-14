@@ -1,6 +1,12 @@
 from collections.abc import Iterable
 
-from app.domain.models import CANONICAL_FIELDS, FieldResult, OverallVerdict, VerificationResult
+from app.domain.models import (
+    CANONICAL_FIELDS,
+    FieldResult,
+    LabelFormatting,
+    OverallVerdict,
+    VerificationResult,
+)
 
 FIELD_ORDER = {field: index for index, field in enumerate(CANONICAL_FIELDS)}
 
@@ -14,11 +20,15 @@ def order_field_results(results: Iterable[FieldResult]) -> list[FieldResult]:
 
 
 def build_verification_result(
-    results: Iterable[FieldResult], *, latency_ms: int | None = None
+    results: Iterable[FieldResult],
+    *,
+    latency_ms: int | None = None,
+    extracted_formatting: LabelFormatting | None = None,
 ) -> VerificationResult:
     ordered_results = order_field_results(results)
     return VerificationResult(
         results=ordered_results,
         overall_verdict=verdict_for_results(ordered_results),
         latency_ms=latency_ms,
+        extracted_formatting=extracted_formatting,
     )

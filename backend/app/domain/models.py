@@ -48,6 +48,7 @@ class ExtractedLabel(BaseModel):
     producer: str | None = None
     country_of_origin: str | None = None
     government_warning: str | None = None
+    government_warning_lead_in_bold: bool | None = None
     raw_text: str | None = None
     extraction_confidence: float | None = Field(default=None, ge=0, le=1)
 
@@ -63,12 +64,19 @@ class FieldResult(BaseModel):
     message: str
 
 
+class LabelFormatting(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    government_warning_lead_in_bold: bool | None = None
+
+
 class VerificationResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     results: list[FieldResult]
     overall_verdict: OverallVerdict
     latency_ms: int | None = None
+    extracted_formatting: LabelFormatting | None = None
 
 
 class BatchSummary(BaseModel):

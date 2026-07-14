@@ -55,8 +55,10 @@ export function PackageWorkflow() {
             detailHeadingRef={workflow.detailHeadingRef}
             isVerifying={workflow.isChecking}
             onApplicationDataChange={workflow.updateApplicationData}
+            onApplicationBoldFormattingChange={workflow.updateApplicationBoldFormatting}
             onClose={workflow.closeDetail}
             onExtractedDataChange={workflow.updateExtractedData}
+            onExtractedBoldFormattingChange={workflow.updateExtractedBoldFormatting}
             onFieldDecision={workflow.setFieldDecision}
             onFieldEditComplete={workflow.compareEditedRecord}
             onVerify={workflow.verifySingleApplication}

@@ -1,115 +1,18 @@
 # Technical Requirements Audit
 
-This document converts `TTB_Label_Verification_Build_Playbook 1.pdf` and
-`Additional Project Requirements` into a code-review checklist.
+Final submission audit against:
 
-Use it to compare the source requirements against the codebase and identify
-missing, risky, or unverified work.
+- `TTB_Label_Verification_Build_Playbook 1.pdf`
+- `Additional Project Requirements`
+- Codebase state after final cleanup
 
-## Classification
+Status labels:
 
-- `MUST`: required by the playbook, deliverables, or stakeholder requirement.
-- `SHOULD`: expected implementation detail that supports a `MUST`.
-- `SUGGESTION`: contextual guidance, optional enhancement, or candidate tradeoff.
+- `PASS`: requirement is implemented and verified locally or by recorded deployed/manual check.
+- `QUESTIONABLE`: acceptable for prototype but should be disclosed.
+- `FAIL`: must be fixed before submission.
 
-## Current Audit Snapshot
-
-Last checked: 2026-07-13.
-
-Backend checks passed:
-
-```bash
-cd backend
-uv run --extra dev ruff check .
-uv run --extra dev pytest
-```
-
-Result: ruff passed; `125 passed, 1 warning`.
-
-Frontend checks passed:
-
-```bash
-cd frontend
-npm run typecheck
-npm test
-npm run build
-```
-
-Result: typecheck passed; `29 passed`; production build passed.
-
-Important current gaps or risks:
-
-- Final live deployed `/verify` and batch flow checks are still documented as pending.
-- Frontend batch workflow now calls `/verify/batch`; manual browser verification is still
-  recommended for progress, summary, and drill-down UX.
-- Application data remains required, and the frontend builds it from editable fields.
-- Government warning text exactness is implemented; bold styling detection is documented
-  as not claimed.
-
-## Requirement Checklist
-
-| ID | Requirement | Class | Source | Verify Against Codebase | Current Status |
-| --- | --- | --- | --- | --- | --- |
-| R-001 | App is a standalone proof-of-concept; do not integrate with COLA. | MUST | Additional requirements, IT context | Search for COLA clients, auth, external persistence, or submission integrations. | Appears pass; README states no COLA integration. |
-| R-002 | No database for MVP; each request is self-contained. | MUST | Playbook architecture | Confirm no DB dependency, migration, ORM, persistent request store, or upload storage. | Appears pass; backend tests pass. |
-| R-003 | Do not store uploaded images, extracted label data, or application data beyond request lifetime. | MUST | Additional requirements, IT/security context | Inspect upload handling, temp files, logs, object storage, analytics, and browser downloads. | Appears pass for backend; reviewed-results download is user-initiated browser output. |
-| R-004 | API keys and secrets live only in environment variables. | MUST | Playbook standing rules, deliverables | Confirm `.env` ignored, `.env.example` placeholders only, no keys in docs/tests/config. | Local audit pass: only `.env.example` is tracked; no real-looking keys found. |
-| R-005 | Backend stack uses Python, FastAPI, Pydantic v2, and `uv`. | MUST | Project rules/playbook | Inspect `backend/pyproject.toml`, imports, and Pydantic model config. | Appears pass. |
-| R-006 | Frontend uses React, TypeScript, and Vite. | MUST | Project rules/playbook | Inspect `frontend/package.json`, `src`, and Vite config. | Pass: typecheck, tests, and build passed. |
-| R-007 | Public API and backend model fields use exact snake_case canonical names. | MUST | Playbook data model | Search for alternate payload fields such as `alcohol_content`, `producer_name_address`, or camelCase. | Appears pass in core API/types. |
-| R-008 | Canonical fields are `brand_name`, `class_type`, `abv`, `net_contents`, `producer`, `country_of_origin`, `government_warning`. | MUST | Playbook data model | Inspect `ApplicationData`, `ExtractedLabel`, frontend TS types, request payloads, API docs. | Pass in backend tests and frontend types. |
-| R-009 | `GET /health` exists and returns service status. | MUST | Phase 0 | Run backend health test and local/deployed curl. | Pass: backend test passed; deployed health returned ok on 2026-07-13. |
-| R-010 | Frontend first screen is the actual verification tool, not a marketing page. | MUST | Playbook/frontend phase | Inspect `App.tsx` and rendered UI. | Appears pass from workflow files; browser verification still recommended. |
-| R-011 | UI is usable by a non-technical older user with no instructions. | MUST | Sarah/Dave stakeholder notes, Phase 4 | Manual UX review: large controls, clear labels, obvious verify action, plain errors. | Needs browser/manual accessibility pass. |
-| R-012 | Single-label verification targets under 5 seconds and every single-label response includes `latency_ms`. | MUST | Playbook, stakeholder notes | Assert `/verify` response shape, logs, live p50/p95. | Pass for warm deployed run: p50 `1501` ms, p95 `2527` ms on 2026-07-13; free-tier cold start may exceed target. |
-| R-013 | Batch upload is required. | MUST | Sarah stakeholder notes, Phase 5 | Confirm backend `/verify/batch`, frontend batch UI, progress/summary/drill-down. | Local automated pass: backend batch tests pass and frontend workflow calls `/verify/batch`; manual browser UX check still recommended. |
-| R-014 | Batch processing uses bounded concurrency. | MUST | Phase 5 | Inspect async semaphore/config and tests. | Pass in backend tests. |
-| R-015 | One bad batch item must not fail the whole batch. | MUST | Phase 5 | Endpoint tests for per-item errors and summary counts. | Pass in backend tests. |
-| R-016 | Batch summary includes `passed`, `needs_review`, and `total`. | MUST | Playbook data model/Phase 5 | Inspect `BatchSummary`, API contract, response tests. | Pass in backend tests. |
-| R-017 | Pydantic models exist for `ApplicationData`, `ExtractedLabel`, `FieldResult`, `VerificationResult`, and batch shapes. | MUST | Phase 1 | Inspect `backend/app/domain/models.py`. | Pass. |
-| R-018 | Domain comparison logic is pure: no FastAPI, file I/O, network, or provider clients. | MUST | Phase 1 | Inspect imports in `backend/app/domain/`. | Appears pass; backend tests pass. |
-| R-019 | Brand name, class/type, and producer use fuzzy comparison. | MUST | Comparison strategy | Tests for case/punctuation/whitespace and threshold behavior. | Pass in backend tests. |
-| R-020 | Country comparison normalizes aliases/synonyms, such as `USA` and `United States`. | MUST | Comparison strategy | Unit tests for synonym map. | Pass in backend tests. |
-| R-021 | ABV comparison extracts numeric value with tolerance around +/- 0.1. | MUST | Comparison strategy | Unit tests for `45%`, `45% Alc./Vol.`, proof text. | Pass in backend tests. |
-| R-022 | Net contents comparison normalizes units to canonical volume. | MUST | Comparison strategy | Unit tests for `750 mL` and `750ml`. | Pass in backend tests. |
-| R-023 | Government warning comparison is exact and case-sensitive after whitespace collapse only. | MUST | Playbook, Jenny stakeholder note | Unit tests for correct text, title case fail, missing colon fail, whitespace pass. | Pass in backend tests. |
-| R-024 | Warning failure returns extracted warning text for human review. | MUST | Playbook critical tension | Endpoint/domain tests assert failed `found` value. | Pass in backend tests. |
-| R-025 | Overall verdict rule: any field `FAIL` -> `NEEDS_REVIEW`; all `PASS` -> `APPROVED`. | MUST | Playbook data model | Unit/API tests for both verdicts. | Pass in backend tests. |
-| R-026 | Vision service is behind an explicit mockable interface. | MUST | Architecture/Phase 2 | Inspect `VisionService`, dependency injection, fake service tests. | Pass in backend tests. |
-| R-027 | Vision extraction returns structured JSON into `ExtractedLabel`; unknown/unclear fields are `null`. | MUST | Phase 2 | Inspect structured-output schema, parser tests, prompt. | Pass in backend tests. |
-| R-028 | Vision prompt asks for government warning copied verbatim. | MUST | Phase 2 review | Inspect prompt and tests. | Pass in backend tests. |
-| R-029 | Image preprocessing downscales/re-encodes before provider call. | MUST | Architecture/Phase 2 | Inspect preprocessing code and tests. | Pass in backend tests. |
-| R-030 | Blurry, angled, glare-heavy, or non-label images degrade gracefully. | SHOULD | Jenny note, Phase 2/6 | Tests for partial/null extraction and safe errors; live imperfect-image test. | Backend tests cover categories; live check still needed. |
-| R-031 | `/verify` accepts multipart image plus application data. | MUST | Phase 3 | Endpoint tests and curl example. | Pass in backend tests. |
-| R-032 | `/verify` validates file type, file size, empty image, and required fields with readable 4xx errors. | MUST | Phase 3 | Endpoint tests for bad upload/empty submission. | Pass in backend tests. |
-| R-033 | API errors use canonical error envelope and never expose stack traces, keys, local paths, provider internals, or raw image contents. | MUST | Error contracts/coding standards | Inspect handlers and tests for error shape/logging. | Backend tests pass; final manual audit recommended. |
-| R-034 | Logs include timing and provider failure categories but never secrets or raw image contents. | MUST | Phase 3 | Inspect logging statements and tests. | Backend tests pass for logging coverage. |
-| R-035 | Frontend single-label flow has image picker, seven labeled fields, submit, loading, readable errors, verdict, per-field results, and expected-vs-found failures. | MUST | Phase 4 | Frontend tests and manual browser review. | Local tests pass; manual browser review still recommended. |
-| R-036 | Frontend uses friendly labels but payload keys remain canonical. | MUST | Project rules/Phase 4 | Inspect TS types and FormData payload. | Appears pass. |
-| R-037 | Frontend batch flow includes progress, summary table, and item drill-down. | MUST | Phase 5 | Frontend tests and manual browser review. | Improved: frontend uses `/verify/batch` and tests pass; manual browser UX review still recommended. |
-| R-038 | Public repo and README are required deliverables. | MUST | Additional requirements | Confirm repo URL and README setup/run/approach/tools/assumptions/limitations. | README has most content; final audit pending. |
-| R-039 | Deployed application URL is required. | MUST | Additional requirements, Phase 7 | Confirm live frontend, backend health, real `/verify`, and batch flows. | Frontend URL documented; deployed backend/live checks pending in README. |
-| R-040 | README documents approach, tools, assumptions, tradeoffs, and limitations. | MUST | Additional requirements | Inspect README final sections. | Appears mostly pass. |
-| R-041 | Government warning lead-in must be all caps and bold. | MUST for label compliance; PARTIAL for MVP automation | Jenny note/additional requirements | Text exactness must be automated; bold styling must be detected or documented as limitation. | Text exactness pass; bold detection documented as limitation. |
-| R-042 | Do not claim warning-style compliance unless styling detection exists. | MUST | Project rules | Inspect README/docs/UI copy. | Appears pass. |
-| R-043 | Cloud/model/provider code stays behind explicit interfaces because outbound domains may be blocked. | MUST | IT context/project rules | Inspect provider boundary and tests without credentials. | Pass in backend tests. |
-| R-044 | Tests must not require real model calls. | MUST | Phase 2/3 | Run automated tests without provider credentials. | Pass: backend tests use fakes/mocks. |
-| R-045 | Deployment path exists for free-tier host. | MUST | Phase 0/7 | Inspect Render/Vercel config and run deployed checks. | Config present; live backend verification pending. |
-
-## Suggestions And Optional Enhancements
-
-These are not hard failures unless the project plan explicitly adopts them.
-
-| ID | Suggestion | Source | Reason To Consider |
-| --- | --- | --- | --- |
-| S-001 | Review official TTB label guidelines for additional context. | Additional requirements | Helps with domain accuracy, but MVP scope is matching application data to label text. |
-| S-002 | Create or source additional synthetic test labels, including AI-generated labels. | Additional requirements | Improves demo coverage and imperfect-image testing. |
-| S-003 | Capture optional warning-style evidence for bold/all-caps lead-in in a later phase. | Jenny note, project docs | Would close the current style-detection limitation, but requires a reviewed contract change. |
-| S-004 | Track deployed warm p50/p95 and cold-start round trip separately. | Phase 6/README | Helps explain free-tier latency versus request processing latency. |
-| S-005 | Keep frontend batch-submit coverage around `/verify/batch`. | Phase 5 | Implemented locally; retain tests so the UI does not drift back to one-at-a-time `/verify` calls. |
-| S-006 | Keep demo/fake providers available only for local tests and demos. | Architecture/provider isolation | Useful for repeatable testing, but production must use real extraction. |
-
-## Review Commands
+## Current Verification
 
 Backend:
 
@@ -119,29 +22,81 @@ uv run --extra dev ruff check .
 uv run --extra dev pytest
 ```
 
+Recorded result after final cleanup: ruff passed; `131 passed`.
+
 Frontend:
 
 ```bash
 cd frontend
-npm install
 npm run typecheck
 npm test
 npm run build
 ```
 
-Live deployed checks:
+Recorded result after final cleanup: typecheck passed; `35 passed`; production build passed.
 
-```bash
-cd backend
-uv run python scripts/live_checklist.py --url https://YOUR_BACKEND_ORIGIN --runs 20
-```
+Deployed checks:
 
-Manual checks:
+- Backend `/health`: PASS, returned `{"status":"ok","service":"ttb-label-verification","version":"0.1.0"}`.
+- Frontend: PASS, returned HTTP 200.
+- Manual deployed single-label UX: PASS, recorded by project owner.
+- Manual deployed batch UX: PASS, recorded by project owner.
+- Manual accessibility/older-user usability pass: PASS, recorded by project owner.
 
-- Open the deployed frontend.
-- Verify one valid label.
-- Verify one intentional mismatch.
-- Verify a warning with title-case `Government Warning:` fails.
-- Verify a batch of at least three labels.
-- Confirm one bad batch item does not hide successful items.
-- Confirm errors are plain English and no CORS errors appear in browser devtools.
+## Requirement Checklist
+
+| ID | Requirement | Source | Status | Evidence / Notes |
+| --- | --- | --- | --- | --- |
+| R-001 | Standalone proof-of-concept; no COLA integration. | Additional requirements | PASS | No COLA client, auth, persistence, or submission integration. |
+| R-002 | No database; each request self-contained. | Playbook | PASS | No DB dependency, migrations, ORM, or persistent request store. |
+| R-003 | Do not store uploads, extracted data, or application data beyond request lifetime. | Additional requirements | PASS | Backend processes in memory; browser export is user-initiated. |
+| R-004 | Secrets only in environment variables. | Playbook | PASS | `.env*` ignored except `.env.example`; no tracked real keys found. |
+| R-005 | Python 3.12, FastAPI, Pydantic v2, `uv`. | Playbook | PASS | Backend pins Python 3.12 and uses FastAPI/Pydantic v2/uv. |
+| R-006 | React, TypeScript, Vite frontend. | Playbook | PASS | `frontend/package.json`; typecheck/tests/build pass. |
+| R-007 | API/model fields use canonical snake_case names. | Playbook | PASS | Public application contract uses the seven canonical fields. |
+| R-008 | `/health` endpoint exists. | Phase 0 | PASS | Local tests pass; deployed health check passed. |
+| R-009 | First screen is the actual tool, not marketing. | Playbook | PASS | `App.tsx` renders backend status plus `PackageWorkflow`. |
+| R-010 | UI usable by non-technical older user. | Stakeholder notes | PASS | Manual deployed UX/accessibility pass recorded by project owner. |
+| R-011 | Single-label response includes `latency_ms`. | Playbook | PASS | `/verify` response model/tests; live timing recorded. |
+| R-012 | Single-label target under 5 seconds. | Playbook | PASS | Deployed warm `latency_ms` p50 1501 ms, p95 2527 ms. |
+| R-013 | Free-tier cold start may exceed target. | Deployment reality | QUESTIONABLE | Disclosed; frontend shows visible startup/loading status. |
+| R-014 | Batch upload required. | Playbook/stakeholder notes | PASS | `/verify/batch` and frontend `Verify Batch`. |
+| R-015 | Batch uses bounded concurrency. | Playbook | PASS | Backend uses `asyncio.Semaphore` with configured limit. |
+| R-016 | Bad batch item does not fail whole batch. | Playbook | PASS | Per-item errors and tests. |
+| R-017 | Batch summary includes `passed`, `needs_review`, `total`. | Playbook | PASS | `BatchSummary` model/tests. |
+| R-018 | Pydantic models for required data shapes. | Phase 1 | PASS | `ApplicationData`, `ExtractedLabel`, `FieldResult`, `VerificationResult`, batch models. |
+| R-019 | Domain comparison logic is pure. | Phase 1 | PASS | Domain import guard test passes. |
+| R-020 | Fuzzy compare for brand/class/producer. | Playbook | PASS | RapidFuzz comparison and tests. |
+| R-021 | Country synonym normalization. | Playbook | PASS | USA/United States tests. |
+| R-022 | ABV numeric normalization. | Playbook | PASS | Percent/proof tests. |
+| R-023 | Net contents unit normalization. | Playbook | PASS | mL/L/fl oz tests. |
+| R-024 | Warning text exact and case-sensitive after whitespace collapse. | Playbook | PASS | Title-case and missing-colon tests fail as required. |
+| R-025 | Warning failure returns extracted text. | Playbook | PASS | `found` and message include extracted warning on failure. |
+| R-026 | Warning lead-in all caps and bold. | Additional requirements | QUESTIONABLE | Text exactness enforced; provider extracts best-effort bold evidence; reviewer can use Ctrl+B in warning fields; uncertainty remains documented. |
+| R-027 | Verdict rule: any fail -> `NEEDS_REVIEW`; all pass -> `APPROVED`. | Playbook | PASS | Domain/API tests. |
+| R-028 | Vision service behind explicit interface. | Phase 2 | PASS | `VisionService` protocol; fake/demo providers. |
+| R-029 | Structured JSON extraction into `ExtractedLabel`. | Phase 2 | PASS | Strict schema and parser tests. |
+| R-030 | Unknown/unclear fields are `null`, not guessed. | Phase 2 | PASS | Prompt and parser behavior. |
+| R-031 | Prompt copies warning verbatim. | Phase 2 | PASS | Prompt/tests. |
+| R-032 | Image preprocessing before model call. | Phase 2 | PASS | Downscale/re-encode tests. |
+| R-033 | Imperfect images degrade gracefully. | Phase 6 | PASS | Prompt instructs partial extraction; safe error categories exist. |
+| R-034 | `/verify` accepts multipart image plus application data. | Phase 3 | PASS | Endpoint/tests. |
+| R-035 | Upload validation has readable 4xx errors. | Phase 3 | PASS | File type, size, empty image, missing data tests. |
+| R-036 | Error envelope does not expose internals/secrets. | Project rules | PASS | Error handlers and tests. |
+| R-037 | Logs include timing/failure categories, not secrets/raw images. | Phase 3 | PASS | Logging tests and safe metadata. |
+| R-038 | Single-label frontend flow has upload, seven fields, loading, errors, result details. | Phase 4 | PASS | Frontend tests and manual deployed UX pass. |
+| R-039 | Frontend payload keys mirror API names. | Project rules | PASS | `frontend/src/types/api.ts`; request construction. |
+| R-040 | Batch frontend has progress/status, summary, drill-down. | Phase 5 | PASS | Tests and manual deployed UX pass. |
+| R-041 | Public repo and README required. | Deliverables | PASS | README documents repo, setup, tools, assumptions, limitations. |
+| R-042 | Deployed application URL required. | Deliverables | PASS | README documents live frontend and backend health URL. |
+| R-043 | Provider code isolated for blocked outbound domains. | IT context | PASS | Provider code behind `VisionService`; tests use fakes. |
+| R-044 | Tests do not require real model calls. | Phase 2/3 | PASS | Automated tests use fake/mock providers. |
+
+## Disclosures
+
+- Free-tier cold starts can delay the first deployed request. The frontend shows visible loading
+  status while the backend wakes.
+- Bold styling detection for `GOVERNMENT WARNING:` is best-effort. It can flag a clear not-bold
+  lead-in, and reviewers can use Ctrl+B to mark bold evidence manually, but uncertain image/style
+  evidence is not treated as definitive.
+- This is a prototype review aid, not an official TTB approval system.

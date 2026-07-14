@@ -49,7 +49,7 @@ def make_application_data(**overrides: str) -> dict[str, str]:
     return data
 
 
-def make_extracted_label(**overrides: str | None) -> ExtractedLabel:
+def make_extracted_label(**overrides: object) -> ExtractedLabel:
     data = {
         "brand_name": "Old Tom Distillery",
         "class_type": "Kentucky Straight Bourbon Whiskey",
@@ -121,6 +121,7 @@ def test_valid_verify_submission_returns_full_verification_result() -> None:
     body = response.json()
     assert_verification_result_literals(body)
     assert body["overall_verdict"] == "APPROVED"
+    assert body["extracted_formatting"] == {"government_warning_lead_in_bold": None}
     assert isinstance(body["latency_ms"], int)
     assert body["latency_ms"] >= 0
     assert len(body["results"]) == 7
@@ -177,6 +178,30 @@ def test_warning_failure_surfaces_extracted_government_warning_text() -> None:
     assert warning_result["found"] == extracted_warning
     assert "AI detected:" in warning_result["message"]
     assert extracted_warning in warning_result["message"]
+
+
+def test_warning_needs_review_when_bold_lead_in_is_clearly_absent() -> None:
+    client, _ = make_client(
+        FakeVisionService(result=make_extracted_label(government_warning_lead_in_bold=False))
+    )
+
+    response = post_verify(
+        client,
+        application_data=make_application_data(),
+        image_bytes=make_image_bytes(),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert_verification_result_literals(body)
+    assert body["overall_verdict"] == "NEEDS_REVIEW"
+    assert body["extracted_formatting"] == {"government_warning_lead_in_bold": False}
+    warning_result = next(
+        result for result in body["results"] if result["field"] == "government_warning"
+    )
+    assert warning_result["status"] == "FAIL"
+    assert warning_result["found"] == CANONICAL_GOVERNMENT_WARNING
+    assert "did not detect bold styling" in warning_result["message"]
 
 
 def test_warning_failure_message_surfaces_normalized_extracted_text() -> None:

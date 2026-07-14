@@ -75,6 +75,11 @@
   box-shadow: 0 8px 22px rgba(17, 24, 39, 0.05);
 }
 
+.data-row:hover,
+.data-row:focus-within {
+  z-index: 10;
+}
+
 .data-row--pass {
   border-color: #11724f;
   box-shadow: inset 5px 0 0 #11724f, 0 8px 22px rgba(17, 24, 39, 0.05);
@@ -166,6 +171,11 @@
   transform: translate(-50%, 0);
 }
 
+.data-row--field-brand_name .field-info-tooltip {
+  top: calc(100% + 8px);
+  bottom: auto;
+}
+
 .field-decision-buttons {
   display: flex;
   gap: 6px;
@@ -215,6 +225,22 @@
   color: #111827;
   font-weight: 800;
   line-height: 1.28;
+}
+
+.application-value-input--rich {
+  min-height: 44px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.application-value-input--rich:focus {
+  outline: 3px solid #0f766e;
+  outline-offset: 2px;
+}
+
+.application-value-input--rich[data-empty="true"]::before {
+  color: #6b7280;
+  content: attr(data-placeholder);
 }
 
 .ai-detected-value-text {
@@ -373,4 +399,3 @@
   color: #36505c;
   font-weight: 900;
 }
-
