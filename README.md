@@ -26,7 +26,6 @@ database.
 - Use Ctrl+B in the government warning application and AI-detected fields to mark the warning
   lead-in as bold during review.
 - Edit AI-detected text and re-run backend comparison through `/compare`.
-- Download reviewed results as JSON from the browser.
 
 The first screen is the actual verification tool, not a marketing page. Manual deployed checks for
 single-label, batch, and accessibility/UX were recorded as passed before final submission cleanup.
@@ -112,7 +111,7 @@ uncertain, especially with blur, glare, compression, small text, or unusual font
 
 Single-label responses include backend `latency_ms`.
 
-Measured deployed timing from `docs/deployed-timing-results.md`:
+Measured deployed p50/p95 score from `docs/deployed-timing-results.md`:
 
 | Metric | Result |
 | --- | ---: |
@@ -121,9 +120,13 @@ Measured deployed timing from `docs/deployed-timing-results.md`:
 | Deployed round-trip p50 | 1676 ms |
 | Deployed round-trip p95 | 2694 ms |
 
-These warm deployed p50/p95 results are under the 5-second target. Free-tier hosting can still add a
+These warm deployed p50/p95 results are under the 4.5-second OpenAI provider timeout and the
+5-second single-label target. Free-tier hosting can still add a
 cold-start delay before the backend is warm; the frontend shows a visible startup/loading status so
 the user is not left guessing during that delay.
+
+The real OpenAI provider timeout is set to 4.5 seconds so provider calls stay inside the single-label
+latency budget.
 
 ## Environment
 
@@ -143,7 +146,7 @@ Backend:
 | `IMAGE_REENCODE_THRESHOLD_BYTES` | Size threshold for re-encoding. |
 | `VISION_PROVIDER` | `openai`, `demo`, or `fake`. Production uses `openai`. |
 | `VISION_MODEL` | OpenAI model used by the real provider. |
-| `OPENAI_TIMEOUT_SECONDS` | OpenAI client timeout. |
+| `OPENAI_TIMEOUT_SECONDS` | OpenAI client timeout; submitted value is `4.5` seconds. |
 | `OPENAI_API_KEY` | Backend-only OpenAI API key. |
 
 Model configuration: the backend reads `VISION_PROVIDER` and `VISION_MODEL` from environment

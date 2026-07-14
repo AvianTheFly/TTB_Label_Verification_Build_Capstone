@@ -275,7 +275,7 @@ def test_openai_provider_defaults_are_current_and_budgeted() -> None:
     assert service._model == DEFAULT_OPENAI_VISION_MODEL
     assert DEFAULT_OPENAI_VISION_MODEL == "gpt-5.4-nano"
     assert service._timeout_seconds == DEFAULT_OPENAI_TIMEOUT_SECONDS
-    assert DEFAULT_OPENAI_TIMEOUT_SECONDS == 30.0
+    assert DEFAULT_OPENAI_TIMEOUT_SECONDS == 4.5
     assert service._image_detail == DEFAULT_OPENAI_IMAGE_DETAIL
     assert DEFAULT_OPENAI_IMAGE_DETAIL == "low"
     assert service._max_output_tokens == 500

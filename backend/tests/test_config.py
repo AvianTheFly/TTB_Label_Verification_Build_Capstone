@@ -8,6 +8,7 @@ def test_cors_origins_accept_comma_separated_env(monkeypatch) -> None:
         "BACKEND_CORS_ORIGINS",
         "http://localhost:5173, http://127.0.0.1:5173",
     )
+    monkeypatch.setenv("OPENAI_TIMEOUT_SECONDS", "4.5")
     get_settings.cache_clear()
 
     settings = get_settings()
@@ -22,6 +23,7 @@ def test_cors_origins_accept_comma_separated_env(monkeypatch) -> None:
 def test_public_identity_can_be_set_from_env(monkeypatch) -> None:
     monkeypatch.setenv("APP_VERSION", "9.9.9")
     monkeypatch.setenv("SERVICE_SLUG", "example-service")
+    monkeypatch.setenv("OPENAI_TIMEOUT_SECONDS", "4.5")
     get_settings.cache_clear()
 
     settings = get_settings()
@@ -37,7 +39,7 @@ def test_production_safe_defaults_use_real_provider() -> None:
     assert settings.vision_provider == "openai"
     assert settings.vision_model == "gpt-5.4-nano"
     assert settings.single_label_timeout_seconds == 4.8
-    assert settings.openai_timeout_seconds == 30.0
+    assert settings.openai_timeout_seconds == 4.5
     assert settings.openai_image_detail == "low"
     assert settings.openai_max_output_tokens == 500
     assert settings.image_max_dimension == 1600
@@ -46,8 +48,10 @@ def test_production_safe_defaults_use_real_provider() -> None:
 
 
 def test_openai_timeout_cannot_exceed_latency_budget() -> None:
+    assert Settings(_env_file=None, openai_timeout_seconds=4.5)
+
     with pytest.raises(ValueError):
-        Settings(_env_file=None, openai_timeout_seconds=61.0)
+        Settings(_env_file=None, openai_timeout_seconds=4.6)
 
 
 def test_single_label_timeout_cannot_exceed_challenge_budget() -> None:

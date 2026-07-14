@@ -35,31 +35,6 @@ export interface ApplicationPackageRecord {
   item_error: string | null;
 }
 
-export interface ReviewedResultsExport {
-  schema_version: "application-package-review-v1";
-  generated_at: string;
-  summary: {
-    needs_review: number;
-    passed: number;
-    pending: number;
-    total: number;
-  };
-  applications: ReviewedResultsApplication[];
-}
-
-export interface ReviewedResultsApplication {
-  application_id: string;
-  image_filename: string;
-  status: VisibleStatus;
-  application_data: ApplicationData;
-  application_formatting: LabelFormatting;
-  reviewed_extracted_data: ExtractedData | null;
-  reviewed_extracted_formatting: LabelFormatting | null;
-  field_results: VerificationResult["results"];
-  overall_verdict: VerificationResult["overall_verdict"] | null;
-  errors: { code: string; message: string }[];
-}
-
 const IMAGE_EXTENSION_RE = /\.(jpe?g|png|webp)$/i;
 const CANONICAL_FIELDS = FIELD_CONFIGS.map((field) => field.name);
 
@@ -116,78 +91,6 @@ export function statusSortRank(status: VisibleStatus): number {
   };
 
   return ranks[status];
-}
-
-export function buildReviewedResultsExport(
-  records: ApplicationPackageRecord[],
-  generatedAt = new Date().toISOString()
-): ReviewedResultsExport {
-  const summary = records.reduce(
-    (counts, record) => {
-      if (record.status === "Needs Review") {
-        counts.needs_review += 1;
-      } else if (record.status === "Approved") {
-        counts.passed += 1;
-      } else {
-        counts.pending += 1;
-      }
-      counts.total += 1;
-      return counts;
-    },
-    { needs_review: 0, passed: 0, pending: 0, total: 0 }
-  );
-
-  return {
-    schema_version: "application-package-review-v1",
-    generated_at: generatedAt,
-    summary,
-    applications: records.map((record) => ({
-      application_id: record.package_id,
-      image_filename: record.image_filename,
-      status: record.status,
-      application_data: record.application_data,
-      application_formatting: record.application_formatting,
-      reviewed_extracted_data: record.reviewed_extracted_data,
-      reviewed_extracted_formatting: record.reviewed_extracted_formatting,
-      field_results: reviewedFieldResults(record),
-      overall_verdict:
-        record.comparison_result || Object.keys(record.field_decisions).length > 0
-          ? record.status === "Approved"
-            ? "APPROVED"
-            : "NEEDS_REVIEW"
-          : null,
-      errors: [
-        ...record.validation_errors.map((error) => ({
-          code: error.code,
-          message: error.message
-        })),
-        ...(record.item_error ? [{ code: "item_error", message: record.item_error }] : [])
-      ]
-    }))
-  };
-}
-
-function reviewedFieldResults(record: ApplicationPackageRecord): VerificationResult["results"] {
-  return (record.comparison_result?.results ?? []).map((fieldResult) => {
-    const decision = record.field_decisions[fieldResult.field];
-    if (!decision) {
-      return fieldResult;
-    }
-
-    if (decision === "pass") {
-      return {
-        ...fieldResult,
-        status: "PASS",
-        message: "Reviewer marked this field as pass."
-      };
-    }
-
-    return {
-      ...fieldResult,
-      status: "FAIL",
-      message: "Reviewer marked this field as fail."
-    };
-  });
 }
 
 export async function parseApplicationPackages(files: File[]): Promise<{
