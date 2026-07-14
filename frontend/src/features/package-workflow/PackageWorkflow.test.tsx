@@ -136,6 +136,9 @@ function mockWorkflowFetch(result = verificationResult(), compareResult = result
       if (url.endsWith("/extract")) {
         return okJson(extractionResult());
       }
+      if (url.endsWith("/verify")) {
+        return okJson(result);
+      }
       if (url.endsWith("/verify/batch")) {
         const formData = init?.body as FormData;
         return okJson(batchResult(formData.getAll("images").map(() => result)));
@@ -218,6 +221,17 @@ async function changeField(label: string, value: string) {
   });
 }
 
+async function blurField(label: string) {
+  await act(async () => {
+    const input = container.querySelector(`[aria-label="${label}"]`);
+    if (!(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement)) {
+      throw new Error(`Missing field: ${label}`);
+    }
+    input.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+  });
+  await waitForAsyncUpdates();
+}
+
 async function fillApplicationData(data = canonicalApplicationData) {
   await changeField("Application Value Brand Name", data.brand_name);
   await changeField("Application Value Class / Type", data.class_type);
@@ -237,7 +251,7 @@ async function uploadOpenFillAndVerify(
     firstPackageButton().click();
   });
   await fillApplicationData(data);
-  await clickButton("Verify Batch");
+  await clickButton("Verify");
 }
 
 async function waitForAsyncUpdates() {
@@ -245,10 +259,6 @@ async function waitForAsyncUpdates() {
     await Promise.resolve();
     await Promise.resolve();
   });
-}
-
-function readFormDataBody(callIndex = 0): FormData {
-  return (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[callIndex][1].body as FormData;
 }
 
 function firstPackageButton(): HTMLButtonElement {
@@ -356,6 +366,7 @@ describe("PackageWorkflow", () => {
       value: vi.fn()
     });
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -428,12 +439,7 @@ describe("PackageWorkflow", () => {
     expect(container.textContent).toContain("first.png");
     expect(container.textContent).toContain("second.png");
     expect(container.querySelectorAll(".package-card")).toHaveLength(2);
-    expect(fetch).toHaveBeenCalledTimes(2);
-    expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:8000/extract", {
-      method: "POST",
-      body: expect.any(FormData),
-      signal: expect.any(AbortSignal)
-    });
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("adds later uploads to the current batch instead of replacing them", async () => {
@@ -446,7 +452,7 @@ describe("PackageWorkflow", () => {
     expect(container.textContent).toContain("first.png");
     expect(container.textContent).toContain("second.png");
     expect(container.textContent).toContain("2 total");
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("shows non-image files as unsupported and keeps image uploads as applications", async () => {
@@ -463,7 +469,7 @@ describe("PackageWorkflow", () => {
 
     expect(container.textContent).toContain("Applications");
     expect(container.textContent).toContain("label.png");
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("filters applications and updates section counts from search text", async () => {
@@ -551,51 +557,42 @@ describe("PackageWorkflow", () => {
     expect(container.textContent).toContain("1 total");
   });
 
-  it("calls /verify/batch after application fields are entered and submitted", async () => {
+  it("calls /verify from the application card after fields are entered", async () => {
     mockWorkflowFetch();
 
     await renderPackageWorkflow();
     await uploadOpenFillAndVerify();
 
-    expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:8000/verify/batch", {
+    expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:8000/verify", {
       method: "POST",
       body: expect.any(FormData),
       signal: expect.any(AbortSignal)
     });
-    const formData = readFormDataBody(1);
-    expect((formData.get("images") as File).name).toBe("label.png");
-    expect(JSON.parse(String(formData.get("application_data")))).toEqual(
-      canonicalApplicationData
-    );
-    expect(formData.get("use_real_vision")).toBeNull();
-    expect(formData.get("openai_api_key")).toBeNull();
-    expect(formData.get("openai_model")).toBeNull();
+    const formData = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1].body as FormData;
+    expect((formData.get("image") as File).name).toBe("label.png");
+    expect(JSON.parse(String(formData.get("application_data")))).toEqual(canonicalApplicationData);
     expect(container.textContent).toContain("Approved");
   });
 
-  it("runs extraction on upload and waits for the batch action before /verify/batch", async () => {
+  it("calls /verify/batch from the homepage for complete applications", async () => {
     mockWorkflowFetch();
 
     await renderPackageWorkflow();
     await chooseFiles([imageFile("first.png"), imageFile("second.png")]);
 
-    expect(fetch).toHaveBeenCalledTimes(2);
-    expect((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBe(
-      "http://127.0.0.1:8000/extract"
-    );
-    expect((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[1][0]).toBe(
-      "http://127.0.0.1:8000/extract"
-    );
+    expect(fetch).not.toHaveBeenCalled();
 
     await act(async () => {
       packageButtonAt(0).click();
     });
     await fillApplicationData({ ...canonicalApplicationData, brand_name: "FIRST BRAND" });
+    await blurField("Application Value Government Warning");
     await clickButton("Close");
     await act(async () => {
       packageButtonAt(1).click();
     });
     await fillApplicationData({ ...canonicalApplicationData, brand_name: "SECOND BRAND" });
+    await clickButton("Close");
     await clickButton("Verify Batch");
 
     expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:8000/verify/batch", {
@@ -603,19 +600,16 @@ describe("PackageWorkflow", () => {
       body: expect.any(FormData),
       signal: expect.any(AbortSignal)
     });
-    const formData = readFormDataBody(2);
+    const formData = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1].body as FormData;
     expect(formData.getAll("images").map((file) => (file as File).name)).toEqual([
       "first.png",
       "second.png"
     ]);
-    expect(formData.get("use_real_vision")).toBeNull();
-    expect(formData.get("openai_api_key")).toBeNull();
-    expect(formData.get("openai_model")).toBeNull();
 
     expect(container.textContent).toContain("FIRST BRAND");
     expect(container.textContent).toContain("SECOND BRAND");
     expect(container.textContent).toContain("Approved");
-    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("blocks verification when numeric application fields do not include numbers", async () => {
@@ -631,12 +625,9 @@ describe("PackageWorkflow", () => {
       abv: "forty five percent",
       net_contents: "standard bottle"
     });
-    await clickButton("Verify Batch");
+    await clickButton("Verify");
 
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBe(
-      "http://127.0.0.1:8000/extract"
-    );
+    expect(fetch).not.toHaveBeenCalled();
     expect(container.textContent).toContain("Alcohol Content with a number");
     expect(container.textContent).toContain("Net Contents with a number");
   });
@@ -693,7 +684,7 @@ describe("PackageWorkflow", () => {
     await uploadOpenFillAndVerify();
 
     await changeField("Extracted Value Brand Name", "Reviewed Brand Text");
-    await clickButton("Done");
+    await clickButtonLabel("Close detail view");
 
     await act(async () => {
       firstPackageButton().click();
@@ -1023,7 +1014,7 @@ describe("PackageWorkflow", () => {
       body: expect.any(String),
       signal: expect.any(AbortSignal)
     });
-    expect(JSON.parse((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[2][1].body)).toMatchObject({
+    expect(JSON.parse((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[1][1].body)).toMatchObject({
       field_decisions: { brand_name: "fail" }
     });
     expect(container.textContent).toContain("Needs Review");

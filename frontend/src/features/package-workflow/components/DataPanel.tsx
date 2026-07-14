@@ -25,6 +25,7 @@ interface DataPanelProps {
     field: CanonicalLabelField,
     value: string
   ) => void;
+  onFieldEditComplete: (packageId: string) => void;
   onFieldDecision: (
     packageId: string,
     field: CanonicalLabelField,
@@ -36,6 +37,7 @@ interface DataPanelProps {
 export function DataPanel({
   onApplicationDataChange,
   onExtractedDataChange,
+  onFieldEditComplete,
   onFieldDecision,
   record
 }: DataPanelProps) {
@@ -173,6 +175,7 @@ export function DataPanel({
                       onChange={(event) =>
                         onApplicationDataChange(record.package_id, field.name, event.target.value)
                       }
+                      onBlur={() => onFieldEditComplete(record.package_id)}
                       value={record.application_data[field.name]}
                     />
                   ) : (
@@ -183,6 +186,7 @@ export function DataPanel({
                       onChange={(event) =>
                         onApplicationDataChange(record.package_id, field.name, event.target.value)
                       }
+                      onBlur={() => onFieldEditComplete(record.package_id)}
                       inputMode={inputMode}
                       pattern={pattern}
                       title={isNumericTextField ? `${field.label} must include a number.` : undefined}
@@ -202,6 +206,7 @@ export function DataPanel({
                     onChange={(event) =>
                       onExtractedDataChange(record.package_id, field.name, event.target.value)
                     }
+                    onBlur={() => onFieldEditComplete(record.package_id)}
                     placeholder="Not detected"
                     value={extractedValue}
                   />
@@ -223,6 +228,7 @@ interface AutoGrowApplicationTextareaProps {
   className: string;
   id: string;
   onChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
+  onBlur: () => void;
   placeholder?: string;
   value: string;
 }
@@ -232,6 +238,7 @@ function AutoGrowApplicationTextarea({
   className,
   id,
   onChange,
+  onBlur,
   placeholder,
   value
 }: AutoGrowApplicationTextareaProps) {
@@ -253,6 +260,7 @@ function AutoGrowApplicationTextarea({
       className={className}
       id={id}
       onChange={onChange}
+      onBlur={onBlur}
       placeholder={placeholder}
       ref={textareaRef}
       rows={1}

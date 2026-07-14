@@ -23,12 +23,15 @@ interface ApplicationDetailDialogProps {
     field: CanonicalLabelField,
     value: string
   ) => void;
+  onFieldEditComplete: (packageId: string) => void;
   onClose: () => void;
   onFieldDecision: (
     packageId: string,
     field: CanonicalLabelField,
     decision: FieldReviewDecision
   ) => void;
+  onVerify: (packageId: string) => void;
+  isVerifying: boolean;
   record: ApplicationPackageRecord;
 }
 
@@ -37,7 +40,10 @@ export function ApplicationDetailDialog({
   onApplicationDataChange,
   onClose,
   onExtractedDataChange,
+  onFieldEditComplete,
   onFieldDecision,
+  onVerify,
+  isVerifying,
   record
 }: ApplicationDetailDialogProps) {
   const title = record.application_data.brand_name.trim() || record.image_filename;
@@ -88,6 +94,16 @@ export function ApplicationDetailDialog({
             >
               {record.status}
             </span>
+          </div>
+          <div className="detail-panel__actions">
+            <button
+              className="detail-verify-button"
+              disabled={isVerifying}
+              onClick={() => onVerify(record.package_id)}
+              type="button"
+            >
+              Verify
+            </button>
             <button
               aria-label="Close detail view"
               className="detail-close-button"
@@ -111,6 +127,7 @@ export function ApplicationDetailDialog({
             <DataPanel
               onApplicationDataChange={onApplicationDataChange}
               onExtractedDataChange={onExtractedDataChange}
+              onFieldEditComplete={onFieldEditComplete}
               onFieldDecision={onFieldDecision}
               record={record}
             />
@@ -124,15 +141,6 @@ export function ApplicationDetailDialog({
           </div>
         )}
 
-        <div className="decision-actions" aria-label="Application decision">
-          <button
-            className="decision-button decision-button--secondary"
-            onClick={onClose}
-            type="button"
-          >
-            Done
-          </button>
-        </div>
       </section>
     </div>
   );

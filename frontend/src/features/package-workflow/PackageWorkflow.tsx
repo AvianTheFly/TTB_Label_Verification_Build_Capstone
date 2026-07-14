@@ -3,8 +3,8 @@ import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "re
 import {
   VerificationApiError,
   compareExtractedData,
-  extractLabelText,
-  verifyBatch
+  verifyBatch,
+  verifyLabel
 } from "../../api/verification";
 import type {
   CanonicalLabelField,
@@ -26,8 +26,8 @@ import {
   emptyExtractedData,
   extractedDataFromResult,
   parseApplicationPackages,
-  statusSortRank,
-  statusFromResult
+  statusFromResult,
+  statusSortRank
 } from "./packageWorkflowUtils";
 import {
   allStatusFilters,
@@ -50,6 +50,7 @@ const NUMERIC_APPLICATION_FIELDS: Array<{
   { name: "net_contents", label: "Net Contents", example: "750 mL" }
 ];
 const HAS_NUMBER_RE = /\d+(?:\.\d+)?/;
+const MAX_BATCH_ITEMS = 25;
 
 function errorMessageFor(error: unknown): string {
   if (error instanceof VerificationApiError) {
@@ -149,7 +150,6 @@ export function PackageWorkflow() {
     const parsed = await parseApplicationPackages(files);
     const currentRecords = recordsRef.current;
     const currentByKey = new Map(currentRecords.map((record) => [recordKey(record), record]));
-    const recordsToExtract: ApplicationPackageRecord[] = [];
     const nextRecords = parsed.records.map((record) => {
       const existing = currentByKey.get(recordKey(record));
       if (existing) {
@@ -168,18 +168,13 @@ export function PackageWorkflow() {
           status: imageChanged ? "Pending Check" : existing.status,
           item_error: imageChanged ? null : existing.item_error
         };
-        if (imageChanged) {
-          recordsToExtract.push(nextRecord);
-        }
         return nextRecord;
       }
 
-      const nextRecord = {
+      return {
         ...record,
         image_preview_url: createPreviewUrl(record.image_file)
       };
-      recordsToExtract.push(nextRecord);
-      return nextRecord;
     });
 
     for (const record of currentRecords) {
@@ -194,7 +189,6 @@ export function PackageWorkflow() {
       current && nextRecords.some((record) => record.package_id === current) ? current : null
     );
     setCheckError(null);
-    void extractUploadedRecords(recordsToExtract);
   }
 
   function addUploadedFiles(fileList: FileList | File[]) {
@@ -235,132 +229,6 @@ export function PackageWorkflow() {
     dragDepthRef.current = 0;
     setIsDragging(false);
     addUploadedFiles(event.dataTransfer.files);
-  }
-
-  async function extractUploadedRecords(recordsToExtract: ApplicationPackageRecord[]) {
-    if (recordsToExtract.length === 0) {
-      return;
-    }
-    setIsChecking(true);
-    setCheckError(null);
-
-    try {
-      for (const record of recordsToExtract) {
-        try {
-          const extractedData = await extractLabelText(record.image_file);
-          setRecords((current) =>
-            current.map((candidate) =>
-              candidate.package_id === record.package_id
-                ? {
-                    ...candidate,
-                    original_extracted_data: extractedData,
-                    reviewed_extracted_data: extractedData,
-                    item_error: null
-                  }
-                : candidate
-            )
-          );
-        } catch (error) {
-          const message = errorMessageFor(error);
-          setCheckError("Some labels could not be read. Open the application card for details.");
-          setRecords((current) =>
-            current.map((candidate) =>
-              candidate.package_id === record.package_id
-                ? { ...candidate, item_error: message, status: "Needs Review" }
-                : candidate
-            )
-          );
-        }
-      }
-    } finally {
-      setIsChecking(false);
-    }
-  }
-
-  async function verifyBatchApplications() {
-    const currentRecords = recordsRef.current;
-    if (currentRecords.length === 0) {
-      setCheckError("Choose label images before verifying the batch.");
-      return;
-    }
-
-    const validationMessages = new Map<string, string>();
-    for (const record of currentRecords) {
-      const message = validationMessageFor(record);
-      if (message) {
-        validationMessages.set(record.package_id, message);
-      }
-    }
-
-    if (validationMessages.size > 0) {
-      setRecords((current) =>
-        current.map((record) =>
-          validationMessages.has(record.package_id)
-            ? { ...record, item_error: validationMessages.get(record.package_id) ?? null }
-            : record
-        )
-      );
-      setCheckError("Enter the missing label details before verifying the batch.");
-      return;
-    }
-
-    setIsChecking(true);
-    setCheckError(null);
-
-    try {
-      const submittedRecords = currentRecords.slice();
-      const batchResult = await verifyBatch(
-        submittedRecords.map((record) => ({
-          image: record.image_file,
-          application_data: record.application_data
-        }))
-      );
-
-      for (const item of batchResult.items) {
-        const record = submittedRecords[item.index];
-        if (!record) {
-          continue;
-        }
-        if (item.result) {
-          updateRecordWithResult(record.package_id, item.result);
-        } else if (item.error) {
-          setRecords((current) =>
-            current.map((candidate) =>
-              candidate.package_id === record.package_id
-                ? {
-                    ...candidate,
-                    item_error: item.error?.message ?? "This application could not be checked.",
-                    status: "Needs Review"
-                  }
-                : candidate
-            )
-          );
-        }
-      }
-    } catch (error) {
-      setCheckError(errorMessageFor(error));
-    } finally {
-      setIsChecking(false);
-    }
-  }
-
-  function updateRecordWithResult(packageId: string, result: VerificationResult) {
-    const extractedData = extractedDataFromResult(result);
-    setRecords((current) =>
-      current.map((record) =>
-        record.package_id === packageId
-          ? {
-              ...record,
-              original_extracted_data: record.original_extracted_data ?? extractedData,
-              reviewed_extracted_data: extractedData,
-              comparison_result: result,
-              field_decisions: {},
-              status: statusFromResult(result),
-              item_error: null
-            }
-          : record
-      )
-    );
   }
 
   function updateApplicationData(
@@ -423,6 +291,178 @@ export function PackageWorkflow() {
         };
       })
     );
+  }
+
+  async function verifySingleApplication(packageId: string) {
+    const record = recordsRef.current.find((candidate) => candidate.package_id === packageId);
+    if (!record) {
+      return;
+    }
+
+    const validationMessage = validationMessageFor(record);
+    if (validationMessage) {
+      setRecords((current) =>
+        current.map((candidate) =>
+          candidate.package_id === packageId
+            ? { ...candidate, item_error: validationMessage, status: "Pending Check" }
+            : candidate
+        )
+      );
+      return;
+    }
+
+    setIsChecking(true);
+    setCheckError(null);
+    try {
+      const result = await verifyLabel(record.image_file, record.application_data);
+      updateRecordWithResult(packageId, result);
+    } catch (error) {
+      const message = errorMessageFor(error);
+      setCheckError(message);
+      setRecords((current) =>
+        current.map((candidate) =>
+          candidate.package_id === packageId
+            ? { ...candidate, item_error: message, status: "Needs Review" }
+            : candidate
+        )
+      );
+    } finally {
+      setIsChecking(false);
+    }
+  }
+
+  async function verifyBatchApplications() {
+    const currentRecords = recordsRef.current;
+    if (currentRecords.length === 0) {
+      setCheckError("Choose label images before verifying the batch.");
+      return;
+    }
+
+    if (currentRecords.length > MAX_BATCH_ITEMS) {
+      setCheckError(`Verify Batch can run ${MAX_BATCH_ITEMS} applications at a time.`);
+      return;
+    }
+
+    const validationMessages = new Map<string, string>();
+    for (const record of currentRecords) {
+      const message = validationMessageFor(record);
+      if (message) {
+        validationMessages.set(record.package_id, message);
+      }
+    }
+
+    if (validationMessages.size > 0) {
+      setRecords((current) =>
+        current.map((record) =>
+          validationMessages.has(record.package_id)
+            ? { ...record, item_error: validationMessages.get(record.package_id) ?? null }
+            : record
+        )
+      );
+      setCheckError("Enter the missing label details before verifying the batch.");
+      return;
+    }
+
+    const shouldRunBatch =
+      currentRecords.length <= 1 ||
+      window.confirm(
+        `Verify ${currentRecords.length} applications now?\n\nBatch verification sends each complete application and label image to /verify/batch. The current limit is ${MAX_BATCH_ITEMS} applications per batch.`
+      );
+    if (!shouldRunBatch) {
+      return;
+    }
+
+    setIsChecking(true);
+    setCheckError(null);
+    try {
+      const submittedRecords = currentRecords.slice();
+      const batchResult = await verifyBatch(
+        submittedRecords.map((record) => ({
+          image: record.image_file,
+          application_data: record.application_data
+        }))
+      );
+
+      for (const item of batchResult.items) {
+        const record = submittedRecords[item.index];
+        if (!record) {
+          continue;
+        }
+        if (item.result) {
+          updateRecordWithResult(record.package_id, item.result);
+        } else if (item.error) {
+          setRecords((current) =>
+            current.map((candidate) =>
+              candidate.package_id === record.package_id
+                ? {
+                    ...candidate,
+                    item_error: item.error?.message ?? "This application could not be checked.",
+                    status: "Needs Review"
+                  }
+                : candidate
+            )
+          );
+        }
+      }
+    } catch (error) {
+      setCheckError(errorMessageFor(error));
+    } finally {
+      setIsChecking(false);
+    }
+  }
+
+  function updateRecordWithResult(packageId: string, result: VerificationResult) {
+    const extractedData = extractedDataFromResult(result);
+    setRecords((current) =>
+      current.map((record) =>
+        record.package_id === packageId
+          ? {
+              ...record,
+              original_extracted_data: record.original_extracted_data ?? extractedData,
+              reviewed_extracted_data: extractedData,
+              comparison_result: result,
+              field_decisions: {},
+              status: statusFromResult(result),
+              item_error: null
+            }
+          : record
+      )
+    );
+  }
+
+  async function compareEditedRecord(packageId: string) {
+    const record = recordsRef.current.find((candidate) => candidate.package_id === packageId);
+    if (!record) {
+      return;
+    }
+
+    await compareRecordWhenReady(record);
+  }
+
+  async function compareRecordWhenReady(record: ApplicationPackageRecord) {
+    if (!record.reviewed_extracted_data) {
+      return;
+    }
+
+    const validationMessage = validationMessageFor(record);
+    if (validationMessage) {
+      setRecords((current) =>
+        current.map((candidate) =>
+          candidate.package_id === record.package_id
+            ? {
+                ...candidate,
+                comparison_result: null,
+                field_decisions: {},
+                status: "Pending Check",
+                item_error: validationMessage
+              }
+            : candidate
+        )
+      );
+      return;
+    }
+
+    await applyBackendFieldDecisions(record, record.field_decisions);
   }
 
   function openDetail(packageId: string) {
@@ -529,10 +569,11 @@ export function PackageWorkflow() {
     <main className="app-shell">
       <section className="tool-layout package-workflow" aria-labelledby="package-title">
         <WorkflowHeader
-          isChecking={isChecking}
-          onVerifyBatch={verifyBatchApplications}
+          batchLimit={MAX_BATCH_ITEMS}
           canVerifyBatch={records.length > 0}
+          isChecking={isChecking}
           onDownloadDemoData={downloadDemoData}
+          onVerifyBatch={verifyBatchApplications}
         />
 
         <UploadDropSurface
@@ -573,7 +614,10 @@ export function PackageWorkflow() {
             onClose={closeDetail}
             onApplicationDataChange={updateApplicationData}
             onExtractedDataChange={updateExtractedData}
+            onFieldEditComplete={compareEditedRecord}
             onFieldDecision={setFieldDecision}
+            onVerify={verifySingleApplication}
+            isVerifying={isChecking}
             record={selectedRecord}
           />
         )}
