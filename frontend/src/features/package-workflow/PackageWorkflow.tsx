@@ -387,6 +387,44 @@ export function PackageWorkflow() {
     );
   }
 
+  function updateExtractedData(
+    packageId: string,
+    field: CanonicalLabelField,
+    value: string
+  ) {
+    const reviewedValue = value.trim() ? value : null;
+    setRecords((current) =>
+      current.map((record) => {
+        if (record.package_id !== packageId) {
+          return record;
+        }
+
+        const reviewedExtractedData = {
+          ...(record.reviewed_extracted_data ?? emptyExtractedData()),
+          [field]: reviewedValue
+        };
+
+        return {
+          ...record,
+          reviewed_extracted_data: reviewedExtractedData,
+          comparison_result: record.comparison_result
+            ? {
+                ...record.comparison_result,
+                results: record.comparison_result.results.map((fieldResult) =>
+                  fieldResult.field === field
+                    ? {
+                        ...fieldResult,
+                        found: reviewedValue
+                      }
+                    : fieldResult
+                )
+              }
+            : record.comparison_result
+        };
+      })
+    );
+  }
+
   function openDetail(packageId: string) {
     setSelectedPackageId(packageId);
   }
@@ -508,20 +546,21 @@ export function PackageWorkflow() {
           onFileInputChange={handleFileInputChange}
           validationErrors={validationErrors}
         >
-          <SearchPanel
-            advancedFilters={advancedFilters}
-            isAdvancedSearchOpen={isAdvancedSearchOpen}
-            onAdvancedFilterChange={updateAdvancedFilter}
-            onSearchTermChange={setSearchTerm}
-            onToggleAdvancedSearch={() => setIsAdvancedSearchOpen((isOpen) => !isOpen)}
-            searchTerm={searchTerm}
-          />
-
           <ApplicationsSection
             allRecordCount={records.length}
             filteredRecords={filteredRecords}
             onOpenDetail={openDetail}
             onToggleStatusFilter={toggleStatusFilter}
+            searchPanel={(
+              <SearchPanel
+                advancedFilters={advancedFilters}
+                isAdvancedSearchOpen={isAdvancedSearchOpen}
+                onAdvancedFilterChange={updateAdvancedFilter}
+                onSearchTermChange={setSearchTerm}
+                onToggleAdvancedSearch={() => setIsAdvancedSearchOpen((isOpen) => !isOpen)}
+                searchTerm={searchTerm}
+              />
+            )}
             sortedRecords={sortedRecords}
             statusFilters={statusFilters}
             summary={applicationSummary}
@@ -533,6 +572,7 @@ export function PackageWorkflow() {
             detailHeadingRef={detailHeadingRef}
             onClose={closeDetail}
             onApplicationDataChange={updateApplicationData}
+            onExtractedDataChange={updateExtractedData}
             onFieldDecision={setFieldDecision}
             record={selectedRecord}
           />

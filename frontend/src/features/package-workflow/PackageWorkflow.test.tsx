@@ -641,7 +641,7 @@ describe("PackageWorkflow", () => {
     expect(container.textContent).toContain("Net Contents with a number");
   });
 
-  it("opens detail view with brand header, image, read-only values, and field decision icons", async () => {
+  it("opens detail view with brand header, image, editable values, and field decision icons", async () => {
     mockWorkflowFetch();
 
     await renderPackageWorkflow();
@@ -672,8 +672,10 @@ describe("PackageWorkflow", () => {
     expect((applicationNetContents as HTMLInputElement).inputMode).toBe("decimal");
     expect((applicationAbv as HTMLInputElement).pattern).toContain("[0-9]");
     expect((applicationNetContents as HTMLInputElement).pattern).toContain("[0-9]");
-    expect(extractedBrand).toBeInstanceOf(HTMLParagraphElement);
-    expect(extractedBrand?.textContent).toBe("Old Tom Distillery");
+    expect(extractedBrand).toBeInstanceOf(HTMLTextAreaElement);
+    expect(extractedBrand?.classList.contains("ai-detected-value-input")).toBe(true);
+    expect((extractedBrand as HTMLTextAreaElement).rows).toBe(1);
+    expect((extractedBrand as HTMLTextAreaElement).value).toBe("Old Tom Distillery");
     expect(buttonWithText("Close")).toBeInstanceOf(HTMLButtonElement);
     expect(container.querySelector('[aria-label="Fail Brand Name"]')).not.toBeNull();
     expect(container.querySelector('[aria-label="Needs review Brand Name"]')).toBeNull();
@@ -682,6 +684,24 @@ describe("PackageWorkflow", () => {
     expect(container.textContent).toContain("same within 0.1 percentage points");
     expect(container.textContent).toContain("same within 1 mL");
     expect(container.textContent).toContain("AI can have a hard time confirming");
+  });
+
+  it("keeps edited AI detected text when detail is reopened", async () => {
+    mockWorkflowFetch();
+
+    await renderPackageWorkflow();
+    await uploadOpenFillAndVerify();
+
+    await changeField("Extracted Value Brand Name", "Reviewed Brand Text");
+    await clickButton("Done");
+
+    await act(async () => {
+      firstPackageButton().click();
+    });
+
+    const extractedBrand = container.querySelector('[aria-label="Extracted Value Brand Name"]');
+    expect(extractedBrand).toBeInstanceOf(HTMLTextAreaElement);
+    expect((extractedBrand as HTMLTextAreaElement).value).toBe("Reviewed Brand Text");
   });
 
   it("closes detail when the status button is clicked", async () => {

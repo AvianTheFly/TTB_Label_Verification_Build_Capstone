@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { VISIBLE_STATUSES } from "../constants";
 import type { ApplicationPackageRecord, VisibleStatus } from "../packageWorkflowUtils";
 import {
@@ -14,6 +16,7 @@ interface ApplicationsSectionProps {
   filteredRecords: ApplicationPackageRecord[];
   onOpenDetail: (packageId: string) => void;
   onToggleStatusFilter: (status: VisibleStatus | "total") => void;
+  searchPanel?: ReactNode;
   sortedRecords: ApplicationPackageRecord[];
   statusFilters: Record<VisibleStatus, boolean>;
   summary: ApplicationSummary;
@@ -24,6 +27,7 @@ export function ApplicationsSection({
   filteredRecords,
   onOpenDetail,
   onToggleStatusFilter,
+  searchPanel,
   sortedRecords,
   statusFilters,
   summary
@@ -59,6 +63,7 @@ export function ApplicationsSection({
           onToggle={(filterKey) => onToggleStatusFilter(filterKey as VisibleStatus | "total")}
         />
       </div>
+      {searchPanel}
       <div className="package-grid" aria-label="Uploaded applications">
         {filteredRecords.length === 0 ? (
           <div className="empty-state">
