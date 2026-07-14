@@ -33,6 +33,16 @@ export interface ExtractedData {
   government_warning: string | null;
 }
 
+export interface LabelFormatting {
+  government_warning_lead_in_bold: boolean | null;
+}
+
+export interface ExtractedLabelResponse extends ExtractedData {
+  government_warning_lead_in_bold?: boolean | null;
+  raw_text?: string | null;
+  extraction_confidence?: number | null;
+}
+
 export type FieldStatus = "PASS" | "FAIL";
 export type OverallVerdict = "APPROVED" | "NEEDS_REVIEW";
 export type MatchType = "fuzzy" | "numeric" | "unit" | "synonym" | "exact";
@@ -51,6 +61,7 @@ export interface VerificationResult {
   results: FieldResult[];
   overall_verdict: OverallVerdict;
   latency_ms: number | null;
+  extracted_formatting?: LabelFormatting | null;
 }
 
 export interface BatchItemError {

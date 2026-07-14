@@ -4,7 +4,9 @@ import type {
   BatchResult,
   BatchVerificationRequestItem,
   ExtractedData,
+  ExtractedLabelResponse,
   FieldDecisionOverrides,
+  LabelFormatting,
   VerificationResult
 } from "../types/api";
 
@@ -21,6 +23,15 @@ export class VerificationApiError extends Error {
 }
 
 const REQUEST_TIMEOUT_MS = 60000;
+const EXTRACTED_FIELDS = [
+  "brand_name",
+  "class_type",
+  "abv",
+  "net_contents",
+  "producer",
+  "country_of_origin",
+  "government_warning"
+] as const;
 
 interface VerificationTimingLog {
   event: "verification_api_request";
@@ -230,9 +241,26 @@ export async function verifyBatch(
   });
 }
 
+export async function extractLabelText(image: File): Promise<ExtractedData> {
+  const formData = new FormData();
+  formData.append("image", image);
+
+  const payload = await requestVerification<ExtractedLabelResponse>("/extract", {
+      method: "POST",
+      body: formData
+  });
+  const extracted = {} as ExtractedData;
+  for (const field of EXTRACTED_FIELDS) {
+    const value = payload[field];
+    extracted[field] = typeof value === "string" ? value : null;
+  }
+  return extracted;
+}
+
 export async function compareExtractedData(
   applicationData: ApplicationData,
   extractedData: ExtractedData,
+  extractedFormatting?: LabelFormatting | null,
   fieldDecisions?: FieldDecisionOverrides
 ): Promise<VerificationResult> {
   return requestVerification<VerificationResult>("/compare", {
@@ -243,6 +271,7 @@ export async function compareExtractedData(
     body: JSON.stringify({
       application_data: applicationData,
       extracted_data: extractedData,
+      ...(extractedFormatting ? { extracted_formatting: extractedFormatting } : {}),
       ...(fieldDecisions ? { field_decisions: fieldDecisions } : {})
     })
   });

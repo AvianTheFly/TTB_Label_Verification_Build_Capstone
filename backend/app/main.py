@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from app.api.batch import router as batch_router
 from app.api.compare import router as compare_router
 from app.api.dependencies import warm_vision_service
+from app.api.extract import router as extract_router
 from app.api.health import router as health_router
 from app.api.verify import router as verify_router
 from app.core.config import get_settings
@@ -52,6 +53,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(health_router)
+    app.include_router(extract_router)
     app.include_router(verify_router)
     app.include_router(batch_router)
     app.include_router(compare_router)

@@ -3,6 +3,7 @@ import type {
   CanonicalLabelField,
   ExtractedData,
   FieldReviewDecision,
+  LabelFormatting,
   VerificationResult
 } from "../../types/api";
 import { ACCEPTED_IMAGE_TYPES, FIELD_CONFIGS, emptyApplicationData } from "../labelFields";
@@ -18,13 +19,15 @@ export interface PackageValidationError {
 
 export interface ApplicationPackageRecord {
   package_id: string;
-  json_filename: string;
   image_filename: string;
   image_file: File;
   image_preview_url: string;
   application_data: ApplicationData;
+  application_formatting: LabelFormatting;
   original_extracted_data: ExtractedData | null;
+  original_extracted_formatting: LabelFormatting | null;
   reviewed_extracted_data: ExtractedData | null;
+  reviewed_extracted_formatting: LabelFormatting | null;
   comparison_result: VerificationResult | null;
   field_decisions: Partial<Record<CanonicalLabelField, FieldReviewDecision>>;
   status: VisibleStatus;
@@ -46,11 +49,12 @@ export interface ReviewedResultsExport {
 
 export interface ReviewedResultsApplication {
   application_id: string;
-  json_filename: string;
   image_filename: string;
   status: VisibleStatus;
   application_data: ApplicationData;
+  application_formatting: LabelFormatting;
   reviewed_extracted_data: ExtractedData | null;
+  reviewed_extracted_formatting: LabelFormatting | null;
   field_results: VerificationResult["results"];
   overall_verdict: VerificationResult["overall_verdict"] | null;
   errors: { code: string; message: string }[];
@@ -71,12 +75,22 @@ export function emptyExtractedData(): ExtractedData {
   };
 }
 
+export function emptyLabelFormatting(): LabelFormatting {
+  return {
+    government_warning_lead_in_bold: null
+  };
+}
+
 export function extractedDataFromResult(result: VerificationResult): ExtractedData {
   const extracted = emptyExtractedData();
   for (const fieldResult of result.results) {
     extracted[fieldResult.field] = fieldResult.found;
   }
   return extracted;
+}
+
+export function extractedFormattingFromResult(result: VerificationResult): LabelFormatting {
+  return result.extracted_formatting ?? emptyLabelFormatting();
 }
 
 export function statusFromResult(result: VerificationResult): VisibleStatus {
@@ -129,11 +143,12 @@ export function buildReviewedResultsExport(
     summary,
     applications: records.map((record) => ({
       application_id: record.package_id,
-      json_filename: record.json_filename,
       image_filename: record.image_filename,
       status: record.status,
       application_data: record.application_data,
+      application_formatting: record.application_formatting,
       reviewed_extracted_data: record.reviewed_extracted_data,
+      reviewed_extracted_formatting: record.reviewed_extracted_formatting,
       field_results: reviewedFieldResults(record),
       overall_verdict:
         record.comparison_result || Object.keys(record.field_decisions).length > 0
@@ -177,7 +192,6 @@ function reviewedFieldResults(record: ApplicationPackageRecord): VerificationRes
 
 export async function parseApplicationPackages(files: File[]): Promise<{
   records: ApplicationPackageRecord[];
-  incomplete_records: [];
   errors: PackageValidationError[];
 }> {
   const images = new Map<string, File>();
@@ -205,13 +219,15 @@ export async function parseApplicationPackages(files: File[]): Promise<{
 
   const records = Array.from(images.values()).map((imageFile, index) => ({
     package_id: `application-${index + 1}`,
-    json_filename: "",
     image_filename: imageFile.name,
     image_file: imageFile,
     image_preview_url: "",
     application_data: { ...emptyApplicationData },
+    application_formatting: emptyLabelFormatting(),
     original_extracted_data: null,
+    original_extracted_formatting: null,
     reviewed_extracted_data: null,
+    reviewed_extracted_formatting: null,
     comparison_result: null,
     field_decisions: {},
     status: "Pending Check" as VisibleStatus,
@@ -219,7 +235,7 @@ export async function parseApplicationPackages(files: File[]): Promise<{
     item_error: null
   }));
 
-  return { records, incomplete_records: [], errors };
+  return { records, errors };
 }
 
 export function isSupportedImageFile(file: File): boolean {

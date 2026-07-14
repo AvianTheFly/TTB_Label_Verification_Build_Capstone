@@ -2,18 +2,30 @@ import type { RefObject } from "react";
 
 import type { CanonicalLabelField, FieldReviewDecision } from "../../../types/api";
 import type { ApplicationPackageRecord } from "../packageWorkflowUtils";
-import { applicationNumber, cardStatusClass } from "../recordStatus";
+import {
+  applicationNumber,
+  cardStatusClass,
+  resolvedFieldDecisions,
+  summarizeFieldDecisions
+} from "../recordStatus";
 import { DataPanel } from "./DataPanel";
 import { ZoomableLabelImage } from "./ZoomableLabelImage";
 
 interface ApplicationDetailDialogProps {
   detailHeadingRef: RefObject<HTMLHeadingElement>;
-  isChecking: boolean;
   onApplicationDataChange: (
     packageId: string,
     field: CanonicalLabelField,
     value: string
   ) => void;
+  onApplicationBoldFormattingChange: (packageId: string, isBold: boolean) => void;
+  onExtractedDataChange: (
+    packageId: string,
+    field: CanonicalLabelField,
+    value: string
+  ) => void;
+  onExtractedBoldFormattingChange: (packageId: string, isBold: boolean) => void;
+  onFieldEditComplete: (packageId: string) => void;
   onClose: () => void;
   onFieldDecision: (
     packageId: string,
@@ -21,19 +33,27 @@ interface ApplicationDetailDialogProps {
     decision: FieldReviewDecision
   ) => void;
   onVerify: (packageId: string) => void;
+  isVerifying: boolean;
   record: ApplicationPackageRecord;
 }
 
 export function ApplicationDetailDialog({
   detailHeadingRef,
-  isChecking,
   onApplicationDataChange,
+  onApplicationBoldFormattingChange,
   onClose,
+  onExtractedDataChange,
+  onExtractedBoldFormattingChange,
+  onFieldEditComplete,
   onFieldDecision,
   onVerify,
+  isVerifying,
   record
 }: ApplicationDetailDialogProps) {
   const title = record.application_data.brand_name.trim() || record.image_filename;
+  const fieldSummary = summarizeFieldDecisions(resolvedFieldDecisions(record));
+  const reviewLabel =
+    fieldSummary.fail === 1 ? "1 field to review" : `${fieldSummary.fail} fields to review`;
 
   return (
     <div
@@ -53,14 +73,6 @@ export function ApplicationDetailDialog({
         role="dialog"
       >
         <div className="detail-panel__header">
-          <button
-            aria-label="Close detail view"
-            className="detail-close-button"
-            onClick={onClose}
-            type="button"
-          >
-            X
-          </button>
           <div className="detail-title-group">
             <div className="detail-title-copy">
               <p className="detail-kicker">Application Review</p>
@@ -68,19 +80,43 @@ export function ApplicationDetailDialog({
                 {title}
               </h2>
               <div className="detail-meta-strip" aria-label="Application metadata">
-                <span>Application #{applicationNumber(record.package_id)}</span>
-                <span>{record.image_filename}</span>
+                <span className="detail-meta-chip detail-meta-chip--strong">
+                  Application #{applicationNumber(record.package_id)}
+                </span>
+                <span className="detail-meta-chip">{reviewLabel}</span>
+                <span className="detail-meta-chip">{fieldSummary.pass} passed</span>
+                <span className="detail-meta-chip detail-meta-chip--file">
+                  {record.image_filename}
+                </span>
               </div>
             </div>
           </div>
-          <button
-            aria-label={`Close detail view. Current status: ${record.status}`}
-            className={`status-chip status-chip--large status-chip--button status-chip--${cardStatusClass(record.status)}`}
-            onClick={onClose}
-            type="button"
-          >
-            {record.status}
-          </button>
+          <div className="detail-panel__status-area">
+            <span
+              aria-label={`Current status: ${record.status}`}
+              className={`status-chip status-chip--large status-chip--${cardStatusClass(record.status)}`}
+            >
+              {record.status}
+            </span>
+          </div>
+          <div className="detail-panel__actions">
+            <button
+              className="detail-verify-button"
+              disabled={isVerifying}
+              onClick={() => onVerify(record.package_id)}
+              type="button"
+            >
+              Verify
+            </button>
+            <button
+              aria-label="Close detail view"
+              className="detail-close-button"
+              onClick={onClose}
+              type="button"
+            >
+              Close
+            </button>
+          </div>
         </div>
 
         <div className="detail-layout">
@@ -94,6 +130,10 @@ export function ApplicationDetailDialog({
           <div className="detail-fields">
             <DataPanel
               onApplicationDataChange={onApplicationDataChange}
+              onApplicationBoldFormattingChange={onApplicationBoldFormattingChange}
+              onExtractedDataChange={onExtractedDataChange}
+              onExtractedBoldFormattingChange={onExtractedBoldFormattingChange}
+              onFieldEditComplete={onFieldEditComplete}
               onFieldDecision={onFieldDecision}
               record={record}
             />
@@ -107,16 +147,6 @@ export function ApplicationDetailDialog({
           </div>
         )}
 
-        <div className="decision-actions" aria-label="Application decision">
-          <button
-            className="decision-button decision-button--verify"
-            disabled={isChecking}
-            onClick={() => onVerify(record.package_id)}
-            type="button"
-          >
-            {isChecking ? "VERIFYING..." : "VERIFY"}
-          </button>
-        </div>
       </section>
     </div>
   );

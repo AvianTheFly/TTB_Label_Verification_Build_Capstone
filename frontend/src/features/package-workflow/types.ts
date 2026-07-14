@@ -1,7 +1,6 @@
 import type { CanonicalLabelField, FieldReviewDecision } from "../../types/api";
 import type { ApplicationPackageRecord } from "./packageWorkflowUtils";
 
-export type IncompleteFilter = "json" | "image";
 export type AbvOperator = "any" | "lt" | "eq" | "gt";
 
 export interface AdvancedSearchFilters {
@@ -16,12 +15,8 @@ export interface AdvancedSearchFilters {
 }
 
 export type StatusFilters = Record<ApplicationPackageRecord["status"], boolean>;
-export type IncompleteFilters = Record<IncompleteFilter, boolean>;
 export type FieldDecisionMap = Record<CanonicalLabelField, FieldReviewDecision>;
-export type PackageRecordKey = Pick<
-  ApplicationPackageRecord,
-  "json_filename" | "image_filename"
->;
+export type PackageRecordKey = Pick<ApplicationPackageRecord, "image_filename">;
 
 export interface ApplicationSummary {
   needs_review: number;

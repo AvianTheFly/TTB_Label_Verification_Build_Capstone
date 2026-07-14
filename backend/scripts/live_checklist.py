@@ -21,6 +21,20 @@ CANONICAL_FIELDS = {
 }
 FIELD_STATUSES = {"PASS", "FAIL"}
 OVERALL_VERDICTS = {"APPROVED", "NEEDS_REVIEW"}
+DEFAULT_APPLICATION_DATA = {
+    "brand_name": "NORTHERN LIGHT RIESLING",
+    "class_type": "White Wine Blend",
+    "abv": "13.8% Alc./Vol.",
+    "net_contents": "700 mL",
+    "producer": "Northstar Vineyards, Traverse City, MI",
+    "country_of_origin": "Canada",
+    "government_warning": (
+        "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink "
+        "alcoholic beverages during pregnancy because of the risk of birth defects. "
+        "(2) Consumption of alcoholic beverages impairs your ability to drive a car or operate "
+        "machinery, and may cause health problems."
+    ),
+}
 
 
 def main() -> int:
@@ -33,7 +47,11 @@ def main() -> int:
         help="Backend base URL or full /verify URL, for example https://example.com/verify.",
     )
     parser.add_argument("--image", type=Path, default=_default_image_path())
-    parser.add_argument("--application-data", type=Path, default=_default_application_data_path())
+    parser.add_argument(
+        "--application-data",
+        type=Path,
+        help="Optional JSON file containing exactly the seven canonical application fields.",
+    )
     parser.add_argument("--timeout", type=float, default=30.0)
     parser.add_argument("--max-latency-ms", type=int, default=5000)
     parser.add_argument(
@@ -50,17 +68,17 @@ def main() -> int:
 
     endpoint = _verify_endpoint(args.url)
     image_path = args.image.resolve()
-    application_data_path = args.application_data.resolve()
 
     if not image_path.exists():
         print(f"Sample image not found: {image_path}", file=sys.stderr)
         return 2
-    if not application_data_path.exists():
-        print(f"Application data not found: {application_data_path}", file=sys.stderr)
-        return 2
 
     try:
-        application_data = _load_application_data(application_data_path)
+        application_data = (
+            _load_application_data(args.application_data.resolve())
+            if args.application_data
+            else DEFAULT_APPLICATION_DATA
+        )
         results = []
         round_trip_ms = []
         for _ in range(args.runs):
@@ -101,10 +119,6 @@ def main() -> int:
 
 def _default_image_path() -> Path:
     return _demo_input_path("northstar-riesling.png")
-
-
-def _default_application_data_path() -> Path:
-    return _demo_input_path("northstar-riesling.application.json")
 
 
 def _demo_input_path(filename: str, repo_root: Path | None = None) -> Path:

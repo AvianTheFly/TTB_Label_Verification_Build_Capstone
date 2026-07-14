@@ -1,15 +1,23 @@
 import base64
-import json
 import logging
 from time import perf_counter
-from typing import Any, Literal, Protocol
-
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+from typing import Any, Protocol
 
 from app.domain.models import ExtractedLabel
 from app.services.image_preprocess import PreprocessedImage
-from app.use_cases.timing import elapsed_ms
+from app.services.openai_extraction import (
+    CANONICAL_EXTRACTION_FIELDS,
+    EXTRACTION_PROMPT,
+    STRUCTURED_OUTPUT_SCHEMA,
+    WARNING_STYLE_FIELD,
+    category_for_provider_exception,
+    extract_response_payload,
+    parse_structured_label_payload,
+    safe_provider_message,
+)
+from app.services.vision_errors import VisionIssueCategory, VisionServiceError
 from app.use_cases.timeout import run_with_timeout
+from app.use_cases.timing import elapsed_ms
 
 DEFAULT_OPENAI_VISION_MODEL = "gpt-5.4-nano"
 DEFAULT_OPENAI_TIMEOUT_SECONDS = 30.0
@@ -18,98 +26,26 @@ DEFAULT_OPENAI_MAX_OUTPUT_TOKENS = 500
 
 logger = logging.getLogger(__name__)
 
-CANONICAL_EXTRACTION_FIELDS = (
-    "brand_name",
-    "class_type",
-    "abv",
-    "net_contents",
-    "producer",
-    "country_of_origin",
-    "government_warning",
-)
-
-VisionIssueCategory = Literal[
-    "non_label_image",
-    "blurry_image",
-    "angled_image",
-    "glare_heavy_image",
-    "partial_extraction",
-    "malformed_provider_output",
-    "provider_timeout",
-    "provider_quota_exceeded",
-    "provider_unavailable",
-    "provider_not_configured",
-    "extraction_failed",
+__all__ = [
+    "CANONICAL_EXTRACTION_FIELDS",
+    "DEFAULT_OPENAI_IMAGE_DETAIL",
+    "DEFAULT_OPENAI_MAX_OUTPUT_TOKENS",
+    "DEFAULT_OPENAI_TIMEOUT_SECONDS",
+    "DEFAULT_OPENAI_VISION_MODEL",
+    "EXTRACTION_PROMPT",
+    "STRUCTURED_OUTPUT_SCHEMA",
+    "WARNING_STYLE_FIELD",
+    "OpenAIVisionService",
+    "VisionIssueCategory",
+    "VisionService",
+    "VisionServiceError",
+    "parse_structured_label_payload",
 ]
-
-EXTRACTION_PROMPT = """Extract alcohol beverage label data from the image.
-
-Return exactly these seven canonical fields:
-brand_name, class_type, abv, net_contents, producer, country_of_origin, government_warning.
-
-Rules:
-- Use null for any field that is absent, unreadable, obscured, ambiguous, or uncertain.
-- Do not guess missing fields.
-- Do not infer values from common alcohol label wording or from the standard warning text.
-- Copy government_warning verbatim from the visible label when possible, preserving
-  capitalization, punctuation, and wording.
-- If the government warning is partly unreadable, return only the visible readable text;
-  do not fill gaps from memory.
-- For blurry, angled, or glare-heavy images, return partial data rather than failing.
-- If the image is not an alcohol label, return null for all seven fields.
-"""
-
-STRUCTURED_OUTPUT_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        field: {"type": ["string", "null"]} for field in CANONICAL_EXTRACTION_FIELDS
-    },
-    "required": list(CANONICAL_EXTRACTION_FIELDS),
-    "additionalProperties": False,
-}
 
 
 class VisionService(Protocol):
     async def extract_label(self, image: PreprocessedImage) -> ExtractedLabel:
         """Extract canonical label fields from a preprocessed image."""
-
-
-class VisionServiceError(Exception):
-    def __init__(self, category: VisionIssueCategory, message: str) -> None:
-        super().__init__(message)
-        self.category = category
-        self.message = message
-
-
-class StructuredLabelOutput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    brand_name: str | None
-    class_type: str | None
-    abv: str | None
-    net_contents: str | None
-    producer: str | None
-    country_of_origin: str | None
-    government_warning: str | None
-
-    @field_validator(
-        "brand_name",
-        "class_type",
-        "abv",
-        "net_contents",
-        "producer",
-        "country_of_origin",
-        "government_warning",
-        mode="before",
-    )
-    @classmethod
-    def blank_strings_become_null(cls, value: Any) -> Any:
-        if isinstance(value, str) and not value.strip():
-            return None
-        return value
-
-    def to_extracted_label(self) -> ExtractedLabel:
-        return ExtractedLabel(**self.model_dump())
 
 
 class OpenAIVisionService:
@@ -198,11 +134,11 @@ class OpenAIVisionService:
                 "The vision provider timed out while reading the label.",
             ) from exc
         except Exception as exc:
-            category = _category_for_provider_exception(exc)
-            raise VisionServiceError(category, _safe_provider_message(category)) from exc
+            category = category_for_provider_exception(exc)
+            raise VisionServiceError(category, safe_provider_message(category)) from exc
 
         payload_start = perf_counter()
-        payload = _extract_response_payload(response)
+        payload = extract_response_payload(response)
         payload_extract_ms = elapsed_ms(payload_start)
 
         parse_start = perf_counter()
@@ -276,76 +212,6 @@ class OpenAIVisionService:
         return self._client
 
 
-def parse_structured_label_payload(payload: object) -> ExtractedLabel:
-    try:
-        if isinstance(payload, str):
-            payload = json.loads(payload)
-        structured = StructuredLabelOutput.model_validate(payload)
-    except (json.JSONDecodeError, TypeError, ValidationError) as exc:
-        raise VisionServiceError(
-            "malformed_provider_output",
-            "The vision provider returned an unreadable extraction result.",
-        ) from exc
-
-    return structured.to_extracted_label()
-
-
-def classify_extraction_issue(extracted_label: ExtractedLabel) -> VisionIssueCategory | None:
-    values = [getattr(extracted_label, field) for field in CANONICAL_EXTRACTION_FIELDS]
-    populated_count = sum(value is not None for value in values)
-    if populated_count == 0:
-        return "non_label_image"
-    if populated_count < len(CANONICAL_EXTRACTION_FIELDS):
-        return "partial_extraction"
-    return None
-
-
 def _image_data_url(image: PreprocessedImage) -> str:
     encoded = base64.b64encode(image.content).decode("ascii")
     return f"data:{image.content_type};base64,{encoded}"
-
-
-def _extract_response_payload(response: Any) -> object:
-    parsed = getattr(response, "output_parsed", None)
-    if parsed is not None:
-        return parsed
-
-    output_text = getattr(response, "output_text", None)
-    if output_text:
-        return output_text
-
-    if isinstance(response, dict):
-        if response.get("output_parsed") is not None:
-            return response["output_parsed"]
-        if response.get("output_text"):
-            return response["output_text"]
-
-    raise VisionServiceError(
-        "malformed_provider_output",
-        "The vision provider returned no structured extraction result.",
-    )
-
-
-def _category_for_provider_exception(exc: Exception) -> VisionIssueCategory:
-    exception_name = exc.__class__.__name__.lower()
-    code = str(getattr(exc, "code", "")).lower()
-    message = str(getattr(exc, "message", exc)).lower()
-    if "timeout" in exception_name:
-        return "provider_timeout"
-    if (
-        "ratelimit" in exception_name
-        and ("insufficient_quota" in code or "insufficient_quota" in message)
-    ) or "exceeded your current quota" in message:
-        return "provider_quota_exceeded"
-    return "provider_unavailable"
-
-
-def _safe_provider_message(category: VisionIssueCategory) -> str:
-    if category == "provider_timeout":
-        return "The vision provider timed out while reading the label."
-    if category == "provider_quota_exceeded":
-        return (
-            "This API call exceeds your current quota. "
-            "Please check your OpenAI plan and billing details."
-        )
-    return "The vision provider is unavailable."

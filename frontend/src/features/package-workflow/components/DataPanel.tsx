@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
+import type { ChangeEvent, FormEvent, KeyboardEvent } from "react";
 
 import type { CanonicalLabelField, FieldReviewDecision } from "../../../types/api";
 import { FIELD_CONFIGS } from "../../labelFields";
@@ -19,6 +20,14 @@ interface DataPanelProps {
     field: CanonicalLabelField,
     value: string
   ) => void;
+  onApplicationBoldFormattingChange: (packageId: string, isBold: boolean) => void;
+  onExtractedDataChange: (
+    packageId: string,
+    field: CanonicalLabelField,
+    value: string
+  ) => void;
+  onExtractedBoldFormattingChange: (packageId: string, isBold: boolean) => void;
+  onFieldEditComplete: (packageId: string) => void;
   onFieldDecision: (
     packageId: string,
     field: CanonicalLabelField,
@@ -27,11 +36,20 @@ interface DataPanelProps {
   record: ApplicationPackageRecord;
 }
 
-export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: DataPanelProps) {
+export function DataPanel({
+  onApplicationDataChange,
+  onApplicationBoldFormattingChange,
+  onExtractedDataChange,
+  onExtractedBoldFormattingChange,
+  onFieldEditComplete,
+  onFieldDecision,
+  record
+}: DataPanelProps) {
   const [fieldFilters, setFieldFilters] = useState<Record<FieldReviewDecision, boolean>>({
     fail: true,
     pass: true
   });
+  const hasExtractedData = record.reviewed_extracted_data !== null;
   const extractedData = record.reviewed_extracted_data ?? emptyExtractedData();
   const fieldResults = new Map(
     sortedResults(record.comparison_result).map((result) => [result.field, result])
@@ -67,7 +85,10 @@ export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: 
   return (
     <section className="data-panel" aria-labelledby="data-title">
       <div className="data-panel__header">
-        <h3 id="data-title">Data</h3>
+        <div className="data-panel__title">
+          <h3 id="data-title">Application Data</h3>
+          <p>{visibleFields.length} fields shown</p>
+        </div>
         <SectionStats
           items={[
             {
@@ -103,6 +124,8 @@ export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: 
           const extractedValue = extractedData[field.name] ?? "";
           const selectedDecision = fieldDecisions[field.name];
           const isNumericTextField = field.name === "abv" || field.name === "net_contents";
+          const isGovernmentWarningField = field.name === "government_warning";
+          const usesWrappedApplicationControl = field.multiline || !isNumericTextField;
           const inputMode = isNumericTextField ? "decimal" : undefined;
           const pattern = isNumericTextField ? ".*[0-9]+(\\.[0-9]+)?.*" : undefined;
 
@@ -116,6 +139,9 @@ export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: 
               <div className="data-row__heading">
                 <div className="data-row__title">
                   <h4>{field.label}</h4>
+                  <span className={`data-row__status data-row__status--${selectedDecision}`}>
+                    {selectedDecision === "pass" ? "Pass" : "Review"}
+                  </span>
                   <button
                     aria-label={`${field.label} comparison rule`}
                     className="field-info-button"
@@ -147,14 +173,32 @@ export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: 
                   <label className="data-value-label" htmlFor={applicationId}>
                     Application
                   </label>
-                  {field.multiline ? (
-                    <textarea
+                  {isGovernmentWarningField ? (
+                    <RichWarningTextarea
                       aria-label={`Application Value ${field.label}`}
-                      className="application-value-input application-value-input--multiline"
+                      className="application-value-input application-value-input--auto-grow application-value-input--rich"
+                      id={applicationId}
+                      isLeadInBold={
+                        record.application_formatting.government_warning_lead_in_bold === true
+                      }
+                      onBoldChange={(isBold) =>
+                        onApplicationBoldFormattingChange(record.package_id, isBold)
+                      }
+                      onBlur={() => onFieldEditComplete(record.package_id)}
+                      onChange={(value) =>
+                        onApplicationDataChange(record.package_id, field.name, value)
+                      }
+                      value={record.application_data[field.name]}
+                    />
+                  ) : usesWrappedApplicationControl ? (
+                    <AutoGrowApplicationTextarea
+                      aria-label={`Application Value ${field.label}`}
+                      className="application-value-input application-value-input--auto-grow"
                       id={applicationId}
                       onChange={(event) =>
                         onApplicationDataChange(record.package_id, field.name, event.target.value)
                       }
+                      onBlur={() => onFieldEditComplete(record.package_id)}
                       value={record.application_data[field.name]}
                     />
                   ) : (
@@ -165,6 +209,7 @@ export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: 
                       onChange={(event) =>
                         onApplicationDataChange(record.package_id, field.name, event.target.value)
                       }
+                      onBlur={() => onFieldEditComplete(record.package_id)}
                       inputMode={inputMode}
                       pattern={pattern}
                       title={isNumericTextField ? `${field.label} must include a number.` : undefined}
@@ -174,22 +219,256 @@ export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: 
                   )}
                 </div>
                 <div className="data-value-group">
-                  <span className="data-value-label">AI Detected</span>
-                  <p
-                    aria-label={`Extracted Value ${field.label}`}
-                    className="ai-detected-value-text"
-                    id={extractedId}
-                  >
-                    {extractedValue || "Not detected"}
-                  </p>
+                  <label className="data-value-label" htmlFor={extractedId}>
+                    AI Detected
+                  </label>
+                  {isGovernmentWarningField ? (
+                    <RichWarningTextarea
+                      aria-label={`Extracted Value ${field.label}`}
+                      className="application-value-input application-value-input--auto-grow ai-detected-value-input application-value-input--rich"
+                      id={extractedId}
+                      isLeadInBold={
+                        record.reviewed_extracted_formatting?.government_warning_lead_in_bold === true
+                      }
+                      onBoldChange={(isBold) =>
+                        onExtractedBoldFormattingChange(record.package_id, isBold)
+                      }
+                      onBlur={() => onFieldEditComplete(record.package_id)}
+                      onChange={(value) =>
+                        onExtractedDataChange(record.package_id, field.name, value)
+                      }
+                      placeholder="Not detected"
+                      readOnly={!hasExtractedData}
+                      value={extractedValue}
+                    />
+                  ) : (
+                    <AutoGrowApplicationTextarea
+                      aria-label={`Extracted Value ${field.label}`}
+                      className="application-value-input application-value-input--auto-grow ai-detected-value-input"
+                      id={extractedId}
+                      onChange={(event) =>
+                        onExtractedDataChange(record.package_id, field.name, event.target.value)
+                      }
+                      onBlur={() => onFieldEditComplete(record.package_id)}
+                      placeholder="Not detected"
+                      readOnly={!hasExtractedData}
+                      value={extractedValue}
+                    />
+                  )}
                 </div>
               </div>
+              {fieldResult?.message && (
+                <p className="data-row__message">{fieldResult.message}</p>
+              )}
             </div>
           );
         })}
       </div>
     </section>
   );
+}
+
+interface AutoGrowApplicationTextareaProps {
+  "aria-label": string;
+  className: string;
+  id: string;
+  onChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
+  onBlur: () => void;
+  placeholder?: string;
+  readOnly?: boolean;
+  value: string;
+}
+
+function AutoGrowApplicationTextarea({
+  "aria-label": ariaLabel,
+  className,
+  id,
+  onChange,
+  onBlur,
+  placeholder,
+  readOnly = false,
+  value
+}: AutoGrowApplicationTextareaProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = "auto";
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [value]);
+
+  return (
+    <textarea
+      aria-label={ariaLabel}
+      className={className}
+      id={id}
+      onChange={onChange}
+      onBlur={onBlur}
+      placeholder={placeholder}
+      readOnly={readOnly}
+      ref={textareaRef}
+      rows={1}
+      value={value}
+    />
+  );
+}
+
+interface RichWarningTextareaProps {
+  "aria-label": string;
+  className: string;
+  id: string;
+  isLeadInBold: boolean;
+  onBoldChange: (isBold: boolean) => void;
+  onBlur: () => void;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  readOnly?: boolean;
+  value: string;
+}
+
+const WARNING_LEAD_IN = "GOVERNMENT WARNING:";
+
+function RichWarningTextarea({
+  "aria-label": ariaLabel,
+  className,
+  id,
+  isLeadInBold,
+  onBoldChange,
+  onBlur,
+  onChange,
+  placeholder,
+  readOnly = false,
+  value
+}: RichWarningTextareaProps) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const lastRenderedRef = useRef<{ isLeadInBold: boolean; value: string } | null>(null);
+
+  useLayoutEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) {
+      return;
+    }
+
+    const nextHtml = warningHtml(value, isLeadInBold);
+    const previous = lastRenderedRef.current;
+    const isFocused = document.activeElement === editor;
+    const textAlreadyCurrent = editor.textContent === value;
+    const boldStateUnchanged = previous?.isLeadInBold === isLeadInBold;
+    const htmlAlreadyCurrent = editor.innerHTML === nextHtml;
+
+    if (isFocused && textAlreadyCurrent && boldStateUnchanged && htmlAlreadyCurrent) {
+      lastRenderedRef.current = { isLeadInBold, value };
+      return;
+    }
+
+    if (!htmlAlreadyCurrent) {
+      const caretOffset = isFocused ? selectionTextOffset(editor) : null;
+      editor.innerHTML = nextHtml;
+      if (caretOffset !== null) {
+        restoreCaretAtTextOffset(editor, caretOffset);
+      }
+    }
+    lastRenderedRef.current = { isLeadInBold, value };
+  }, [isLeadInBold, value]);
+
+  function handleInput(event: FormEvent<HTMLDivElement>) {
+    onChange(event.currentTarget.textContent ?? "");
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "b") {
+      event.preventDefault();
+      if (!readOnly) {
+        onBoldChange(!isLeadInBold);
+      }
+    }
+  }
+
+  return (
+    <div
+      aria-label={ariaLabel}
+      aria-multiline="true"
+      className={className}
+      contentEditable={!readOnly}
+      data-empty={!value.trim()}
+      data-placeholder={placeholder}
+      id={id}
+      onBlur={onBlur}
+      onInput={handleInput}
+      onKeyDown={handleKeyDown}
+      ref={editorRef}
+      role="textbox"
+      suppressContentEditableWarning
+      tabIndex={readOnly ? -1 : 0}
+    />
+  );
+}
+
+function warningHtml(value: string, isLeadInBold: boolean): string {
+  if (!isLeadInBold || !value.startsWith(WARNING_LEAD_IN)) {
+    return escapeHtml(value);
+  }
+
+  return `<strong>${escapeHtml(WARNING_LEAD_IN)}</strong>${escapeHtml(
+    value.slice(WARNING_LEAD_IN.length)
+  )}`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function selectionTextOffset(container: HTMLElement): number | null {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    return null;
+  }
+
+  const range = selection.getRangeAt(0);
+  if (!container.contains(range.endContainer)) {
+    return null;
+  }
+
+  const precedingText = range.cloneRange();
+  precedingText.selectNodeContents(container);
+  precedingText.setEnd(range.endContainer, range.endOffset);
+  return precedingText.toString().length;
+}
+
+function restoreCaretAtTextOffset(container: HTMLElement, offset: number) {
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  let remainingOffset = offset;
+  let currentNode = walker.nextNode();
+
+  while (currentNode) {
+    const textLength = currentNode.textContent?.length ?? 0;
+    if (remainingOffset <= textLength) {
+      setCaret(currentNode, remainingOffset);
+      return;
+    }
+
+    remainingOffset -= textLength;
+    currentNode = walker.nextNode();
+  }
+
+  setCaret(container, container.childNodes.length);
+}
+
+function setCaret(node: Node, offset: number) {
+  const range = document.createRange();
+  range.setStart(node, offset);
+  range.collapse(true);
+
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
 }
 
 interface FieldDecisionButtonProps {

@@ -1,6 +1,13 @@
+import type { ReactNode } from "react";
+
 import { VISIBLE_STATUSES } from "../constants";
 import type { ApplicationPackageRecord, VisibleStatus } from "../packageWorkflowUtils";
-import { cardStatusClass } from "../recordStatus";
+import {
+  applicationNumber,
+  cardStatusClass,
+  resolvedFieldDecisions,
+  summarizeFieldDecisions
+} from "../recordStatus";
 import type { ApplicationSummary } from "../types";
 import { SectionStats } from "./SectionStats";
 
@@ -9,6 +16,7 @@ interface ApplicationsSectionProps {
   filteredRecords: ApplicationPackageRecord[];
   onOpenDetail: (packageId: string) => void;
   onToggleStatusFilter: (status: VisibleStatus | "total") => void;
+  searchPanel?: ReactNode;
   sortedRecords: ApplicationPackageRecord[];
   statusFilters: Record<VisibleStatus, boolean>;
   summary: ApplicationSummary;
@@ -19,6 +27,7 @@ export function ApplicationsSection({
   filteredRecords,
   onOpenDetail,
   onToggleStatusFilter,
+  searchPanel,
   sortedRecords,
   statusFilters,
   summary
@@ -54,6 +63,7 @@ export function ApplicationsSection({
           onToggle={(filterKey) => onToggleStatusFilter(filterKey as VisibleStatus | "total")}
         />
       </div>
+      {searchPanel}
       <div className="package-grid" aria-label="Uploaded applications">
         {filteredRecords.length === 0 ? (
           <div className="empty-state">
@@ -65,33 +75,58 @@ export function ApplicationsSection({
             </p>
           </div>
         ) : (
-          sortedRecords.map((record) => (
-            <article
-              className={`package-card package-card--${cardStatusClass(record.status)}`}
-              key={record.package_id}
-            >
-              <button
-                className="package-card__button"
-                onClick={() => onOpenDetail(record.package_id)}
-                type="button"
+          sortedRecords.map((record) => {
+            const fieldSummary = summarizeFieldDecisions(resolvedFieldDecisions(record));
+            const title = record.application_data.brand_name.trim() || record.image_filename;
+            const classType = record.application_data.class_type.trim() || "Class / type pending";
+            const abv = record.application_data.abv.trim();
+            const netContents = record.application_data.net_contents.trim();
+
+            return (
+              <article
+                className={`package-card package-card--${cardStatusClass(record.status)}`}
+                key={record.package_id}
               >
-                {record.image_preview_url ? (
-                  <img alt="" className="package-card__thumbnail" src={record.image_preview_url} />
-                ) : (
-                  <span className="package-card__thumbnail package-card__thumbnail--blank" />
-                )}
-                <span className="package-card__body">
-                  <strong>{record.application_data.brand_name.trim() || record.image_filename}</strong>
-                  <span className={`status-chip status-chip--${cardStatusClass(record.status)}`}>
-                    {record.status}
+                <button
+                  className="package-card__button"
+                  onClick={() => onOpenDetail(record.package_id)}
+                  type="button"
+                >
+                  <span className="package-card__media">
+                    {record.image_preview_url ? (
+                      <img alt="" className="package-card__thumbnail" src={record.image_preview_url} />
+                    ) : (
+                      <span className="package-card__thumbnail package-card__thumbnail--blank" />
+                    )}
                   </span>
-                  {record.item_error && (
-                    <span className="package-card__error">{record.item_error}</span>
-                  )}
-                </span>
-              </button>
-            </article>
-          ))
+                  <span className="package-card__body">
+                    <span className="package-card__eyebrow">
+                      Application #{applicationNumber(record.package_id)}
+                    </span>
+                    <strong>{title}</strong>
+                    <span className="package-card__subline">{classType}</span>
+                    <span className="package-card__facts">
+                      <span>{abv || "ABV pending"}</span>
+                      <span>{netContents || "Size pending"}</span>
+                    </span>
+                    <span className="package-card__footer">
+                      <span className={`status-chip status-chip--${cardStatusClass(record.status)}`}>
+                        {record.status}
+                      </span>
+                      <span className="package-card__review-count">
+                        {fieldSummary.fail === 1
+                          ? "1 review"
+                          : `${fieldSummary.fail} reviews`}
+                      </span>
+                    </span>
+                    {record.item_error && (
+                      <span className="package-card__error">{record.item_error}</span>
+                    )}
+                  </span>
+                </button>
+              </article>
+            );
+          })
         )}
       </div>
     </section>

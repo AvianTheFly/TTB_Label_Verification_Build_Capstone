@@ -2,6 +2,13 @@
 
 FastAPI backend for the TTB Label Verification proof-of-concept.
 
+## Runtime
+
+- Python 3.12
+- `uv`
+- FastAPI
+- Pydantic v2
+
 ## Run
 
 ```bash
@@ -9,38 +16,48 @@ uv sync
 uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
+For local demo extraction without a real provider key:
+
+```bash
+VISION_PROVIDER=demo OPENAI_API_KEY= uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
 ## Test
 
 ```bash
-uv run pytest
-uv run ruff check .
+uv run --extra dev ruff check .
+uv run --extra dev pytest
 ```
 
-## Live Smoke Check
-
-After deployment, run a real `/verify` request against the deployed backend:
-
-```bash
-uv run python scripts/live_checklist.py --url https://your-backend.example.com
-```
-
-## App Structure
+## Structure
 
 ```text
 app/
   api/        FastAPI routes, request parsing, dependency wiring, HTTP error mapping
   core/       settings, canonical API errors, global exception handlers
-  domain/     pure models, normalization, and comparison rules
-  services/   external-service boundaries: vision provider, fake/demo vision, image preprocessing
-  use_cases/  application workflows that orchestrate domain logic and services
-  tests/      backend regression tests by endpoint or module
+  domain/     pure models, normalization, comparison rules, verdict rules
+  services/   vision provider boundary, fake/demo vision, image preprocessing
+  use_cases/  single-label, extraction, recomparison, and batch workflows
+tests/        backend regression tests
 ```
 
-## Ownership Rules
+## Endpoints
 
-- Keep route handlers thin. They should parse HTTP input, call one use case, log safe metadata, and return models.
-- Keep `domain/` pure. No FastAPI, files, network, settings, or provider imports.
-- Put workflow logic in `use_cases/`. Single-label and batch verification live there.
-- Put provider and preprocessing boundaries in `services/`.
-- Public API/model fields must stay snake_case and canonical: `brand_name`, `class_type`, `abv`, `net_contents`, `producer`, `country_of_origin`, `government_warning`.
-- Do not store uploads, extracted labels, application data, API keys, or request state beyond the request lifetime.
+- `GET /health`
+- `POST /verify`
+- `POST /verify/batch`
+- `POST /extract`
+- `POST /compare`
+
+See `../docs/interfaces/api-contracts.md` and `../docs/interfaces/error-contracts.md`.
+
+## Rules
+
+- Keep domain logic pure and typed.
+- Keep HTTP handlers thin.
+- Keep provider code behind `VisionService`.
+- Keep public application-data fields canonical and snake_case.
+- Do not persist uploaded images, extracted labels, application data, API keys, or request state.
+- Warning text comparison is exact after whitespace collapse; warning lead-in bold detection is
+  best-effort visual evidence. Reviewer-edited bold state is accepted through
+  `extracted_formatting` on `/compare`.

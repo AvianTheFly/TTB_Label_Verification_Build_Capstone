@@ -35,17 +35,29 @@ export function UploadDropSurface({
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
+      <div className="package-drop-surface__overlay" aria-hidden={!isDragging}>
+        <span className="package-drop-surface__overlay-icon" aria-hidden="true" />
+        <strong>Drop files here</strong>
+        <span>Release to add label images to this application batch.</span>
+      </div>
       <div
         aria-label="Application package upload"
         className={`package-dropzone ${isDragging ? "package-dropzone--active" : ""}`}
         data-testid="package-upload-area"
       >
-        <div>
-          <h2>Drop Label Images</h2>
-          <p>JPG, PNG, or WEBP label images</p>
+        <div className="package-dropzone__copy">
+          <span className="package-dropzone__icon" aria-hidden="true" />
+          <div>
+            <h2>Upload Labels</h2>
+            <p>Drop label image files anywhere in this outlined area, or choose JPG, PNG, or WEBP files.</p>
+          </div>
         </div>
-        <button className="secondary-button" onClick={() => fileInputRef.current?.click()} type="button">
-          Choose Files
+        <button
+          className="secondary-button package-dropzone__button"
+          onClick={() => fileInputRef.current?.click()}
+          type="button"
+        >
+          Choose Images
         </button>
         <input
           accept="image/*"

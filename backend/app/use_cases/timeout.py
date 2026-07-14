@@ -1,11 +1,8 @@
 import asyncio
 from collections.abc import Awaitable
-from typing import TypeVar
-
-T = TypeVar("T")
 
 
-async def run_with_timeout(coro: Awaitable[T], timeout_seconds: float) -> T:
+async def run_with_timeout[T](coro: Awaitable[T], timeout_seconds: float) -> T:
     task = asyncio.create_task(coro)
     done, _ = await asyncio.wait({task}, timeout=timeout_seconds)
     if task in done:
