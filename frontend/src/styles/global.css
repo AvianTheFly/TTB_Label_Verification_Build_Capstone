@@ -1586,6 +1586,11 @@ p {
   overflow-wrap: anywhere;
 }
 
+.ai-detected-value-input {
+  border-color: #b7c5d2;
+  background: #f1f5f9;
+}
+
 .field-icon-button {
   display: inline-flex;
   align-items: center;
@@ -2820,6 +2825,12 @@ h1 {
   color: var(--ink);
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.ai-detected-value-input {
+  border-color: #5f7181;
+  background: #1a2833;
+  color: var(--ink);
 }
 
 .field-icon-button--fail {

@@ -20,6 +20,11 @@ interface DataPanelProps {
     field: CanonicalLabelField,
     value: string
   ) => void;
+  onExtractedDataChange: (
+    packageId: string,
+    field: CanonicalLabelField,
+    value: string
+  ) => void;
   onFieldDecision: (
     packageId: string,
     field: CanonicalLabelField,
@@ -28,7 +33,12 @@ interface DataPanelProps {
   record: ApplicationPackageRecord;
 }
 
-export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: DataPanelProps) {
+export function DataPanel({
+  onApplicationDataChange,
+  onExtractedDataChange,
+  onFieldDecision,
+  record
+}: DataPanelProps) {
   const [fieldFilters, setFieldFilters] = useState<Record<FieldReviewDecision, boolean>>({
     fail: true,
     pass: true
@@ -182,14 +192,19 @@ export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: 
                   )}
                 </div>
                 <div className="data-value-group">
-                  <span className="data-value-label">AI Detected</span>
-                  <p
+                  <label className="data-value-label" htmlFor={extractedId}>
+                    AI Detected
+                  </label>
+                  <AutoGrowApplicationTextarea
                     aria-label={`Extracted Value ${field.label}`}
-                    className="ai-detected-value-text"
+                    className="application-value-input application-value-input--auto-grow ai-detected-value-input"
                     id={extractedId}
-                  >
-                    {extractedValue || "Not detected"}
-                  </p>
+                    onChange={(event) =>
+                      onExtractedDataChange(record.package_id, field.name, event.target.value)
+                    }
+                    placeholder="Not detected"
+                    value={extractedValue}
+                  />
                 </div>
               </div>
               {fieldResult?.message && (
@@ -208,6 +223,7 @@ interface AutoGrowApplicationTextareaProps {
   className: string;
   id: string;
   onChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
+  placeholder?: string;
   value: string;
 }
 
@@ -216,6 +232,7 @@ function AutoGrowApplicationTextarea({
   className,
   id,
   onChange,
+  placeholder,
   value
 }: AutoGrowApplicationTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -236,6 +253,7 @@ function AutoGrowApplicationTextarea({
       className={className}
       id={id}
       onChange={onChange}
+      placeholder={placeholder}
       ref={textareaRef}
       rows={1}
       value={value}
