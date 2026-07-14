@@ -16,7 +16,7 @@ export function sortedResults(result: VerificationResult | null): FieldResult[] 
 }
 
 export function recordKey(record: PackageRecordKey): string {
-  return `${record.json_filename}|${record.image_filename}`;
+  return record.image_filename;
 }
 
 export function cardStatusClass(status: VisibleStatus): string {

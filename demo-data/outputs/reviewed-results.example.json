@@ -10,7 +10,6 @@
   "applications": [
     {
       "application_id": "application-1",
-      "json_filename": "evergreen-amber-bourbon.application.json",
       "image_filename": "evergreen-amber-bourbon.png",
       "status": "Passed",
       "application_data": {
@@ -54,7 +53,6 @@
     },
     {
       "application_id": "application-2",
-      "json_filename": "coastal-pear-cider.application.json",
       "image_filename": "coastal-pear-cider.png",
       "status": "Needs Review",
       "application_data": {
@@ -98,7 +96,6 @@
     },
     {
       "application_id": "application-3",
-      "json_filename": "northstar-riesling.application.json",
       "image_filename": "northstar-riesling.png",
       "status": "Pending Check",
       "application_data": {

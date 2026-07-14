@@ -3,7 +3,7 @@ from time import perf_counter
 
 from app.core.config import Settings
 from app.domain.comparison import compare_label
-from app.domain.models import ApplicationData, VerificationResult
+from app.domain.models import ApplicationData, ExtractedLabel, VerificationResult
 from app.services.image_preprocess import preprocess_image
 from app.services.vision import VisionService
 from app.use_cases.timing import elapsed_ms
@@ -60,3 +60,39 @@ async def verify_label_image(
         },
     )
     return result
+
+
+async def extract_label_image(
+    *,
+    image_bytes: bytes,
+    content_type: str,
+    filename: str | None,
+    vision_service: VisionService,
+    settings: Settings,
+) -> ExtractedLabel:
+    preprocess_start = perf_counter()
+    preprocessed = preprocess_image(
+        image_bytes,
+        content_type,
+        filename=filename,
+        max_upload_mb=settings.max_upload_mb,
+        max_dimension_px=settings.image_max_dimension,
+        jpeg_quality=settings.image_jpeg_quality,
+        reencode_threshold_bytes=settings.image_reencode_threshold_bytes,
+    )
+    preprocessing_ms = elapsed_ms(preprocess_start)
+
+    vision_start = perf_counter()
+    extracted = await vision_service.extract_label(preprocessed)
+    vision_ms = elapsed_ms(vision_start)
+
+    logger.info(
+        "extract_timing_breakdown preprocessing_ms=%s vision_ms=%s",
+        preprocessing_ms,
+        vision_ms,
+        extra={
+            "preprocessing_ms": preprocessing_ms,
+            "vision_ms": vision_ms,
+        },
+    )
+    return extracted

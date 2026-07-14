@@ -25,23 +25,6 @@ function imageFile(name: string, type = "image/png"): File {
   return new File([`image-${name}`], name, { type });
 }
 
-function jsonFile(
-  name: string,
-  imageFilename: string,
-  applicationData: Record<string, unknown> = canonicalApplicationData
-): File {
-  return new File(
-    [
-      JSON.stringify({
-        image_filename: imageFilename,
-        application_data: applicationData
-      })
-    ],
-    name,
-    { type: "application/json" }
-  );
-}
-
 function verificationResult(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     overall_verdict: "APPROVED",
@@ -106,6 +89,60 @@ function verificationResult(overrides: Partial<Record<string, unknown>> = {}) {
     ],
     ...overrides
   };
+}
+
+function extractionResult(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    brand_name: "Old Tom Distillery",
+    class_type: "Kentucky Straight Bourbon Whiskey",
+    abv: "45% Alc./Vol. (90 Proof)",
+    net_contents: "750ml",
+    producer: "OLD TOM DISTILLERY, LOUISVILLE KY",
+    country_of_origin: "USA",
+    government_warning: "GOVERNMENT WARNING: Test warning text.",
+    raw_text: null,
+    extraction_confidence: null,
+    ...overrides
+  };
+}
+
+function batchResult(results = [verificationResult()]) {
+  return {
+    items: results.map((result, index) => ({
+      index,
+      result,
+      error: null
+    })),
+    summary: {
+      passed: results.filter((result) => result.overall_verdict === "APPROVED").length,
+      needs_review: results.filter((result) => result.overall_verdict === "NEEDS_REVIEW").length,
+      total: results.length
+    }
+  };
+}
+
+function okJson(payload: unknown) {
+  return {
+    ok: true,
+    json: async () => payload
+  };
+}
+
+function mockWorkflowFetch(result = verificationResult(), compareResult = result) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/extract")) {
+        return okJson(extractionResult());
+      }
+      if (url.endsWith("/verify/batch")) {
+        const formData = init?.body as FormData;
+        return okJson(batchResult(formData.getAll("images").map(() => result)));
+      }
+      return okJson(compareResult);
+    })
+  );
 }
 
 async function renderPackageWorkflow() {
@@ -200,7 +237,7 @@ async function uploadOpenFillAndVerify(
     firstPackageButton().click();
   });
   await fillApplicationData(data);
-  await clickButton("VERIFY");
+  await clickButton("Verify Batch");
 }
 
 async function waitForAsyncUpdates() {
@@ -257,7 +294,7 @@ describe("package parser", () => {
     ]);
   });
 
-  it("keeps image upload order instead of pairing JSON files", async () => {
+  it("keeps image upload order", async () => {
     const result = await parseApplicationPackages([
       imageFile("second.png"),
       imageFile("first.png")
@@ -271,9 +308,9 @@ describe("package parser", () => {
     ]);
   });
 
-  it("rejects JSON files instead of creating incomplete applications", async () => {
+  it("rejects non-image files instead of creating incomplete applications", async () => {
     const result = await parseApplicationPackages([
-      jsonFile("orphan-json.json", "not-uploaded.png"),
+      new File(["{}"], "metadata.json", { type: "application/json" }),
       imageFile("orphan-image.png")
     ]);
 
@@ -283,7 +320,7 @@ describe("package parser", () => {
     expect(result.errors).toEqual([
       expect.objectContaining({
         code: "unsupported_image_type",
-        filename: "orphan-json.json"
+        filename: "metadata.json"
       })
     ]);
   });
@@ -382,7 +419,7 @@ describe("PackageWorkflow", () => {
   });
 
   it("adds selected images as applications immediately", async () => {
-    vi.stubGlobal("fetch", vi.fn());
+    mockWorkflowFetch();
 
     await renderPackageWorkflow();
     await chooseFiles([imageFile("first.png"), imageFile("second.png")]);
@@ -391,11 +428,16 @@ describe("PackageWorkflow", () => {
     expect(container.textContent).toContain("first.png");
     expect(container.textContent).toContain("second.png");
     expect(container.querySelectorAll(".package-card")).toHaveLength(2);
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:8000/extract", {
+      method: "POST",
+      body: expect.any(FormData),
+      signal: expect.any(AbortSignal)
+    });
   });
 
   it("adds later uploads to the current batch instead of replacing them", async () => {
-    vi.stubGlobal("fetch", vi.fn());
+    mockWorkflowFetch();
 
     await renderPackageWorkflow();
     await chooseFiles([imageFile("first.png")]);
@@ -404,31 +446,28 @@ describe("PackageWorkflow", () => {
     expect(container.textContent).toContain("first.png");
     expect(container.textContent).toContain("second.png");
     expect(container.textContent).toContain("2 total");
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
-  it("shows JSON files as unsupported and keeps image uploads as applications", async () => {
-    vi.stubGlobal("fetch", vi.fn());
+  it("shows non-image files as unsupported and keeps image uploads as applications", async () => {
+    mockWorkflowFetch();
 
     await renderPackageWorkflow();
-    await chooseFiles([jsonFile("application.json", "label.png")]);
+    await chooseFiles([new File(["{}"], "metadata.json", { type: "application/json" })]);
 
     expect(container.textContent).not.toContain("Incomplete Applications");
-    expect(container.textContent).toContain("application.json was not added");
+    expect(container.textContent).toContain("metadata.json was not added");
     expect(fetch).not.toHaveBeenCalled();
 
     await chooseFiles([imageFile("label.png")]);
 
     expect(container.textContent).toContain("Applications");
     expect(container.textContent).toContain("label.png");
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("filters applications and updates section counts from search text", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({ ok: true, json: async () => verificationResult() })
-    );
+    mockWorkflowFetch();
 
     await renderPackageWorkflow();
     await chooseFiles([imageFile("first.png"), imageFile("second.png")]);
@@ -451,11 +490,14 @@ describe("PackageWorkflow", () => {
 
   it("does not show incomplete-application filters", async () => {
     await renderPackageWorkflow();
-    await chooseFiles([jsonFile("waiting.json", "missing.png"), imageFile("lonely.png")]);
+    await chooseFiles([
+      new File(["{}"], "metadata.json", { type: "application/json" }),
+      imageFile("lonely.png")
+    ]);
 
     expect(container.textContent).toContain("1 total");
     expect(container.textContent).toContain("lonely.png");
-    expect(container.textContent).toContain("waiting.json was not added");
+    expect(container.textContent).toContain("metadata.json was not added");
     expect(container.textContent).not.toContain("1 json");
     expect(container.textContent).not.toContain("1 images");
   });
@@ -509,72 +551,75 @@ describe("PackageWorkflow", () => {
     expect(container.textContent).toContain("1 total");
   });
 
-  it("calls /verify after application fields are entered and submitted", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => verificationResult()
-      })
-    );
+  it("calls /verify/batch after application fields are entered and submitted", async () => {
+    mockWorkflowFetch();
 
     await renderPackageWorkflow();
     await uploadOpenFillAndVerify();
 
-    expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:8000/verify", {
+    expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:8000/verify/batch", {
       method: "POST",
       body: expect.any(FormData),
       signal: expect.any(AbortSignal)
     });
-    expect((readFormDataBody().get("image") as File).name).toBe("label.png");
-    expect(JSON.parse(String(readFormDataBody().get("application_data")))).toEqual(
+    const formData = readFormDataBody(1);
+    expect((formData.get("images") as File).name).toBe("label.png");
+    expect(JSON.parse(String(formData.get("application_data")))).toEqual(
       canonicalApplicationData
     );
-    expect(readFormDataBody().get("use_real_vision")).toBeNull();
-    expect(readFormDataBody().get("openai_api_key")).toBeNull();
-    expect(readFormDataBody().get("openai_model")).toBeNull();
+    expect(formData.get("use_real_vision")).toBeNull();
+    expect(formData.get("openai_api_key")).toBeNull();
+    expect(formData.get("openai_model")).toBeNull();
     expect(container.textContent).toContain("Approved");
   });
 
-  it("does not call /verify/batch automatically for multiple applications", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => verificationResult()
-      })
-    );
+  it("runs extraction on upload and waits for the batch action before /verify/batch", async () => {
+    mockWorkflowFetch();
 
     await renderPackageWorkflow();
     await chooseFiles([imageFile("first.png"), imageFile("second.png")]);
 
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBe(
+      "http://127.0.0.1:8000/extract"
+    );
+    expect((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[1][0]).toBe(
+      "http://127.0.0.1:8000/extract"
+    );
 
     await act(async () => {
       packageButtonAt(0).click();
     });
     await fillApplicationData({ ...canonicalApplicationData, brand_name: "FIRST BRAND" });
-    await clickButton("VERIFY");
+    await clickButton("Close");
+    await act(async () => {
+      packageButtonAt(1).click();
+    });
+    await fillApplicationData({ ...canonicalApplicationData, brand_name: "SECOND BRAND" });
+    await clickButton("Verify Batch");
 
-    expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:8000/verify", {
+    expect(fetch).toHaveBeenCalledWith("http://127.0.0.1:8000/verify/batch", {
       method: "POST",
       body: expect.any(FormData),
       signal: expect.any(AbortSignal)
     });
-    const formData = readFormDataBody();
-    expect((formData.get("image") as File).name).toBe("first.png");
+    const formData = readFormDataBody(2);
+    expect(formData.getAll("images").map((file) => (file as File).name)).toEqual([
+      "first.png",
+      "second.png"
+    ]);
     expect(formData.get("use_real_vision")).toBeNull();
     expect(formData.get("openai_api_key")).toBeNull();
     expect(formData.get("openai_model")).toBeNull();
 
-    const firstCard = container.textContent ?? "";
-    expect(firstCard).toContain("FIRST BRAND");
-    expect(firstCard).toContain("Approved");
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("FIRST BRAND");
+    expect(container.textContent).toContain("SECOND BRAND");
+    expect(container.textContent).toContain("Approved");
+    expect(fetch).toHaveBeenCalledTimes(3);
   });
 
   it("blocks verification when numeric application fields do not include numbers", async () => {
-    vi.stubGlobal("fetch", vi.fn());
+    mockWorkflowFetch();
 
     await renderPackageWorkflow();
     await chooseFiles([imageFile("label.png")]);
@@ -586,21 +631,18 @@ describe("PackageWorkflow", () => {
       abv: "forty five percent",
       net_contents: "standard bottle"
     });
-    await clickButton("VERIFY");
+    await clickButton("Verify Batch");
 
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBe(
+      "http://127.0.0.1:8000/extract"
+    );
     expect(container.textContent).toContain("Alcohol Content with a number");
     expect(container.textContent).toContain("Net Contents with a number");
   });
 
   it("opens detail view with brand header, image, read-only values, and field decision icons", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => verificationResult()
-      })
-    );
+    mockWorkflowFetch();
 
     await renderPackageWorkflow();
     await uploadOpenFillAndVerify();
@@ -608,7 +650,7 @@ describe("PackageWorkflow", () => {
     const image = container.querySelector('img[alt="Label image for OLD TOM DISTILLERY"]');
     expect(image).not.toBeNull();
     expect(container.querySelector("#detail-title")?.textContent).toBe("OLD TOM DISTILLERY");
-    expect(container.textContent).toContain("Data");
+    expect(container.textContent).toContain("Application Data");
     expect(container.textContent).toContain("Application #");
     expect(container.querySelector(".data-row--field-government_warning")).not.toBeNull();
     expect(container.textContent).toContain("Application");
@@ -643,13 +685,7 @@ describe("PackageWorkflow", () => {
   });
 
   it("closes detail when the status button is clicked", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => verificationResult()
-      })
-    );
+    mockWorkflowFetch();
 
     await renderPackageWorkflow();
     await uploadOpenFillAndVerify();
@@ -660,25 +696,20 @@ describe("PackageWorkflow", () => {
   });
 
   it("filters detail data fields from the data header count buttons", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () =>
-          verificationResult({
-            overall_verdict: "NEEDS_REVIEW",
-            results: [
-              {
-                field: "brand_name",
-                match_type: "fuzzy",
-                expected: "OLD TOM DISTILLERY",
-                found: "WRONG BRAND",
-                status: "FAIL",
-                message: "Values do not match after fuzzy normalization."
-              },
-              ...verificationResult().results.slice(1)
-            ]
-          })
+    mockWorkflowFetch(
+      verificationResult({
+        overall_verdict: "NEEDS_REVIEW",
+        results: [
+          {
+            field: "brand_name",
+            match_type: "fuzzy",
+            expected: "OLD TOM DISTILLERY",
+            found: "WRONG BRAND",
+            status: "FAIL",
+            message: "Values do not match after fuzzy normalization."
+          },
+          ...verificationResult().results.slice(1)
+        ]
       })
     );
 
@@ -712,13 +743,7 @@ describe("PackageWorkflow", () => {
   });
 
   it("shows a magnified label pane that can freeze, reset, and rotate with the image", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => verificationResult()
-      })
-    );
+    mockWorkflowFetch();
 
     await renderPackageWorkflow();
     await chooseFiles([imageFile("label.png")]);
@@ -901,24 +926,19 @@ describe("PackageWorkflow", () => {
   });
 
   it("shows needs review when any backend field result fails", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () =>
-          verificationResult({
-            overall_verdict: "NEEDS_REVIEW",
-            results: [
-              {
-                field: "brand_name",
-                match_type: "fuzzy",
-                expected: "OLD TOM DISTILLERY",
-                found: "WRONG BRAND",
-                status: "FAIL",
-                message: "Values do not match after fuzzy normalization."
-              }
-            ]
-          })
+    mockWorkflowFetch(
+      verificationResult({
+        overall_verdict: "NEEDS_REVIEW",
+        results: [
+          {
+            field: "brand_name",
+            match_type: "fuzzy",
+            expected: "OLD TOM DISTILLERY",
+            found: "WRONG BRAND",
+            status: "FAIL",
+            message: "Values do not match after fuzzy normalization."
+          }
+        ]
       })
     );
 
@@ -932,13 +952,7 @@ describe("PackageWorkflow", () => {
   });
 
   it("does not open detail from card hover and closes detail when clicking outside", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        json: async () => verificationResult()
-      })
-    );
+    mockWorkflowFetch();
 
     await renderPackageWorkflow();
     await chooseFiles([imageFile("label.png")]);
@@ -961,32 +975,22 @@ describe("PackageWorkflow", () => {
   });
 
   it("field decision icons override the application status", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => verificationResult()
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () =>
-            verificationResult({
-              overall_verdict: "NEEDS_REVIEW",
-              results: [
-                {
-                  field: "brand_name",
-                  match_type: "fuzzy",
-                  expected: "OLD TOM DISTILLERY",
-                  found: "Old Tom Distillery",
-                  status: "FAIL",
-                  message: "Reviewer marked this field as fail."
-                },
-                ...verificationResult().results.slice(1)
-              ]
-            })
-        })
+    mockWorkflowFetch(
+      verificationResult(),
+      verificationResult({
+        overall_verdict: "NEEDS_REVIEW",
+        results: [
+          {
+            field: "brand_name",
+            match_type: "fuzzy",
+            expected: "OLD TOM DISTILLERY",
+            found: "Old Tom Distillery",
+            status: "FAIL",
+            message: "Reviewer marked this field as fail."
+          },
+          ...verificationResult().results.slice(1)
+        ]
+      })
     );
 
     await renderPackageWorkflow();
@@ -999,7 +1003,7 @@ describe("PackageWorkflow", () => {
       body: expect.any(String),
       signal: expect.any(AbortSignal)
     });
-    expect(JSON.parse((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[1][1].body)).toMatchObject({
+    expect(JSON.parse((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[2][1].body)).toMatchObject({
       field_decisions: { brand_name: "fail" }
     });
     expect(container.textContent).toContain("Needs Review");
@@ -1009,7 +1013,6 @@ describe("PackageWorkflow", () => {
     const exportJson = buildReviewedResultsExport([
       {
         package_id: "application-1",
-        json_filename: "application.json",
         image_filename: "label.png",
         image_file: imageFile("label.png"),
         image_preview_url: "",
@@ -1034,11 +1037,13 @@ describe("PackageWorkflow", () => {
       application_id: "application-1",
       image_filename: "label.png",
       status: "Pending Check",
+      application_data: canonicalApplicationData,
       reviewed_extracted_data: null,
       field_results: [],
       overall_verdict: null,
       errors: []
     });
+    expect("expected_label_data" in exportJson.applications[0]).toBe(false);
   });
 
   it("builds export JSON with item errors when present", () => {
@@ -1046,7 +1051,6 @@ describe("PackageWorkflow", () => {
       [
         {
           package_id: "application-1",
-          json_filename: "application.json",
           image_filename: "label.png",
           image_file: imageFile("label.png"),
           image_preview_url: "",

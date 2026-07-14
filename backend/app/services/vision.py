@@ -34,15 +34,28 @@ VisionIssueCategory = Literal[
     "extraction_failed",
 ]
 
-EXTRACTION_PROMPT = """Extract alcohol beverage label data from the image.
+EXTRACTION_PROMPT = """Extract text from one alcohol beverage label image and sort it into
+the correct TTB label fields.
 
 Return exactly these seven canonical fields:
 brand_name, class_type, abv, net_contents, producer, country_of_origin, government_warning.
 
 Rules:
+- Treat each request as one label image. Batch verification calls this prompt once per
+  uploaded image, so never combine information across labels or infer from another item.
+- Use only text that is visible in the current image.
 - Use null for any field that is absent, unreadable, obscured, ambiguous, or uncertain.
-- Do not guess missing fields.
+- If the image is blank, mostly blank, not a label, or too poor to identify, return null
+  for all seven fields.
+- Do not guess, complete, correct, translate, normalize, or standardize missing fields.
 - Do not infer values from common alcohol label wording or from the standard warning text.
+- Put each visible text value in the most specific matching field:
+  brand_name is the product/brand name; class_type is the beverage class/type;
+  abv is alcohol by volume or proof text; net_contents is bottle/can volume;
+  producer is bottler/producer/importer name and address text; country_of_origin is
+  origin text; government_warning is the required warning statement.
+- Do not place the same visible text in multiple fields unless the label explicitly repeats it.
+- If several candidate values appear for one field and the correct one is unclear, use null.
 - Copy government_warning verbatim from the visible label when possible, preserving
   capitalization, punctuation, and wording.
 - If the government warning is partly unreadable, return only the visible readable text;

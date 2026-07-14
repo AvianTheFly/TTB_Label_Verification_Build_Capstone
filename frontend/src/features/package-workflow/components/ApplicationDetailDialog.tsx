@@ -13,7 +13,6 @@ import { ZoomableLabelImage } from "./ZoomableLabelImage";
 
 interface ApplicationDetailDialogProps {
   detailHeadingRef: RefObject<HTMLHeadingElement>;
-  isChecking: boolean;
   onApplicationDataChange: (
     packageId: string,
     field: CanonicalLabelField,
@@ -25,17 +24,14 @@ interface ApplicationDetailDialogProps {
     field: CanonicalLabelField,
     decision: FieldReviewDecision
   ) => void;
-  onVerify: (packageId: string) => void;
   record: ApplicationPackageRecord;
 }
 
 export function ApplicationDetailDialog({
   detailHeadingRef,
-  isChecking,
   onApplicationDataChange,
   onClose,
   onFieldDecision,
-  onVerify,
   record
 }: ApplicationDetailDialogProps) {
   const title = record.application_data.brand_name.trim() || record.image_filename;
@@ -128,14 +124,6 @@ export function ApplicationDetailDialog({
             type="button"
           >
             Done
-          </button>
-          <button
-            className="decision-button decision-button--verify"
-            disabled={isChecking}
-            onClick={() => onVerify(record.package_id)}
-            type="button"
-          >
-            {isChecking ? "VERIFYING..." : "VERIFY"}
           </button>
         </div>
       </section>
