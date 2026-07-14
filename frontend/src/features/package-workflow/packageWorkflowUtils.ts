@@ -18,7 +18,6 @@ export interface PackageValidationError {
 
 export interface ApplicationPackageRecord {
   package_id: string;
-  json_filename: string;
   image_filename: string;
   image_file: File;
   image_preview_url: string;
@@ -46,7 +45,6 @@ export interface ReviewedResultsExport {
 
 export interface ReviewedResultsApplication {
   application_id: string;
-  json_filename: string;
   image_filename: string;
   status: VisibleStatus;
   application_data: ApplicationData;
@@ -129,7 +127,6 @@ export function buildReviewedResultsExport(
     summary,
     applications: records.map((record) => ({
       application_id: record.package_id,
-      json_filename: record.json_filename,
       image_filename: record.image_filename,
       status: record.status,
       application_data: record.application_data,
@@ -205,7 +202,6 @@ export async function parseApplicationPackages(files: File[]): Promise<{
 
   const records = Array.from(images.values()).map((imageFile, index) => ({
     package_id: `application-${index + 1}`,
-    json_filename: "",
     image_filename: imageFile.name,
     image_file: imageFile,
     image_preview_url: "",
