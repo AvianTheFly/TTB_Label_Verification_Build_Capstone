@@ -134,6 +134,10 @@ Backend:
 | `OPENAI_TIMEOUT_SECONDS` | OpenAI client timeout. |
 | `OPENAI_API_KEY` | Backend-only OpenAI API key. |
 
+Model configuration: the backend reads `VISION_PROVIDER` and `VISION_MODEL` from environment
+variables. The submitted configuration uses `VISION_PROVIDER=openai` with `VISION_MODEL=gpt-5.4-nano`;
+the provider model name is not hardcoded in application logic.
+
 Frontend:
 
 | Variable | Purpose |
@@ -220,6 +224,53 @@ For real extraction, run the backend with `VISION_PROVIDER=openai`, `VISION_MODE
 - Recomputes backend comparison without calling the vision provider.
 
 See `docs/interfaces/api-contracts.md` and `docs/interfaces/error-contracts.md` for exact shapes.
+
+## API Examples
+
+Run these examples against a local backend started on `http://127.0.0.1:8000`. Replace image paths
+with local JPG, PNG, or WEBP files.
+
+Single-label verification:
+
+```bash
+curl -sS http://127.0.0.1:8000/verify \
+  -F "image=@./sample-label.jpg" \
+  -F 'application_data={
+    "brand_name":"Example Cellars",
+    "class_type":"Red Wine",
+    "abv":"13.5%",
+    "net_contents":"750 ml",
+    "producer":"Example Cellars, Napa, CA",
+    "country_of_origin":"United States",
+    "government_warning":"GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems."
+  }'
+```
+
+Batch verification:
+
+```bash
+curl -sS http://127.0.0.1:8000/verify/batch \
+  -F "images=@./sample-label-1.jpg" \
+  -F "images=@./sample-label-2.jpg" \
+  -F 'application_data={
+    "brand_name":"Example Cellars",
+    "class_type":"Red Wine",
+    "abv":"13.5%",
+    "net_contents":"750 ml",
+    "producer":"Example Cellars, Napa, CA",
+    "country_of_origin":"United States",
+    "government_warning":"GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems."
+  }' \
+  -F 'application_data={
+    "brand_name":"Example Brewing",
+    "class_type":"Beer",
+    "abv":"5.0%",
+    "net_contents":"12 fl oz",
+    "producer":"Example Brewing, Austin, TX",
+    "country_of_origin":"United States",
+    "government_warning":"GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems."
+  }'
+```
 
 ## Checks
 
