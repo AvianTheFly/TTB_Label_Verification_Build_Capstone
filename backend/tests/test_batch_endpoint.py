@@ -308,6 +308,18 @@ class ConcurrencyCountingVisionService:
         return make_extracted_label()
 
 
+class SlowVisionService:
+    def __init__(self, delay_seconds: float) -> None:
+        self._delay_seconds = delay_seconds
+        self.calls = 0
+
+    async def extract_label(self, image: PreprocessedImage) -> ExtractedLabel:
+        _ = image
+        self.calls += 1
+        await asyncio.sleep(self._delay_seconds)
+        return make_extracted_label()
+
+
 def test_batch_concurrency_is_bounded(monkeypatch) -> None:
     monkeypatch.setenv("BATCH_CONCURRENCY_LIMIT", "2")
     service = ConcurrencyCountingVisionService()
@@ -325,6 +337,59 @@ def test_batch_concurrency_is_bounded(monkeypatch) -> None:
         assert_verification_result_literals(item["result"])
     assert service.calls == 5
     assert service.max_active == 2
+    get_settings.cache_clear()
+
+
+def test_batch_logs_timing_limits_and_counts_without_payload_contents(caplog) -> None:
+    service = FakeVisionService(
+        results=[make_extracted_label(), make_extracted_label(brand_name="OTHER DISTILLERY")]
+    )
+    client = make_client(service)
+    caplog.set_level("INFO", logger="app.api.batch")
+
+    response = post_batch(
+        client,
+        application_items=[make_application_data(), make_application_data()],
+        image_items=[
+            (make_image_bytes(), "label-0.png", "image/png"),
+            (make_image_bytes(), "label-1.png", "image/png"),
+        ],
+    )
+
+    assert response.status_code == 200
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("batch_verify_request_accepted total=2" in message for message in messages)
+    assert any("concurrency_limit=" in message for message in messages)
+    assert any("max_batch_items=" in message for message in messages)
+    assert any("batch_verify_completed latency_ms=" in message for message in messages)
+    assert any("item_error_count=0" in message for message in messages)
+    assert any("max_item_latency_ms=" in message for message in messages)
+    assert any("latency_budget_ms=" in message for message in messages)
+    assert all("OLD TOM DISTILLERY" not in message for message in messages)
+    assert all(CANONICAL_GOVERNMENT_WARNING not in message for message in messages)
+
+
+def test_batch_logs_item_latency_budget_exceeded(monkeypatch, caplog) -> None:
+    monkeypatch.setenv("SINGLE_LABEL_TIMEOUT_SECONDS", "0.01")
+    service = SlowVisionService(delay_seconds=0.02)
+    client = make_client(service)
+    caplog.set_level("WARNING", logger="app.api.batch")
+
+    response = post_batch(
+        client,
+        application_items=[make_application_data(), make_application_data()],
+        image_items=[
+            (make_image_bytes(), "label-0.png", "image/png"),
+            (make_image_bytes(), "label-1.png", "image/png"),
+        ],
+    )
+
+    assert response.status_code == 200
+    assert service.calls == 2
+    assert any(
+        "batch_item_latency_budget_exceeded count=" in record.getMessage()
+        for record in caplog.records
+    )
     get_settings.cache_clear()
 
 

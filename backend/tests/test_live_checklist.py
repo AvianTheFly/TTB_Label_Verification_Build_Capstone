@@ -86,11 +86,11 @@ def test_live_checklist_percentile_uses_nearest_rank() -> None:
     assert live_checklist._percentile(values, 95) == 500
 
 
-def test_live_checklist_default_sample_paths_exist() -> None:
+def test_live_checklist_default_sample_image_and_data_exist() -> None:
     live_checklist = load_live_checklist()
 
     assert live_checklist._default_image_path().exists()
-    assert live_checklist._default_application_data_path().exists()
+    assert set(live_checklist.DEFAULT_APPLICATION_DATA) == live_checklist.CANONICAL_FIELDS
 
 
 def test_live_checklist_falls_back_to_frontend_demo_inputs(tmp_path: Path) -> None:

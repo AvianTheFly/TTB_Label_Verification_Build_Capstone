@@ -18,7 +18,7 @@ Inputs:
 
 - `multipart/form-data` with repeated `images` file parts.
 - Repeated `application_data` JSON string parts.
-- Users upload label images only. They do not upload application JSON files; the frontend builds `application_data` from the editable application-data inputs.
+- Users upload label images only; the frontend builds `application_data` from the editable application-data inputs.
 - Environment-configured `VisionService`; tests inject a mock service.
 - Provider credentials and model names must not be accepted from request fields. The frontend must never submit OpenAI API keys or provider-selection flags.
 - Items are paired by the order of provided multipart parts: first image with first application-data object, second image with second application-data object, and so on.
@@ -34,7 +34,7 @@ Outputs:
 - `POST /verify/batch`
 - Frontend batch upload view.
 - Batch image uploads become application records immediately.
-- Frontend label text extraction starts when supported image files are uploaded.
+- Frontend verification starts only when the user runs single-label Verify or Verify Batch.
 - Batch API client function.
 - Batch item error shape: `{ code, message, details }`, not the top-level API error envelope.
 

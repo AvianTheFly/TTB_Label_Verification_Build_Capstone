@@ -25,6 +25,7 @@ interface DataPanelProps {
     field: CanonicalLabelField,
     value: string
   ) => void;
+  onFieldEditComplete: (packageId: string) => void;
   onFieldDecision: (
     packageId: string,
     field: CanonicalLabelField,
@@ -36,6 +37,7 @@ interface DataPanelProps {
 export function DataPanel({
   onApplicationDataChange,
   onExtractedDataChange,
+  onFieldEditComplete,
   onFieldDecision,
   record
 }: DataPanelProps) {
@@ -43,6 +45,7 @@ export function DataPanel({
     fail: true,
     pass: true
   });
+  const hasExtractedData = record.reviewed_extracted_data !== null;
   const extractedData = record.reviewed_extracted_data ?? emptyExtractedData();
   const fieldResults = new Map(
     sortedResults(record.comparison_result).map((result) => [result.field, result])
@@ -173,6 +176,7 @@ export function DataPanel({
                       onChange={(event) =>
                         onApplicationDataChange(record.package_id, field.name, event.target.value)
                       }
+                      onBlur={() => onFieldEditComplete(record.package_id)}
                       value={record.application_data[field.name]}
                     />
                   ) : (
@@ -183,6 +187,7 @@ export function DataPanel({
                       onChange={(event) =>
                         onApplicationDataChange(record.package_id, field.name, event.target.value)
                       }
+                      onBlur={() => onFieldEditComplete(record.package_id)}
                       inputMode={inputMode}
                       pattern={pattern}
                       title={isNumericTextField ? `${field.label} must include a number.` : undefined}
@@ -202,7 +207,9 @@ export function DataPanel({
                     onChange={(event) =>
                       onExtractedDataChange(record.package_id, field.name, event.target.value)
                     }
+                    onBlur={() => onFieldEditComplete(record.package_id)}
                     placeholder="Not detected"
+                    readOnly={!hasExtractedData}
                     value={extractedValue}
                   />
                 </div>
@@ -223,7 +230,9 @@ interface AutoGrowApplicationTextareaProps {
   className: string;
   id: string;
   onChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
+  onBlur: () => void;
   placeholder?: string;
+  readOnly?: boolean;
   value: string;
 }
 
@@ -232,7 +241,9 @@ function AutoGrowApplicationTextarea({
   className,
   id,
   onChange,
+  onBlur,
   placeholder,
+  readOnly = false,
   value
 }: AutoGrowApplicationTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -253,7 +264,9 @@ function AutoGrowApplicationTextarea({
       className={className}
       id={id}
       onChange={onChange}
+      onBlur={onBlur}
       placeholder={placeholder}
+      readOnly={readOnly}
       ref={textareaRef}
       rows={1}
       value={value}

@@ -221,8 +221,24 @@ Expected success shape:
 ### `POST /verify/batch`
 
 ```bash
-APPLICATION_DATA_ONE="$(jq -c '.application_data' demo-data/inputs/evergreen-amber-bourbon.application.json)"
-APPLICATION_DATA_TWO="$(jq -c '.application_data' demo-data/inputs/coastal-pear-cider.application.json)"
+APPLICATION_DATA_ONE='{
+  "brand_name": "EVERGREEN AMBER BOURBON",
+  "class_type": "Kentucky Straight Bourbon Whiskey",
+  "abv": "45% Alc./Vol. (90 Proof)",
+  "net_contents": "750 mL",
+  "producer": "Evergreen Spirits LLC, Louisville, KY",
+  "country_of_origin": "United States",
+  "government_warning": "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems."
+}'
+APPLICATION_DATA_TWO='{
+  "brand_name": "COASTAL PEAR CIDER",
+  "class_type": "Hard Cider",
+  "abv": "6.8% Alc./Vol.",
+  "net_contents": "12 fl oz",
+  "producer": "Coastal Orchard Works, Portland, OR",
+  "country_of_origin": "United States",
+  "government_warning": "Government Warning: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems."
+}'
 
 curl -sS http://127.0.0.1:8000/verify/batch \
   -F "images=@demo-data/inputs/evergreen-amber-bourbon.png;type=image/png" \

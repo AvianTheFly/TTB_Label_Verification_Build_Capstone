@@ -23,14 +23,17 @@ export function WorkflowHeader({
             Reading labels
           </p>
         )}
-        <button
-          className="secondary-button"
-          disabled={isChecking || !canVerifyBatch}
-          onClick={onVerifyBatch}
-          type="button"
-        >
-          Verify Batch
-        </button>
+        <div className="batch-action-group">
+          <button
+            className="secondary-button"
+            disabled={isChecking || !canVerifyBatch}
+            onClick={onVerifyBatch}
+            title="Verify all complete applications"
+            type="button"
+          >
+            Verify Batch
+          </button>
+        </div>
         <button className="secondary-button" onClick={onDownloadDemoData} type="button">
           Demo Data
         </button>
