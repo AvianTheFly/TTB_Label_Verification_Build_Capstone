@@ -263,6 +263,59 @@ async function pressCtrlB(label: string) {
   await waitForAsyncUpdates();
 }
 
+function placeCaretAtEnd(element: HTMLElement) {
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.collapse(false);
+
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+async function typeRichWarningText(label: string, text: string) {
+  const input = container.querySelector(`[aria-label="${label}"]`);
+  if (!(input instanceof HTMLElement)) {
+    throw new Error(`Missing field: ${label}`);
+  }
+
+  await act(async () => {
+    input.focus();
+    input.textContent = "";
+    placeCaretAtEnd(input);
+  });
+
+  for (const character of text) {
+    await act(async () => {
+      const selection = window.getSelection();
+      const range =
+        selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : document.createRange();
+
+      if (!selection || selection.rangeCount === 0) {
+        range.selectNodeContents(input);
+        range.collapse(false);
+      }
+
+      range.deleteContents();
+      const textNode = document.createTextNode(character);
+      range.insertNode(textNode);
+      range.setStartAfter(textNode);
+      range.collapse(true);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+
+      input.dispatchEvent(
+        new InputEvent("input", {
+          bubbles: true,
+          data: character,
+          inputType: "insertText"
+        })
+      );
+    });
+    await waitForAsyncUpdates();
+  }
+}
+
 async function fillApplicationData(data = canonicalApplicationData) {
   await changeField("Application Value Brand Name", data.brand_name);
   await changeField("Application Value Class / Type", data.class_type);
@@ -734,6 +787,25 @@ describe("PackageWorkflow", () => {
     const extractedBrand = container.querySelector('[aria-label="Extracted Value Brand Name"]');
     expect(extractedBrand).toBeInstanceOf(HTMLTextAreaElement);
     expect((extractedBrand as HTMLTextAreaElement).value).toBe("Reviewed Brand Text");
+  });
+
+  it("preserves typed order in rich government warning fields", async () => {
+    mockWorkflowFetch();
+
+    await renderPackageWorkflow();
+    await uploadOpenFillAndVerify();
+
+    await typeRichWarningText("Application Value Government Warning", "54321");
+    await typeRichWarningText("Extracted Value Government Warning", "54321");
+
+    const applicationWarning = container.querySelector(
+      '[aria-label="Application Value Government Warning"]'
+    );
+    const extractedWarning = container.querySelector(
+      '[aria-label="Extracted Value Government Warning"]'
+    );
+    expect(applicationWarning?.textContent).toBe("54321");
+    expect(extractedWarning?.textContent).toBe("54321");
   });
 
   it("lets reviewers mark warning text bold with ctrl b and sends extracted formatting", async () => {

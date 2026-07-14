@@ -87,7 +87,7 @@ inspect OCR/model mistakes.
 The source requirements call out `GOVERNMENT WARNING:` as all caps and bold. This app enforces the
 text exactness requirement and also asks the vision provider for best-effort visual evidence. The
 frontend also lets reviewers use Ctrl+B in the government warning application and AI-detected fields
-to mark the lead-in bold after manual review.
+to visibly mark the `GOVERNMENT WARNING:` lead-in bold after manual review.
 
 - `government_warning_lead_in_bold=true`: text can pass and the result message notes bold was detected.
 - `government_warning_lead_in_bold=false`: the warning field fails and needs review.

@@ -345,6 +345,7 @@ function RichWarningTextarea({
   value
 }: RichWarningTextareaProps) {
   const editorRef = useRef<HTMLDivElement>(null);
+  const lastRenderedRef = useRef<{ isLeadInBold: boolean; value: string } | null>(null);
 
   useLayoutEffect(() => {
     const editor = editorRef.current;
@@ -352,7 +353,21 @@ function RichWarningTextarea({
       return;
     }
 
-    editor.innerHTML = warningHtml(value, isLeadInBold);
+    const nextHtml = warningHtml(value, isLeadInBold);
+    const previous = lastRenderedRef.current;
+    const isFocused = document.activeElement === editor;
+    const textAlreadyCurrent = editor.textContent === value;
+    const boldStateUnchanged = previous?.isLeadInBold === isLeadInBold;
+
+    if (isFocused && textAlreadyCurrent && boldStateUnchanged) {
+      lastRenderedRef.current = { isLeadInBold, value };
+      return;
+    }
+
+    if (editor.innerHTML !== nextHtml) {
+      editor.innerHTML = nextHtml;
+    }
+    lastRenderedRef.current = { isLeadInBold, value };
   }, [isLeadInBold, value]);
 
   function handleInput(event: FormEvent<HTMLDivElement>) {
