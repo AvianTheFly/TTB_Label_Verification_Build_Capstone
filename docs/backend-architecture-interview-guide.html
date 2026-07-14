@@ -445,7 +445,7 @@
           <code>/verify/batch</code>.
         </p>
         <ul>
-          <li>Items are paired by multipart order: image 0 with application data 0.</li>
+          <li>Items are matched by multipart order: image 0 with application data 0.</li>
           <li>Each item is validated independently.</li>
           <li>One bad item returns an item-level error and does not fail the whole batch.</li>
           <li>Concurrency is bounded with an async semaphore to protect provider stability.</li>

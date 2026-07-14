@@ -40,7 +40,7 @@ tests/        backend regression tests by endpoint or module
 
 - Health: `GET /health` returns service status for startup/deployment checks.
 - Single-label verification: `POST /verify` validates one uploaded label image plus seven canonical application fields, preprocesses the image, extracts fields through the configured vision provider, compares them, and returns a verdict.
-- Batch verification: `POST /verify/batch` processes multiple image/application pairs with bounded concurrency and per-item error isolation.
+- Batch verification: `POST /verify/batch` processes multiple ordered image and application-data items with bounded concurrency and per-item error isolation.
 - Reviewer recomparison: `POST /compare` recomputes backend-owned comparison results after a reviewer edits extracted values; it does not call vision or accept images.
 - Live smoke check: `scripts/live_checklist.py` posts the bundled sample label to a local or deployed `/verify` endpoint.
 

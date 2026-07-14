@@ -39,7 +39,6 @@ Result: typecheck passed; `29 passed`; production build passed.
 
 Important current gaps or risks:
 
-- Deployed backend p50/p95 latency is still documented as pending in `README.md`.
 - Final live deployed `/verify` and batch flow checks are still documented as pending.
 - Frontend batch workflow now calls `/verify/batch`; manual browser verification is still
   recommended for progress, summary, and drill-down UX.
@@ -59,10 +58,10 @@ Important current gaps or risks:
 | R-006 | Frontend uses React, TypeScript, and Vite. | MUST | Project rules/playbook | Inspect `frontend/package.json`, `src`, and Vite config. | Pass: typecheck, tests, and build passed. |
 | R-007 | Public API and backend model fields use exact snake_case canonical names. | MUST | Playbook data model | Search for alternate payload fields such as `alcohol_content`, `producer_name_address`, or camelCase. | Appears pass in core API/types. |
 | R-008 | Canonical fields are `brand_name`, `class_type`, `abv`, `net_contents`, `producer`, `country_of_origin`, `government_warning`. | MUST | Playbook data model | Inspect `ApplicationData`, `ExtractedLabel`, frontend TS types, request payloads, API docs. | Pass in backend tests and frontend types. |
-| R-009 | `GET /health` exists and returns service status. | MUST | Phase 0 | Run backend health test and local/deployed curl. | Backend test passed; deployed health still needs final confirmation. |
+| R-009 | `GET /health` exists and returns service status. | MUST | Phase 0 | Run backend health test and local/deployed curl. | Pass: backend test passed; deployed health returned ok on 2026-07-13. |
 | R-010 | Frontend first screen is the actual verification tool, not a marketing page. | MUST | Playbook/frontend phase | Inspect `App.tsx` and rendered UI. | Appears pass from workflow files; browser verification still recommended. |
 | R-011 | UI is usable by a non-technical older user with no instructions. | MUST | Sarah/Dave stakeholder notes, Phase 4 | Manual UX review: large controls, clear labels, obvious verify action, plain errors. | Needs browser/manual accessibility pass. |
-| R-012 | Single-label verification targets under 5 seconds and every single-label response includes `latency_ms`. | MUST | Playbook, stakeholder notes | Assert `/verify` response shape, logs, live p50/p95. | Backend tests pass; deployed latency pending. |
+| R-012 | Single-label verification targets under 5 seconds and every single-label response includes `latency_ms`. | MUST | Playbook, stakeholder notes | Assert `/verify` response shape, logs, live p50/p95. | Pass for warm deployed run: p50 `1501` ms, p95 `2527` ms on 2026-07-13; free-tier cold start may exceed target. |
 | R-013 | Batch upload is required. | MUST | Sarah stakeholder notes, Phase 5 | Confirm backend `/verify/batch`, frontend batch UI, progress/summary/drill-down. | Local automated pass: backend batch tests pass and frontend workflow calls `/verify/batch`; manual browser UX check still recommended. |
 | R-014 | Batch processing uses bounded concurrency. | MUST | Phase 5 | Inspect async semaphore/config and tests. | Pass in backend tests. |
 | R-015 | One bad batch item must not fail the whole batch. | MUST | Phase 5 | Endpoint tests for per-item errors and summary counts. | Pass in backend tests. |

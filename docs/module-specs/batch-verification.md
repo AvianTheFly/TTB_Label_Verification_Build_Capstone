@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-Support verifying multiple image and application-data pairs with bounded concurrency, item-level isolation, summary counts, and drill-down results.
+Support verifying multiple ordered image and application-data items with bounded concurrency, item-level isolation, summary counts, and drill-down results.
 
 ## 2. Phase
 
@@ -21,7 +21,7 @@ Inputs:
 - Users upload label images only; the frontend builds `application_data` from the editable application-data inputs.
 - Environment-configured `VisionService`; tests inject a mock service.
 - Provider credentials and model names must not be accepted from request fields. The frontend must never submit OpenAI API keys or provider-selection flags.
-- Items are paired by the order of provided multipart parts: first image with first application-data object, second image with second application-data object, and so on.
+- Items are matched by multipart order: first image with first application-data object, second image with second application-data object, and so on.
 - The frontend should submit only complete rows.
 
 Outputs:

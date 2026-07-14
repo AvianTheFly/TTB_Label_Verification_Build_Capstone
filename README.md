@@ -300,9 +300,8 @@ uv run python scripts/live_checklist.py --url https://YOUR_BACKEND_ORIGIN
 ```
 
 By default, the script uses the bundled `northstar-riesling` sample from `demo-data/inputs`.
-Image lookup can fall back to `frontend/public/demo-data/inputs` if needed, but application
-JSON lives under `demo-data/inputs`. Pass `--image` and `--application-data` to use a
-different sample.
+Image lookup can fall back to `frontend/public/demo-data/inputs` if needed. Pass `--image`
+and `--application-data` to use a different sample and explicit application-data JSON.
 
 Expected output:
 
@@ -347,12 +346,13 @@ Live measurement status:
 | Local `/verify` p50 `latency_ms` | `2979` | `uv run python scripts/live_checklist.py --url http://127.0.0.1:8000 --runs 5` on 2026-07-13. |
 | Local `/verify` p95 `latency_ms` | `3907` | Same 5-run local live OpenAI script output. |
 | Local round-trip p50/p95 | `2984` / `3941` | Same 5-run local live OpenAI script output. |
-| Deployed `/verify` p50 `latency_ms` | Pending | Run `backend/scripts/live_checklist.py --runs 20` after `OPENAI_API_KEY` is configured. |
-| Deployed `/verify` p95 `latency_ms` | Pending | Same 20-run script output, warm deployed service preferred. |
-| Cold-start round trip | Pending | Record first `round_trip_ms` separately on free-tier deploys. |
+| Deployed `/verify` p50 `latency_ms` | `1501` | `uv run python scripts/live_checklist.py --url https://ttb-label-verification-api-0i68.onrender.com --runs 20 --max-latency-ms 60000` on 2026-07-13. |
+| Deployed `/verify` p95 `latency_ms` | `2527` | Same 20-run Render live OpenAI script output after warm-up. |
+| Deployed round-trip p50/p95 | `1676` / `2694` | Same 20-run Render live OpenAI script output after warm-up. |
+| Cold-start round trip | Not recorded | First strict deployed timing check exceeded 5000 ms, consistent with possible free-tier cold start; warm p95 passed. |
 
-Deployed values remain pending until the Render backend is configured with the production
-environment and checked with the same script.
+The deployed warm p95 result is under the 5 second target. Free-tier cold starts may still exceed
+the target before the service is warm.
 
 ## Testing
 
@@ -437,8 +437,8 @@ GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink
 - Every verification request is self-contained and stateless.
 - Government warning text exactness is implemented; bold styling detection for the
   `GOVERNMENT WARNING:` lead-in is not claimed.
-- Real OpenAI extraction has been verified locally with backend environment credentials.
-- Measured deployed p50/p95 latency remains pending until the Render real-provider live pass.
+- Real OpenAI extraction has been verified locally and through the deployed Render backend.
+- Measured deployed warm p50/p95 latency is recorded in the performance section.
 - Free-tier hosting may add cold-start latency outside request-scoped `latency_ms`.
 - Demo/fake providers are for local tests and demos only; they are not a substitute for production
   vision extraction.

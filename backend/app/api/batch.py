@@ -34,7 +34,7 @@ async def verify_batch(
             raise ApiError(
                 status_code=422,
                 code="validation_error",
-                message="Please provide at least one label image and application data pair.",
+                message="Please provide at least one label image and application data item.",
                 details={"fields": ["images", "application_data"]},
             )
 
