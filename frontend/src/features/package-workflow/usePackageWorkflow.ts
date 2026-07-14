@@ -28,6 +28,8 @@ import {
   mergeParsedRecords,
   previewUrlsToRevoke,
   updateApplicationField,
+  updateApplicationFormatting,
+  updateExtractedFormatting,
   updateExtractedField
 } from "./recordMutations";
 import {
@@ -187,6 +189,19 @@ export function usePackageWorkflow() {
     );
   }
 
+  function updateApplicationBoldFormatting(packageId: string, isBold: boolean) {
+    setRecords((current) =>
+      current.map((record) =>
+        record.package_id === packageId
+          ? updateApplicationFormatting(record, {
+              ...record.application_formatting,
+              government_warning_lead_in_bold: isBold
+            })
+          : record
+      )
+    );
+  }
+
   function updateExtractedData(
     packageId: string,
     field: CanonicalLabelField,
@@ -196,6 +211,21 @@ export function usePackageWorkflow() {
       current.map((record) =>
         record.package_id === packageId
           ? updateExtractedField(record, field, value)
+          : record
+      )
+    );
+  }
+
+  function updateExtractedBoldFormatting(packageId: string, isBold: boolean) {
+    setRecords((current) =>
+      current.map((record) =>
+        record.package_id === packageId
+          ? updateExtractedFormatting(record, {
+              ...(record.reviewed_extracted_formatting ?? {
+                government_warning_lead_in_bold: null
+              }),
+              government_warning_lead_in_bold: isBold
+            })
           : record
       )
     );
@@ -388,6 +418,7 @@ export function usePackageWorkflow() {
       const result = await compareExtractedData(
         record.application_data,
         record.reviewed_extracted_data ?? emptyExtractedData(),
+        record.reviewed_extracted_formatting,
         fieldDecisions
       );
       setRecords((current) =>
@@ -478,7 +509,9 @@ export function usePackageWorkflow() {
     toggleStatusFilter,
     updateAdvancedFilter,
     updateApplicationData,
+    updateApplicationBoldFormatting,
     updateExtractedData,
+    updateExtractedBoldFormatting,
     verifyBatchApplications,
     verifySingleApplication
   };

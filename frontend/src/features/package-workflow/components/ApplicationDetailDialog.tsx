@@ -18,11 +18,13 @@ interface ApplicationDetailDialogProps {
     field: CanonicalLabelField,
     value: string
   ) => void;
+  onApplicationBoldFormattingChange: (packageId: string, isBold: boolean) => void;
   onExtractedDataChange: (
     packageId: string,
     field: CanonicalLabelField,
     value: string
   ) => void;
+  onExtractedBoldFormattingChange: (packageId: string, isBold: boolean) => void;
   onFieldEditComplete: (packageId: string) => void;
   onClose: () => void;
   onFieldDecision: (
@@ -38,8 +40,10 @@ interface ApplicationDetailDialogProps {
 export function ApplicationDetailDialog({
   detailHeadingRef,
   onApplicationDataChange,
+  onApplicationBoldFormattingChange,
   onClose,
   onExtractedDataChange,
+  onExtractedBoldFormattingChange,
   onFieldEditComplete,
   onFieldDecision,
   onVerify,
@@ -126,7 +130,9 @@ export function ApplicationDetailDialog({
           <div className="detail-fields">
             <DataPanel
               onApplicationDataChange={onApplicationDataChange}
+              onApplicationBoldFormattingChange={onApplicationBoldFormattingChange}
               onExtractedDataChange={onExtractedDataChange}
+              onExtractedBoldFormattingChange={onExtractedBoldFormattingChange}
               onFieldEditComplete={onFieldEditComplete}
               onFieldDecision={onFieldDecision}
               record={record}

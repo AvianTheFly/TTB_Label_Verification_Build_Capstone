@@ -74,7 +74,7 @@ export function comparisonRuleText(field: CanonicalLabelField): string {
     case "country_of_origin":
       return "PASS when the country means the same place. Common United States wording such as USA, US, and United States of America is treated as United States. FAIL when it names a different country.";
     case "government_warning":
-      return "This is strict. PASS only when the warning words and capitalization match exactly, after ignoring extra spaces. Title case, missing punctuation, or changed wording fails. Limitation: AI can have a hard time confirming that GOVERNMENT WARNING: is bold, so a person should still check bold styling.";
+      return "This is strict. PASS only when the warning words and capitalization match exactly, after ignoring extra spaces. Title case, missing punctuation, or changed wording fails. If AI clearly does not detect bold GOVERNMENT WARNING: text, this needs review. Uncertain bold styling still needs a person to check.";
   }
 }
 

@@ -21,6 +21,7 @@ from app.services.vision import (
     DEFAULT_OPENAI_VISION_MODEL,
     EXTRACTION_PROMPT,
     STRUCTURED_OUTPUT_SCHEMA,
+    WARNING_STYLE_FIELD,
     OpenAIVisionService,
     VisionServiceError,
     parse_structured_label_payload,
@@ -77,6 +78,13 @@ def make_image_bytes(size: tuple[int, int] = (800, 400), image_format: str = "PN
     output = BytesIO()
     image.save(output, format=image_format)
     return output.getvalue()
+
+
+def make_structured_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {field: None for field in CANONICAL_EXTRACTION_FIELDS}
+    payload[WARNING_STYLE_FIELD] = None
+    payload.update(overrides)
+    return payload
 
 
 @pytest.mark.asyncio
@@ -253,9 +261,7 @@ def test_openai_provider_reads_model_and_timeout_from_settings() -> None:
 
 
 def test_openai_provider_warm_client_reuses_built_client() -> None:
-    client = FakeOpenAIClient(
-        output_text=json.dumps({field: None for field in CANONICAL_EXTRACTION_FIELDS})
-    )
+    client = FakeOpenAIClient(output_text=json.dumps(make_structured_payload()))
     service = OpenAIVisionService(client=client, model="test-model")
 
     service.warm_client()
@@ -287,10 +293,12 @@ def test_parse_structured_output_preserves_government_warning_verbatim() -> None
             "producer": "Old Tom Distillery, Louisville, KY",
             "country_of_origin": "United States",
             "government_warning": warning,
+            "government_warning_lead_in_bold": True,
         }
     )
 
     assert result.government_warning == warning
+    assert result.government_warning_lead_in_bold is True
 
 
 def test_parse_structured_output_turns_blank_unknowns_into_null() -> None:
@@ -303,6 +311,7 @@ def test_parse_structured_output_turns_blank_unknowns_into_null() -> None:
             "producer": None,
             "country_of_origin": None,
             "government_warning": None,
+            "government_warning_lead_in_bold": None,
         }
     )
 
@@ -318,7 +327,7 @@ def test_parse_structured_output_rejects_malformed_json() -> None:
 
 
 def test_parse_structured_output_rejects_extra_provider_fields() -> None:
-    payload = {field: None for field in CANONICAL_EXTRACTION_FIELDS}
+    payload = make_structured_payload()
     payload["alcohol_content"] = "45%"
 
     with pytest.raises(VisionServiceError) as exc_info:
@@ -328,7 +337,7 @@ def test_parse_structured_output_rejects_extra_provider_fields() -> None:
 
 
 def test_parse_structured_output_rejects_missing_required_field() -> None:
-    payload = {field: None for field in CANONICAL_EXTRACTION_FIELDS}
+    payload = make_structured_payload()
     del payload["government_warning"]
 
     with pytest.raises(VisionServiceError) as exc_info:
@@ -340,8 +349,10 @@ def test_parse_structured_output_rejects_missing_required_field() -> None:
 @pytest.mark.asyncio
 async def test_openai_provider_uses_strict_structured_output_and_prompt_rules() -> None:
     image = preprocess_image(make_image_bytes(), "image/png")
-    payload = {field: None for field in CANONICAL_EXTRACTION_FIELDS}
-    payload["government_warning"] = "GOVERNMENT WARNING: Visible text."
+    payload = make_structured_payload(
+        government_warning="GOVERNMENT WARNING: Visible text.",
+        government_warning_lead_in_bold=False,
+    )
     client = FakeOpenAIClient(output_text=json.dumps(payload))
     service = OpenAIVisionService(client=client, model="test-model")
 
@@ -350,6 +361,7 @@ async def test_openai_provider_uses_strict_structured_output_and_prompt_rules() 
     request = client.responses.last_request
     assert request is not None
     assert result.government_warning == "GOVERNMENT WARNING: Visible text."
+    assert result.government_warning_lead_in_bold is False
     assert request["model"] == "test-model"
     assert request["store"] is False
     assert request["max_output_tokens"] == 500
@@ -358,16 +370,18 @@ async def test_openai_provider_uses_strict_structured_output_and_prompt_rules() 
     assert "Batch verification calls this prompt once per" in EXTRACTION_PROMPT
     assert "never combine information across labels" in EXTRACTION_PROMPT
     assert "Use only text that is visible in the current image" in EXTRACTION_PROMPT
-    assert "return null for all seven fields" in EXTRACTION_PROMPT
+    assert "return null for all seven text fields" in EXTRACTION_PROMPT
     assert "Do not guess, complete, correct, translate, normalize" in EXTRACTION_PROMPT
     assert "Put each visible text value in the most specific matching field" in EXTRACTION_PROMPT
     assert "brand_name is the product/brand name" in EXTRACTION_PROMPT
     assert "producer is bottler/producer/importer name and address text" in EXTRACTION_PROMPT
     assert "Copy government_warning verbatim" in EXTRACTION_PROMPT
+    assert "government_warning_lead_in_bold" in EXTRACTION_PROMPT
+    assert "Return true only when the lead-in appears bold" in EXTRACTION_PROMPT
     assert "absent, unreadable, obscured, ambiguous, or uncertain" in EXTRACTION_PROMPT
     assert "For blurry, angled, or glare-heavy images, return partial data" in EXTRACTION_PROMPT
     assert set(request["text"]["format"]["schema"]["properties"]) == set(
-        CANONICAL_EXTRACTION_FIELDS
+        (*CANONICAL_EXTRACTION_FIELDS, WARNING_STYLE_FIELD)
     )
 
 
@@ -375,8 +389,7 @@ async def test_openai_provider_uses_strict_structured_output_and_prompt_rules() 
 async def test_openai_provider_logs_timing_metadata_without_payload_contents(caplog) -> None:
     caplog.set_level("INFO", logger="app.services.vision")
     image = preprocess_image(make_image_bytes(), "image/png")
-    payload = {field: None for field in CANONICAL_EXTRACTION_FIELDS}
-    payload["brand_name"] = "OLD TOM DISTILLERY"
+    payload = make_structured_payload(brand_name="OLD TOM DISTILLERY")
     client = FakeOpenAIClient(output_text=json.dumps(payload))
     service = OpenAIVisionService(client=client, model="test-model")
 
@@ -467,7 +480,7 @@ class SlowResponses:
     async def create(self, **kwargs: Any) -> Any:
         await asyncio.sleep(1)
         return SimpleNamespace(
-            output_text=json.dumps({field: None for field in CANONICAL_EXTRACTION_FIELDS})
+            output_text=json.dumps(make_structured_payload())
         )
 
 

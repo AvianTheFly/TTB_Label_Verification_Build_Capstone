@@ -8,6 +8,8 @@ services:
     envVars:
       - key: APP_ENV
         value: production
+      - key: PYTHON_VERSION
+        value: 3.12.11
       - key: APP_NAME
         value: TTB Label Verification
       - key: APP_VERSION

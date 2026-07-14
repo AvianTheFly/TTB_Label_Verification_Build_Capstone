@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, FormEvent, KeyboardEvent } from "react";
 
 import type { CanonicalLabelField, FieldReviewDecision } from "../../../types/api";
 import { FIELD_CONFIGS } from "../../labelFields";
@@ -20,11 +20,13 @@ interface DataPanelProps {
     field: CanonicalLabelField,
     value: string
   ) => void;
+  onApplicationBoldFormattingChange: (packageId: string, isBold: boolean) => void;
   onExtractedDataChange: (
     packageId: string,
     field: CanonicalLabelField,
     value: string
   ) => void;
+  onExtractedBoldFormattingChange: (packageId: string, isBold: boolean) => void;
   onFieldEditComplete: (packageId: string) => void;
   onFieldDecision: (
     packageId: string,
@@ -36,7 +38,9 @@ interface DataPanelProps {
 
 export function DataPanel({
   onApplicationDataChange,
+  onApplicationBoldFormattingChange,
   onExtractedDataChange,
+  onExtractedBoldFormattingChange,
   onFieldEditComplete,
   onFieldDecision,
   record
@@ -120,6 +124,7 @@ export function DataPanel({
           const extractedValue = extractedData[field.name] ?? "";
           const selectedDecision = fieldDecisions[field.name];
           const isNumericTextField = field.name === "abv" || field.name === "net_contents";
+          const isGovernmentWarningField = field.name === "government_warning";
           const usesWrappedApplicationControl = field.multiline || !isNumericTextField;
           const inputMode = isNumericTextField ? "decimal" : undefined;
           const pattern = isNumericTextField ? ".*[0-9]+(\\.[0-9]+)?.*" : undefined;
@@ -168,7 +173,24 @@ export function DataPanel({
                   <label className="data-value-label" htmlFor={applicationId}>
                     Application
                   </label>
-                  {usesWrappedApplicationControl ? (
+                  {isGovernmentWarningField ? (
+                    <RichWarningTextarea
+                      aria-label={`Application Value ${field.label}`}
+                      className="application-value-input application-value-input--auto-grow application-value-input--rich"
+                      id={applicationId}
+                      isLeadInBold={
+                        record.application_formatting.government_warning_lead_in_bold === true
+                      }
+                      onBoldChange={(isBold) =>
+                        onApplicationBoldFormattingChange(record.package_id, isBold)
+                      }
+                      onBlur={() => onFieldEditComplete(record.package_id)}
+                      onChange={(value) =>
+                        onApplicationDataChange(record.package_id, field.name, value)
+                      }
+                      value={record.application_data[field.name]}
+                    />
+                  ) : usesWrappedApplicationControl ? (
                     <AutoGrowApplicationTextarea
                       aria-label={`Application Value ${field.label}`}
                       className="application-value-input application-value-input--auto-grow"
@@ -200,18 +222,39 @@ export function DataPanel({
                   <label className="data-value-label" htmlFor={extractedId}>
                     AI Detected
                   </label>
-                  <AutoGrowApplicationTextarea
-                    aria-label={`Extracted Value ${field.label}`}
-                    className="application-value-input application-value-input--auto-grow ai-detected-value-input"
-                    id={extractedId}
-                    onChange={(event) =>
-                      onExtractedDataChange(record.package_id, field.name, event.target.value)
-                    }
-                    onBlur={() => onFieldEditComplete(record.package_id)}
-                    placeholder="Not detected"
-                    readOnly={!hasExtractedData}
-                    value={extractedValue}
-                  />
+                  {isGovernmentWarningField ? (
+                    <RichWarningTextarea
+                      aria-label={`Extracted Value ${field.label}`}
+                      className="application-value-input application-value-input--auto-grow ai-detected-value-input application-value-input--rich"
+                      id={extractedId}
+                      isLeadInBold={
+                        record.reviewed_extracted_formatting?.government_warning_lead_in_bold === true
+                      }
+                      onBoldChange={(isBold) =>
+                        onExtractedBoldFormattingChange(record.package_id, isBold)
+                      }
+                      onBlur={() => onFieldEditComplete(record.package_id)}
+                      onChange={(value) =>
+                        onExtractedDataChange(record.package_id, field.name, value)
+                      }
+                      placeholder="Not detected"
+                      readOnly={!hasExtractedData}
+                      value={extractedValue}
+                    />
+                  ) : (
+                    <AutoGrowApplicationTextarea
+                      aria-label={`Extracted Value ${field.label}`}
+                      className="application-value-input application-value-input--auto-grow ai-detected-value-input"
+                      id={extractedId}
+                      onChange={(event) =>
+                        onExtractedDataChange(record.package_id, field.name, event.target.value)
+                      }
+                      onBlur={() => onFieldEditComplete(record.package_id)}
+                      placeholder="Not detected"
+                      readOnly={!hasExtractedData}
+                      value={extractedValue}
+                    />
+                  )}
                 </div>
               </div>
               {fieldResult?.message && (
@@ -272,6 +315,94 @@ function AutoGrowApplicationTextarea({
       value={value}
     />
   );
+}
+
+interface RichWarningTextareaProps {
+  "aria-label": string;
+  className: string;
+  id: string;
+  isLeadInBold: boolean;
+  onBoldChange: (isBold: boolean) => void;
+  onBlur: () => void;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  readOnly?: boolean;
+  value: string;
+}
+
+const WARNING_LEAD_IN = "GOVERNMENT WARNING:";
+
+function RichWarningTextarea({
+  "aria-label": ariaLabel,
+  className,
+  id,
+  isLeadInBold,
+  onBoldChange,
+  onBlur,
+  onChange,
+  placeholder,
+  readOnly = false,
+  value
+}: RichWarningTextareaProps) {
+  const editorRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) {
+      return;
+    }
+
+    editor.innerHTML = warningHtml(value, isLeadInBold);
+  }, [isLeadInBold, value]);
+
+  function handleInput(event: FormEvent<HTMLDivElement>) {
+    onChange(event.currentTarget.textContent ?? "");
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "b") {
+      event.preventDefault();
+      if (!readOnly) {
+        onBoldChange(!isLeadInBold);
+      }
+    }
+  }
+
+  return (
+    <div
+      aria-label={ariaLabel}
+      aria-multiline="true"
+      className={className}
+      contentEditable={!readOnly}
+      data-empty={!value.trim()}
+      data-placeholder={placeholder}
+      id={id}
+      onBlur={onBlur}
+      onInput={handleInput}
+      onKeyDown={handleKeyDown}
+      ref={editorRef}
+      role="textbox"
+      suppressContentEditableWarning
+      tabIndex={readOnly ? -1 : 0}
+    />
+  );
+}
+
+function warningHtml(value: string, isLeadInBold: boolean): string {
+  if (!isLeadInBold || !value.startsWith(WARNING_LEAD_IN)) {
+    return escapeHtml(value);
+  }
+
+  return `<strong>${escapeHtml(WARNING_LEAD_IN)}</strong>${escapeHtml(
+    value.slice(WARNING_LEAD_IN.length)
+  )}`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 interface FieldDecisionButtonProps {

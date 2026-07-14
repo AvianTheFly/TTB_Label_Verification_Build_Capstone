@@ -3,6 +3,7 @@ import type {
   CanonicalLabelField,
   ExtractedData,
   FieldReviewDecision,
+  LabelFormatting,
   VerificationResult
 } from "../../types/api";
 import { ACCEPTED_IMAGE_TYPES, FIELD_CONFIGS, emptyApplicationData } from "../labelFields";
@@ -22,8 +23,11 @@ export interface ApplicationPackageRecord {
   image_file: File;
   image_preview_url: string;
   application_data: ApplicationData;
+  application_formatting: LabelFormatting;
   original_extracted_data: ExtractedData | null;
+  original_extracted_formatting: LabelFormatting | null;
   reviewed_extracted_data: ExtractedData | null;
+  reviewed_extracted_formatting: LabelFormatting | null;
   comparison_result: VerificationResult | null;
   field_decisions: Partial<Record<CanonicalLabelField, FieldReviewDecision>>;
   status: VisibleStatus;
@@ -48,7 +52,9 @@ export interface ReviewedResultsApplication {
   image_filename: string;
   status: VisibleStatus;
   application_data: ApplicationData;
+  application_formatting: LabelFormatting;
   reviewed_extracted_data: ExtractedData | null;
+  reviewed_extracted_formatting: LabelFormatting | null;
   field_results: VerificationResult["results"];
   overall_verdict: VerificationResult["overall_verdict"] | null;
   errors: { code: string; message: string }[];
@@ -69,12 +75,22 @@ export function emptyExtractedData(): ExtractedData {
   };
 }
 
+export function emptyLabelFormatting(): LabelFormatting {
+  return {
+    government_warning_lead_in_bold: null
+  };
+}
+
 export function extractedDataFromResult(result: VerificationResult): ExtractedData {
   const extracted = emptyExtractedData();
   for (const fieldResult of result.results) {
     extracted[fieldResult.field] = fieldResult.found;
   }
   return extracted;
+}
+
+export function extractedFormattingFromResult(result: VerificationResult): LabelFormatting {
+  return result.extracted_formatting ?? emptyLabelFormatting();
 }
 
 export function statusFromResult(result: VerificationResult): VisibleStatus {
@@ -130,7 +146,9 @@ export function buildReviewedResultsExport(
       image_filename: record.image_filename,
       status: record.status,
       application_data: record.application_data,
+      application_formatting: record.application_formatting,
       reviewed_extracted_data: record.reviewed_extracted_data,
+      reviewed_extracted_formatting: record.reviewed_extracted_formatting,
       field_results: reviewedFieldResults(record),
       overall_verdict:
         record.comparison_result || Object.keys(record.field_decisions).length > 0
@@ -205,8 +223,11 @@ export async function parseApplicationPackages(files: File[]): Promise<{
     image_file: imageFile,
     image_preview_url: "",
     application_data: { ...emptyApplicationData },
+    application_formatting: emptyLabelFormatting(),
     original_extracted_data: null,
+    original_extracted_formatting: null,
     reviewed_extracted_data: null,
+    reviewed_extracted_formatting: null,
     comparison_result: null,
     field_decisions: {},
     status: "Pending Check" as VisibleStatus,

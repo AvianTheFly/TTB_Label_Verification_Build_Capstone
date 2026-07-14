@@ -7,6 +7,7 @@ from app.domain.models import (
     CanonicalField,
     ExtractedLabel,
     FieldResult,
+    LabelFormatting,
     MatchType,
     VerificationResult,
 )
@@ -91,7 +92,9 @@ def compare_net_contents(expected: str, found: str | None) -> FieldResult:
     return _fail("net_contents", "unit", expected, found, "Net contents do not match.")
 
 
-def compare_government_warning(expected: str, found: str | None) -> FieldResult:
+def compare_government_warning(
+    expected: str, found: str | None, lead_in_bold: bool | None = None
+) -> FieldResult:
     if found is None:
         return _fail("government_warning", "exact", expected, found, "No extracted value found.")
 
@@ -99,12 +102,31 @@ def compare_government_warning(expected: str, found: str | None) -> FieldResult:
     found_collapsed = collapse_whitespace(found)
 
     if expected_collapsed == found_collapsed:
+        if lead_in_bold is False:
+            return _fail(
+                "government_warning",
+                "exact",
+                expected,
+                found,
+                "Government warning text matches, but AI did not detect bold styling on the "
+                "GOVERNMENT WARNING: lead-in.",
+            )
+        if lead_in_bold is True:
+            return _pass(
+                "government_warning",
+                "exact",
+                expected,
+                found,
+                "Government warning text matches exactly after whitespace collapse, and AI "
+                "detected bold styling on the GOVERNMENT WARNING: lead-in.",
+            )
         return _pass(
             "government_warning",
             "exact",
             expected,
             found,
-            "Government warning text matches exactly after whitespace collapse.",
+            "Government warning text matches exactly after whitespace collapse. Bold lead-in "
+            "styling could not be confirmed automatically.",
         )
 
     return _fail(
@@ -131,11 +153,26 @@ FIELD_COMPARERS: tuple[tuple[CanonicalField, FieldComparer], ...] = (
 def compare_label(
     application_data: ApplicationData, extracted_label: ExtractedLabel
 ) -> VerificationResult:
-    results = [
-        compare(getattr(application_data, field), getattr(extracted_label, field))
-        for field, compare in FIELD_COMPARERS
-    ]
-    return build_verification_result(results)
+    results = []
+    for field, compare in FIELD_COMPARERS:
+        if field == "government_warning":
+            results.append(
+                compare_government_warning(
+                    application_data.government_warning,
+                    extracted_label.government_warning,
+                    extracted_label.government_warning_lead_in_bold,
+                )
+            )
+        else:
+            results.append(
+                compare(getattr(application_data, field), getattr(extracted_label, field))
+            )
+    return build_verification_result(
+        results,
+        extracted_formatting=LabelFormatting(
+            government_warning_lead_in_bold=extracted_label.government_warning_lead_in_bold
+        ),
+    )
 
 
 def _compare_fuzzy(field: CanonicalField, expected: str, found: str | None) -> FieldResult:

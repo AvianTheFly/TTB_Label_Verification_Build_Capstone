@@ -8,12 +8,14 @@ from app.domain.models import CANONICAL_FIELDS, ExtractedLabel
 from .vision_errors import VisionIssueCategory, VisionServiceError
 
 CANONICAL_EXTRACTION_FIELDS = CANONICAL_FIELDS
+WARNING_STYLE_FIELD = "government_warning_lead_in_bold"
 
 EXTRACTION_PROMPT = """Extract text from one alcohol beverage label image and sort it into
 the correct TTB label fields.
 
-Return exactly these seven canonical fields:
+Return exactly these seven canonical text fields:
 brand_name, class_type, abv, net_contents, producer, country_of_origin, government_warning.
+Also return government_warning_lead_in_bold as true, false, or null.
 
 Rules:
 - Treat each request as one label image. Batch verification calls this prompt once per
@@ -35,16 +37,21 @@ Rules:
   capitalization, punctuation, and wording.
 - If the government warning is partly unreadable, return only the visible readable text;
   do not fill gaps from memory.
+- For government_warning_lead_in_bold, inspect only the visible GOVERNMENT WARNING: lead-in.
+  Return true only when the lead-in appears bold, false only when it is clearly not bold, and
+  null when the image quality, font, crop, or contrast makes style uncertain.
 - For blurry, angled, or glare-heavy images, return partial data rather than failing.
-- If the image is not an alcohol label, return null for all seven fields.
+- If the image is not an alcohol label, return null for all seven text fields and null for
+  government_warning_lead_in_bold.
 """
 
 STRUCTURED_OUTPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
-        field: {"type": ["string", "null"]} for field in CANONICAL_EXTRACTION_FIELDS
+        **{field: {"type": ["string", "null"]} for field in CANONICAL_EXTRACTION_FIELDS},
+        WARNING_STYLE_FIELD: {"type": ["boolean", "null"]},
     },
-    "required": list(CANONICAL_EXTRACTION_FIELDS),
+    "required": [*CANONICAL_EXTRACTION_FIELDS, WARNING_STYLE_FIELD],
     "additionalProperties": False,
 }
 
@@ -59,6 +66,7 @@ class StructuredLabelOutput(BaseModel):
     producer: str | None
     country_of_origin: str | None
     government_warning: str | None
+    government_warning_lead_in_bold: bool | None
 
     @field_validator(
         "brand_name",

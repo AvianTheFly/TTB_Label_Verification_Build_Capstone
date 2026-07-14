@@ -22,7 +22,7 @@ def make_application(**overrides: str) -> ApplicationData:
     return ApplicationData(**data)
 
 
-def make_extracted(**overrides: str | None) -> ExtractedLabel:
+def make_extracted(**overrides: object) -> ExtractedLabel:
     data = {
         "brand_name": "Old Tom Distillery",
         "class_type": "Kentucky Straight Bourbon Whiskey",
@@ -170,6 +170,30 @@ def test_correct_all_caps_government_warning_passes() -> None:
 
     assert field_result.status == "PASS"
     assert field_result.match_type == "exact"
+    assert "could not be confirmed" in field_result.message
+
+
+def test_government_warning_fails_when_bold_lead_in_is_clearly_absent() -> None:
+    field_result = result_for_field(
+        make_application(),
+        make_extracted(government_warning_lead_in_bold=False),
+        "government_warning",
+    )
+
+    assert field_result.status == "FAIL"
+    assert field_result.found == CANONICAL_GOVERNMENT_WARNING
+    assert "did not detect bold styling" in field_result.message
+
+
+def test_government_warning_passes_when_bold_lead_in_is_detected() -> None:
+    field_result = result_for_field(
+        make_application(),
+        make_extracted(government_warning_lead_in_bold=True),
+        "government_warning",
+    )
+
+    assert field_result.status == "PASS"
+    assert "detected bold styling" in field_result.message
 
 
 def test_government_warning_compares_application_to_extracted_not_canonical() -> None:
@@ -290,7 +314,11 @@ def test_compare_label_returns_exactly_seven_canonical_fields_in_stable_order() 
 
 def test_models_use_exact_canonical_field_names() -> None:
     expected_application_fields = set(CANONICAL_FIELDS)
-    expected_extracted_fields = expected_application_fields | {"raw_text", "extraction_confidence"}
+    expected_extracted_fields = expected_application_fields | {
+        "government_warning_lead_in_bold",
+        "raw_text",
+        "extraction_confidence",
+    }
 
     assert set(ApplicationData.model_fields) == expected_application_fields
     assert set(ExtractedLabel.model_fields) == expected_extracted_fields
