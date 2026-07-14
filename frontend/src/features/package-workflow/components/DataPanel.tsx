@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
 
 import type { CanonicalLabelField, FieldReviewDecision } from "../../../types/api";
 import { FIELD_CONFIGS } from "../../labelFields";
@@ -106,6 +107,7 @@ export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: 
           const extractedValue = extractedData[field.name] ?? "";
           const selectedDecision = fieldDecisions[field.name];
           const isNumericTextField = field.name === "abv" || field.name === "net_contents";
+          const usesWrappedApplicationControl = field.multiline || !isNumericTextField;
           const inputMode = isNumericTextField ? "decimal" : undefined;
           const pattern = isNumericTextField ? ".*[0-9]+(\\.[0-9]+)?.*" : undefined;
 
@@ -153,10 +155,10 @@ export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: 
                   <label className="data-value-label" htmlFor={applicationId}>
                     Application
                   </label>
-                  {field.multiline ? (
-                    <textarea
+                  {usesWrappedApplicationControl ? (
+                    <AutoGrowApplicationTextarea
                       aria-label={`Application Value ${field.label}`}
-                      className="application-value-input application-value-input--multiline"
+                      className="application-value-input application-value-input--auto-grow"
                       id={applicationId}
                       onChange={(event) =>
                         onApplicationDataChange(record.package_id, field.name, event.target.value)
@@ -198,6 +200,46 @@ export function DataPanel({ onApplicationDataChange, onFieldDecision, record }: 
         })}
       </div>
     </section>
+  );
+}
+
+interface AutoGrowApplicationTextareaProps {
+  "aria-label": string;
+  className: string;
+  id: string;
+  onChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
+  value: string;
+}
+
+function AutoGrowApplicationTextarea({
+  "aria-label": ariaLabel,
+  className,
+  id,
+  onChange,
+  value
+}: AutoGrowApplicationTextareaProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = "auto";
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  }, [value]);
+
+  return (
+    <textarea
+      aria-label={ariaLabel}
+      className={className}
+      id={id}
+      onChange={onChange}
+      ref={textareaRef}
+      rows={1}
+      value={value}
+    />
   );
 }
 
