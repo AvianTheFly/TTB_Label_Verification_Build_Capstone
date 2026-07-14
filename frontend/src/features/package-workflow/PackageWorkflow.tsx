@@ -427,20 +427,21 @@ export function PackageWorkflow() {
           onFileInputChange={handleFileInputChange}
           validationErrors={validationErrors}
         >
-          <SearchPanel
-            advancedFilters={advancedFilters}
-            isAdvancedSearchOpen={isAdvancedSearchOpen}
-            onAdvancedFilterChange={updateAdvancedFilter}
-            onSearchTermChange={setSearchTerm}
-            onToggleAdvancedSearch={() => setIsAdvancedSearchOpen((isOpen) => !isOpen)}
-            searchTerm={searchTerm}
-          />
-
           <ApplicationsSection
             allRecordCount={records.length}
             filteredRecords={filteredRecords}
             onOpenDetail={openDetail}
             onToggleStatusFilter={toggleStatusFilter}
+            searchPanel={(
+              <SearchPanel
+                advancedFilters={advancedFilters}
+                isAdvancedSearchOpen={isAdvancedSearchOpen}
+                onAdvancedFilterChange={updateAdvancedFilter}
+                onSearchTermChange={setSearchTerm}
+                onToggleAdvancedSearch={() => setIsAdvancedSearchOpen((isOpen) => !isOpen)}
+                searchTerm={searchTerm}
+              />
+            )}
             sortedRecords={sortedRecords}
             statusFilters={statusFilters}
             summary={applicationSummary}

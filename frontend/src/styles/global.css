@@ -2078,33 +2078,121 @@ h1 {
 }
 
 .package-drop-surface {
+  position: relative;
   gap: clamp(0.875rem, 1.4vw, 1.15rem);
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 8px;
+  margin: -0.35rem;
+  padding: 0.35rem;
+  border: 2px solid rgba(55, 183, 169, 0.26);
+  border-radius: 12px;
+  background: rgba(55, 183, 169, 0.04);
 }
 
 .package-drop-surface--active {
-  background: transparent;
-  box-shadow: none;
+  border-color: #55e6d8;
+  background: rgba(55, 183, 169, 0.12);
+  box-shadow: 0 0 0 5px rgba(85, 230, 216, 0.16);
+}
+
+.package-drop-surface__overlay {
+  position: absolute;
+  inset: 0.35rem;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.45rem;
+  min-height: 11rem;
+  padding: 1.2rem;
+  border: 2px solid #a8fff6;
+  border-radius: 12px;
+  background: rgba(9, 35, 41, 0.9);
+  color: #f4fffd;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.992);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.package-drop-surface__overlay strong {
+  font-size: clamp(1.4rem, 1rem + 1.2vw, 2.2rem);
+  font-weight: 950;
+  line-height: 1.1;
+}
+
+.package-drop-surface__overlay span:last-child {
+  max-width: 34rem;
+  color: #d9f4f0;
+  font-size: 1.05rem;
+  font-weight: 850;
+}
+
+.package-drop-surface__overlay-icon {
+  position: relative;
+  width: 4rem;
+  height: 4rem;
+  border: 2px solid #a8fff6;
+  border-radius: 999px;
+  background: rgba(85, 230, 216, 0.18);
+  box-shadow: 0 0 0 10px rgba(85, 230, 216, 0.12);
+}
+
+.package-drop-surface__overlay-icon::before,
+.package-drop-surface__overlay-icon::after {
+  position: absolute;
+  content: "";
+}
+
+.package-drop-surface__overlay-icon::before {
+  left: 50%;
+  top: 0.95rem;
+  width: 1rem;
+  height: 1.55rem;
+  border-right: 3px solid #f4fffd;
+  border-bottom: 3px solid #f4fffd;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.package-drop-surface__overlay-icon::after {
+  left: 50%;
+  bottom: 0.95rem;
+  width: 1.65rem;
+  height: 0.22rem;
+  border-radius: 999px;
+  background: #f4fffd;
+  transform: translateX(-50%);
+}
+
+.package-drop-surface--active .package-drop-surface__overlay {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.package-drop-surface--active > :not(.package-drop-surface__overlay) {
+  opacity: 0.22;
 }
 
 .package-dropzone {
-  min-height: 7.25rem;
-  padding: clamp(0.9rem, 1.6vw, 1.25rem);
-  border: 1px dashed #637482;
-  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+  min-height: 8.75rem;
+  padding: clamp(1.1rem, 1.9vw, 1.55rem);
+  border: 2px dashed #63d8cc;
+  border-radius: 10px;
   background:
-    linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(166, 87, 8, 0.06)),
+    linear-gradient(135deg, rgba(55, 183, 169, 0.2), rgba(222, 145, 51, 0.08)),
     var(--surface);
-  box-shadow: 0 16px 44px rgba(4, 10, 16, 0.22);
+  box-shadow:
+    inset 0 0 0 1px rgba(174, 246, 238, 0.12),
+    0 18px 48px rgba(4, 10, 16, 0.28);
 }
 
 .package-dropzone--active {
-  border-color: var(--accent);
+  border-color: #9ff5ec;
   background:
-    linear-gradient(135deg, rgba(15, 118, 110, 0.16), rgba(166, 87, 8, 0.08)),
+    linear-gradient(135deg, rgba(55, 183, 169, 0.3), rgba(222, 145, 51, 0.12)),
     var(--surface);
 }
 
@@ -2120,9 +2208,9 @@ h1 {
   flex: 0 0 auto;
   width: 3.15rem;
   height: 3.15rem;
-  border: 1px solid rgba(55, 183, 169, 0.42);
+  border: 2px solid rgba(159, 245, 236, 0.58);
   border-radius: 8px;
-  background: rgba(55, 183, 169, 0.13);
+  background: rgba(55, 183, 169, 0.2);
 }
 
 .package-dropzone__icon::before,
@@ -2153,26 +2241,39 @@ h1 {
 }
 
 .package-dropzone p {
-  margin-top: 0.2rem;
-  color: var(--muted);
-  font-size: 0.95rem;
+  max-width: 40rem;
+  margin-top: 0.3rem;
+  color: #d9f4f0;
+  font-size: 1rem;
   font-weight: 800;
 }
 
+.package-dropzone__button {
+  border-color: #7af0e4;
+  background: #0f766e;
+  color: #f4fffd;
+  box-shadow: 0 10px 24px rgba(15, 118, 110, 0.28);
+}
+
+.package-dropzone__button:hover {
+  border-color: #a8fff6;
+  background: #159486;
+}
+
 .search-panel {
-  grid-template-columns: minmax(min(100%, 34rem), 1fr) max-content;
+  grid-template-columns: minmax(min(100%, 38rem), 1fr) max-content;
   gap: 0.75rem;
   align-items: end;
-  padding: 0.9rem;
-  border: 1px solid var(--line);
+  padding: 0.85rem;
+  border: 1px solid #5f7484;
   border-radius: 8px;
-  background: rgba(36, 49, 61, 0.9);
-  box-shadow: 0 10px 30px rgba(4, 10, 16, 0.2);
+  background: #22313c;
+  box-shadow: 0 12px 32px rgba(4, 10, 16, 0.24);
 }
 
 .search-panel__field {
   gap: 0.38rem;
-  color: var(--muted);
+  color: #d7e8ef;
   font-size: 0.82rem;
   text-transform: uppercase;
 }
@@ -2181,12 +2282,16 @@ h1 {
 .advanced-search-field input,
 .advanced-search-field select {
   min-height: 2.75rem;
-  border: 1px solid #546676;
+  border: 2px solid #6f8495;
   border-radius: 8px;
-  background: var(--surface);
+  background: #111d26;
   color: var(--ink);
   font-size: 0.96rem;
   font-weight: 750;
+}
+
+.search-panel__field input::placeholder {
+  color: #aebdca;
 }
 
 .advanced-search-panel {
@@ -3025,6 +3130,58 @@ select option {
 
 .decision-actions {
   border-top-color: #465665;
+}
+
+.package-drop-surface {
+  border-color: rgba(85, 230, 216, 0.3);
+  background: rgba(85, 230, 216, 0.05);
+}
+
+.package-dropzone {
+  border-color: #63d8cc;
+  background:
+    linear-gradient(135deg, rgba(55, 183, 169, 0.2), rgba(222, 145, 51, 0.08)),
+    #24313d;
+}
+
+.package-drop-surface__overlay {
+  border-color: #a8fff6;
+  background: rgba(9, 35, 41, 0.92);
+  color: #f4fffd;
+}
+
+.package-drop-surface__overlay span:last-child {
+  color: #d9f4f0;
+}
+
+.package-dropzone p {
+  color: #d9f4f0;
+}
+
+.secondary-button.package-dropzone__button {
+  border-color: #7af0e4;
+  background: #0f766e;
+  color: #f4fffd;
+}
+
+.secondary-button.package-dropzone__button:hover {
+  border-color: #a8fff6;
+  background: #159486;
+}
+
+.search-panel {
+  border-color: #5f7484;
+  background: #22313c;
+}
+
+.search-panel__field {
+  color: #d7e8ef;
+}
+
+.search-panel__field input,
+.advanced-search-field input,
+.advanced-search-field select {
+  border-color: #6f8495;
 }
 
 .detail-panel > .error-panel {
