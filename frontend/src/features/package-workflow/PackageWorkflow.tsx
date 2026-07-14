@@ -3,7 +3,8 @@ import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "re
 import {
   VerificationApiError,
   compareExtractedData,
-  verifyLabel
+  extractLabelText,
+  verifyBatch
 } from "../../api/verification";
 import type {
   CanonicalLabelField,
@@ -56,6 +57,26 @@ function errorMessageFor(error: unknown): string {
   }
 
   return "The verification service could not check these applications. Please try again.";
+}
+
+function validationMessageFor(record: ApplicationPackageRecord): string | null {
+  const missingFields = FIELD_CONFIGS.filter(
+    (field) => !record.application_data[field.name].trim()
+  );
+  if (missingFields.length > 0) {
+    return `Enter ${missingFields.map((field) => field.label).join(", ")} before verifying.`;
+  }
+
+  const invalidNumericFields = NUMERIC_APPLICATION_FIELDS.filter(
+    (field) => !HAS_NUMBER_RE.test(record.application_data[field.name])
+  );
+  if (invalidNumericFields.length > 0) {
+    return `Enter ${invalidNumericFields
+      .map((field) => `${field.label} with a number, such as ${field.example}`)
+      .join("; ")} before verifying.`;
+  }
+
+  return null;
 }
 
 export function PackageWorkflow() {
@@ -128,21 +149,36 @@ export function PackageWorkflow() {
     const parsed = await parseApplicationPackages(files);
     const currentRecords = recordsRef.current;
     const currentByKey = new Map(currentRecords.map((record) => [recordKey(record), record]));
+    const recordsToExtract: ApplicationPackageRecord[] = [];
     const nextRecords = parsed.records.map((record) => {
       const existing = currentByKey.get(recordKey(record));
       if (existing) {
-        return {
+        const imageChanged = existing.image_file !== record.image_file;
+        const nextRecord = {
           ...existing,
           image_file: record.image_file,
-          json_filename: record.json_filename,
-          image_filename: record.image_filename
+          image_filename: record.image_filename,
+          image_preview_url: imageChanged
+            ? createPreviewUrl(record.image_file)
+            : existing.image_preview_url,
+          original_extracted_data: imageChanged ? null : existing.original_extracted_data,
+          reviewed_extracted_data: imageChanged ? null : existing.reviewed_extracted_data,
+          comparison_result: imageChanged ? null : existing.comparison_result,
+          field_decisions: imageChanged ? {} : existing.field_decisions,
+          status: imageChanged ? "Pending Check" : existing.status,
+          item_error: imageChanged ? null : existing.item_error
         };
+        if (imageChanged) {
+          recordsToExtract.push(nextRecord);
+        }
+        return nextRecord;
       }
 
       const nextRecord = {
         ...record,
         image_preview_url: createPreviewUrl(record.image_file)
       };
+      recordsToExtract.push(nextRecord);
       return nextRecord;
     });
 
@@ -158,6 +194,7 @@ export function PackageWorkflow() {
       current && nextRecords.some((record) => record.package_id === current) ? current : null
     );
     setCheckError(null);
+    void extractUploadedRecords(recordsToExtract);
   }
 
   function addUploadedFiles(fileList: FileList | File[]) {
@@ -200,45 +237,70 @@ export function PackageWorkflow() {
     addUploadedFiles(event.dataTransfer.files);
   }
 
-  async function verifyApplication(packageId: string) {
-    const record = recordsRef.current.find((candidate) => candidate.package_id === packageId);
-    if (!record) {
+  async function extractUploadedRecords(recordsToExtract: ApplicationPackageRecord[]) {
+    if (recordsToExtract.length === 0) {
+      return;
+    }
+    setIsChecking(true);
+    setCheckError(null);
+
+    try {
+      for (const record of recordsToExtract) {
+        try {
+          const extractedData = await extractLabelText(record.image_file);
+          setRecords((current) =>
+            current.map((candidate) =>
+              candidate.package_id === record.package_id
+                ? {
+                    ...candidate,
+                    original_extracted_data: extractedData,
+                    reviewed_extracted_data: extractedData,
+                    item_error: null
+                  }
+                : candidate
+            )
+          );
+        } catch (error) {
+          const message = errorMessageFor(error);
+          setCheckError("Some labels could not be read. Open the application card for details.");
+          setRecords((current) =>
+            current.map((candidate) =>
+              candidate.package_id === record.package_id
+                ? { ...candidate, item_error: message, status: "Needs Review" }
+                : candidate
+            )
+          );
+        }
+      }
+    } finally {
+      setIsChecking(false);
+    }
+  }
+
+  async function verifyBatchApplications() {
+    const currentRecords = recordsRef.current;
+    if (currentRecords.length === 0) {
+      setCheckError("Choose label images before verifying the batch.");
       return;
     }
 
-    const missingFields = FIELD_CONFIGS.filter(
-      (field) => !record.application_data[field.name].trim()
-    );
-    if (missingFields.length > 0) {
-      setRecords((current) =>
-        current.map((candidate) =>
-          candidate.package_id === packageId
-            ? {
-                ...candidate,
-                item_error: `Enter ${missingFields.map((field) => field.label).join(", ")} before verifying.`
-              }
-            : candidate
-        )
-      );
-      return;
+    const validationMessages = new Map<string, string>();
+    for (const record of currentRecords) {
+      const message = validationMessageFor(record);
+      if (message) {
+        validationMessages.set(record.package_id, message);
+      }
     }
 
-    const invalidNumericFields = NUMERIC_APPLICATION_FIELDS.filter(
-      (field) => !HAS_NUMBER_RE.test(record.application_data[field.name])
-    );
-    if (invalidNumericFields.length > 0) {
+    if (validationMessages.size > 0) {
       setRecords((current) =>
-        current.map((candidate) =>
-          candidate.package_id === packageId
-            ? {
-                ...candidate,
-                item_error: `Enter ${invalidNumericFields
-                  .map((field) => `${field.label} with a number, such as ${field.example}`)
-                  .join("; ")} before verifying.`
-              }
-            : candidate
+        current.map((record) =>
+          validationMessages.has(record.package_id)
+            ? { ...record, item_error: validationMessages.get(record.package_id) ?? null }
+            : record
         )
       );
+      setCheckError("Enter the missing label details before verifying the batch.");
       return;
     }
 
@@ -246,18 +308,37 @@ export function PackageWorkflow() {
     setCheckError(null);
 
     try {
-      const result = await verifyLabel(record.image_file, record.application_data);
-      updateRecordWithResult(record.package_id, result);
-    } catch (error) {
-      const message = errorMessageFor(error);
-      setCheckError(message);
-      setRecords((current) =>
-        current.map((candidate) =>
-          candidate.package_id === packageId
-            ? { ...candidate, item_error: message, status: "Needs Review" }
-            : candidate
-        )
+      const submittedRecords = currentRecords.slice();
+      const batchResult = await verifyBatch(
+        submittedRecords.map((record) => ({
+          image: record.image_file,
+          application_data: record.application_data
+        }))
       );
+
+      for (const item of batchResult.items) {
+        const record = submittedRecords[item.index];
+        if (!record) {
+          continue;
+        }
+        if (item.result) {
+          updateRecordWithResult(record.package_id, item.result);
+        } else if (item.error) {
+          setRecords((current) =>
+            current.map((candidate) =>
+              candidate.package_id === record.package_id
+                ? {
+                    ...candidate,
+                    item_error: item.error?.message ?? "This application could not be checked.",
+                    status: "Needs Review"
+                  }
+                : candidate
+            )
+          );
+        }
+      }
+    } catch (error) {
+      setCheckError(errorMessageFor(error));
     } finally {
       setIsChecking(false);
     }
@@ -296,8 +377,6 @@ export function PackageWorkflow() {
                 ...record.application_data,
                 [field]: value
               },
-              original_extracted_data: null,
-              reviewed_extracted_data: null,
               comparison_result: null,
               field_decisions: {},
               status: "Pending Check",
@@ -451,6 +530,8 @@ export function PackageWorkflow() {
       <section className="tool-layout package-workflow" aria-labelledby="package-title">
         <WorkflowHeader
           isChecking={isChecking}
+          onVerifyBatch={verifyBatchApplications}
+          canVerifyBatch={records.length > 0}
           onDownloadDemoData={downloadDemoData}
         />
 
@@ -489,12 +570,10 @@ export function PackageWorkflow() {
         {selectedRecord && (
           <ApplicationDetailDialog
             detailHeadingRef={detailHeadingRef}
-            isChecking={isChecking}
             onClose={closeDetail}
             onApplicationDataChange={updateApplicationData}
             onExtractedDataChange={updateExtractedData}
             onFieldDecision={setFieldDecision}
-            onVerify={verifyApplication}
             record={selectedRecord}
           />
         )}

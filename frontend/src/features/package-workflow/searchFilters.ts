@@ -28,7 +28,6 @@ export function matchesApplicationSearch(
 
   return [
     record.package_id,
-    record.json_filename,
     record.image_filename,
     record.status,
     record.item_error ?? "",

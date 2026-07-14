@@ -81,6 +81,7 @@ async def process_batch_items(
     processed.sort(key=lambda item: item.index)
     return BatchResult(items=processed, summary=_summarize(processed))
 
+
 def _summarize(items: list[BatchItemResult]) -> BatchSummary:
     passed = sum(
         1

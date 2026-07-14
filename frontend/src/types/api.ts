@@ -33,6 +33,11 @@ export interface ExtractedData {
   government_warning: string | null;
 }
 
+export interface ExtractedLabelResponse extends ExtractedData {
+  raw_text?: string | null;
+  extraction_confidence?: number | null;
+}
+
 export type FieldStatus = "PASS" | "FAIL";
 export type OverallVerdict = "APPROVED" | "NEEDS_REVIEW";
 export type MatchType = "fuzzy" | "numeric" | "unit" | "synonym" | "exact";

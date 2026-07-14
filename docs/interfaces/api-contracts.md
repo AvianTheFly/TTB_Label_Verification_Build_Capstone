@@ -69,6 +69,39 @@ Rules:
 - Government warning failures must include the extracted warning text in `found`.
 - The API contract requires exact warning-text comparison. If warning styling detection is added later, document the optional evidence field before implementation; do not change the required seven-field application-data contract casually.
 
+## `POST /extract`
+
+Phase: 5/6 repair.
+
+Request: `multipart/form-data`
+
+- `image`: label image file.
+
+Provider selection and credentials are backend configuration only. The frontend must never send API keys, model names, or real-vs-mock provider flags.
+
+Success response:
+
+```json
+{
+  "brand_name": "Old Tom Distillery",
+  "class_type": "Kentucky Straight Bourbon Whiskey",
+  "abv": "45% Alc./Vol. (90 Proof)",
+  "net_contents": "750ml",
+  "producer": "OLD TOM DISTILLERY, LOUISVILLE KY",
+  "country_of_origin": "USA",
+  "government_warning": "GOVERNMENT WARNING: Test warning text.",
+  "raw_text": null,
+  "extraction_confidence": null
+}
+```
+
+Rules:
+
+- `/extract` runs image preprocessing and the configured `VisionService`.
+- `/extract` does not accept application data and does not compare fields.
+- Unknown or unclear fields are `null`, not guessed.
+- Public extracted field names remain the canonical snake_case fields.
+
 ## `POST /compare`
 
 Phase: 8B.
@@ -147,6 +180,8 @@ Request: `multipart/form-data`
 
 - `images`: repeated label image file parts.
 - `application_data`: repeated JSON string parts containing the canonical fields.
+
+Frontend note: users upload label images only. The frontend creates these `application_data` parts from the editable application-data inputs; users do not upload application JSON files.
 
 Provider selection and credentials are backend configuration only. The frontend must never send API keys, model names, or real-vs-mock provider flags. Production uses the environment-configured vision provider; automated tests inject a mocked `VisionService`.
 

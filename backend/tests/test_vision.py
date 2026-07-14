@@ -313,8 +313,15 @@ async def test_openai_provider_uses_strict_structured_output_and_prompt_rules() 
     assert request["max_output_tokens"] == 500
     assert request["text"]["format"]["strict"] is True
     assert request["text"]["format"]["schema"] == STRUCTURED_OUTPUT_SCHEMA
+    assert "Batch verification calls this prompt once per" in EXTRACTION_PROMPT
+    assert "never combine information across labels" in EXTRACTION_PROMPT
+    assert "Use only text that is visible in the current image" in EXTRACTION_PROMPT
+    assert "return null for all seven fields" in EXTRACTION_PROMPT
+    assert "Do not guess, complete, correct, translate, normalize" in EXTRACTION_PROMPT
+    assert "Put each visible text value in the most specific matching field" in EXTRACTION_PROMPT
+    assert "brand_name is the product/brand name" in EXTRACTION_PROMPT
+    assert "producer is bottler/producer/importer name and address text" in EXTRACTION_PROMPT
     assert "Copy government_warning verbatim" in EXTRACTION_PROMPT
-    assert "Do not guess missing fields" in EXTRACTION_PROMPT
     assert "absent, unreadable, obscured, ambiguous, or uncertain" in EXTRACTION_PROMPT
     assert "For blurry, angled, or glare-heavy images, return partial data" in EXTRACTION_PROMPT
     assert set(request["text"]["format"]["schema"]["properties"]) == set(
