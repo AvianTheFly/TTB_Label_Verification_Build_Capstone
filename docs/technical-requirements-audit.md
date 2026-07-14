@@ -43,8 +43,7 @@ Important current gaps or risks:
 - Final live deployed `/verify` and batch flow checks are still documented as pending.
 - Frontend batch workflow now calls `/verify/batch`; manual browser verification is still
   recommended for progress, summary, and drill-down UX.
-- Application data remains required, but uploaded application JSON files and JSON/image
-  pairing have been removed from the frontend workflow.
+- Application data remains required, and the frontend builds it from editable fields.
 - Government warning text exactness is implemented; bold styling detection is documented
   as not claimed.
 

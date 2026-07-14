@@ -632,6 +632,21 @@ describe("PackageWorkflow", () => {
     expect(container.textContent).toContain("Net Contents with a number");
   });
 
+  it("keeps AI detected text read-only until verification populates it", async () => {
+    mockWorkflowFetch();
+
+    await renderPackageWorkflow();
+    await chooseFiles([imageFile("label.png")]);
+    await act(async () => {
+      firstPackageButton().click();
+    });
+
+    const extractedBrand = container.querySelector('[aria-label="Extracted Value Brand Name"]');
+    expect(extractedBrand).toBeInstanceOf(HTMLTextAreaElement);
+    expect((extractedBrand as HTMLTextAreaElement).readOnly).toBe(true);
+    expect((extractedBrand as HTMLTextAreaElement).value).toBe("");
+  });
+
   it("opens detail view with brand header, image, editable values, and field decision icons", async () => {
     mockWorkflowFetch();
 
@@ -666,6 +681,7 @@ describe("PackageWorkflow", () => {
     expect(extractedBrand).toBeInstanceOf(HTMLTextAreaElement);
     expect(extractedBrand?.classList.contains("ai-detected-value-input")).toBe(true);
     expect((extractedBrand as HTMLTextAreaElement).rows).toBe(1);
+    expect((extractedBrand as HTMLTextAreaElement).readOnly).toBe(false);
     expect((extractedBrand as HTMLTextAreaElement).value).toBe("Old Tom Distillery");
     expect(buttonWithText("Close")).toBeInstanceOf(HTMLButtonElement);
     expect(container.querySelector('[aria-label="Fail Brand Name"]')).not.toBeNull();

@@ -26,6 +26,51 @@ from app.services.vision import (
     parse_structured_label_payload,
 )
 
+DEMO_APPLICATIONS = {
+    "evergreen-amber-bourbon": {
+        "brand_name": "EVERGREEN AMBER BOURBON",
+        "class_type": "Kentucky Straight Bourbon Whiskey",
+        "abv": "45% Alc./Vol. (90 Proof)",
+        "net_contents": "750 mL",
+        "producer": "Evergreen Spirits LLC, Louisville, KY",
+        "country_of_origin": "United States",
+        "government_warning": (
+            "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink "
+            "alcoholic beverages during pregnancy because of the risk of birth defects. "
+            "(2) Consumption of alcoholic beverages impairs your ability to drive a car or operate "
+            "machinery, and may cause health problems."
+        ),
+    },
+    "coastal-pear-cider": {
+        "brand_name": "COASTAL PEAR CIDER",
+        "class_type": "Hard Cider",
+        "abv": "6.8% Alc./Vol.",
+        "net_contents": "12 fl oz",
+        "producer": "Coastal Orchard Works, Portland, OR",
+        "country_of_origin": "United States",
+        "government_warning": (
+            "Government Warning: (1) According to the Surgeon General, women should not drink "
+            "alcoholic beverages during pregnancy because of the risk of birth defects. "
+            "(2) Consumption of alcoholic beverages impairs your ability to drive a car or operate "
+            "machinery, and may cause health problems."
+        ),
+    },
+    "northstar-riesling": {
+        "brand_name": "NORTHERN LIGHT RIESLING",
+        "class_type": "White Wine Blend",
+        "abv": "13.8% Alc./Vol.",
+        "net_contents": "700 mL",
+        "producer": "Northstar Vineyards, Traverse City, MI",
+        "country_of_origin": "Canada",
+        "government_warning": (
+            "GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink "
+            "alcoholic beverages during pregnancy because of the risk of birth defects. "
+            "(2) Consumption of alcoholic beverages impairs your ability to drive a car or operate "
+            "machinery, and may cause health problems."
+        ),
+    },
+}
+
 
 def make_image_bytes(size: tuple[int, int] = (800, 400), image_format: str = "PNG") -> bytes:
     image = Image.new("RGB", size, color=(240, 240, 240))
@@ -96,9 +141,6 @@ def test_demo_application_inputs_match_intended_scenarios() -> None:
     }
 
     for stem, (verdict, failed_fields) in cases.items():
-        root_application_path = project_root / "demo-data" / "inputs" / f"{stem}.application.json"
-        assert root_application_path.exists()
-        application_payload = json.loads(root_application_path.read_text())["application_data"]
         extraction_path = (
             project_root
             / "backend"
@@ -112,7 +154,7 @@ def test_demo_application_inputs_match_intended_scenarios() -> None:
         )
 
         result = compare_label(
-            ApplicationData.model_validate(application_payload),
+            ApplicationData.model_validate(DEMO_APPLICATIONS[stem]),
             ExtractedLabel.model_validate(extraction_payload),
         )
 

@@ -569,7 +569,6 @@ export function PackageWorkflow() {
     <main className="app-shell">
       <section className="tool-layout package-workflow" aria-labelledby="package-title">
         <WorkflowHeader
-          batchLimit={MAX_BATCH_ITEMS}
           canVerifyBatch={records.length > 0}
           isChecking={isChecking}
           onDownloadDemoData={downloadDemoData}

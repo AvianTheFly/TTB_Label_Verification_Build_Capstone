@@ -45,6 +45,7 @@ export function DataPanel({
     fail: true,
     pass: true
   });
+  const hasExtractedData = record.reviewed_extracted_data !== null;
   const extractedData = record.reviewed_extracted_data ?? emptyExtractedData();
   const fieldResults = new Map(
     sortedResults(record.comparison_result).map((result) => [result.field, result])
@@ -208,6 +209,7 @@ export function DataPanel({
                     }
                     onBlur={() => onFieldEditComplete(record.package_id)}
                     placeholder="Not detected"
+                    readOnly={!hasExtractedData}
                     value={extractedValue}
                   />
                 </div>
@@ -230,6 +232,7 @@ interface AutoGrowApplicationTextareaProps {
   onChange: (event: ChangeEvent<HTMLTextAreaElement>) => void;
   onBlur: () => void;
   placeholder?: string;
+  readOnly?: boolean;
   value: string;
 }
 
@@ -240,6 +243,7 @@ function AutoGrowApplicationTextarea({
   onChange,
   onBlur,
   placeholder,
+  readOnly = false,
   value
 }: AutoGrowApplicationTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -262,6 +266,7 @@ function AutoGrowApplicationTextarea({
       onChange={onChange}
       onBlur={onBlur}
       placeholder={placeholder}
+      readOnly={readOnly}
       ref={textareaRef}
       rows={1}
       value={value}

@@ -181,7 +181,7 @@ Request: `multipart/form-data`
 - `images`: repeated label image file parts.
 - `application_data`: repeated JSON string parts containing the canonical fields.
 
-Frontend note: users upload label images only. The frontend creates these `application_data` parts from the editable application-data inputs; users do not upload application JSON files.
+Frontend note: users upload label images only. The frontend creates `application_data` parts from the editable application-data inputs.
 
 Provider selection and credentials are backend configuration only. The frontend must never send API keys, model names, or real-vs-mock provider flags. Production uses the environment-configured vision provider; automated tests inject a mocked `VisionService`.
 

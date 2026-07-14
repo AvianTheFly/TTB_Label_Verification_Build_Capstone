@@ -194,17 +194,7 @@ select {
 }
 
 .batch-action-group {
-  display: grid;
-  gap: 4px;
-}
-
-.batch-action-hint {
-  max-width: 18rem;
-  margin: 0;
-  color: #64748b;
-  font-size: 0.72rem;
-  font-weight: 800;
-  line-height: 1.25;
+  display: flex;
 }
 
 .phase-label {
