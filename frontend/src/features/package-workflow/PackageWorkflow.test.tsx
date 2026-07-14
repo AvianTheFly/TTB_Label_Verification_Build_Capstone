@@ -819,6 +819,24 @@ describe("PackageWorkflow", () => {
     expect((extractedBrand as HTMLTextAreaElement).value).toBe("Reviewed Brand Text");
   });
 
+  it("keeps previous field decisions visible while editing application data", async () => {
+    mockWorkflowFetch();
+
+    await renderPackageWorkflow();
+    await uploadOpenFillAndVerify();
+
+    const failSummary = container.querySelector(".data-panel .section-stat--fail");
+    const passSummary = container.querySelector(".data-panel .section-stat--passed");
+    expect(failSummary?.textContent).toContain("0 fail");
+    expect(passSummary?.textContent).toContain("7 passed");
+
+    await changeField("Application Value Class / Type", "Kentucky Bourbon");
+
+    expect(failSummary?.textContent).toContain("0 fail");
+    expect(passSummary?.textContent).toContain("7 passed");
+    expect(container.querySelectorAll(".data-row--pass")).toHaveLength(7);
+  });
+
   it("preserves typed order in rich government warning fields", async () => {
     mockWorkflowFetch();
 

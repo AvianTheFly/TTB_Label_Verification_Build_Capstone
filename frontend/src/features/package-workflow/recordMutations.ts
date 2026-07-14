@@ -76,9 +76,19 @@ export function updateApplicationField(
       ...record.application_data,
       [field]: value
     },
-    comparison_result: null,
-    field_decisions: {},
-    status: "Pending Check",
+    comparison_result: record.comparison_result
+      ? {
+          ...record.comparison_result,
+          results: record.comparison_result.results.map((fieldResult) =>
+            fieldResult.field === field
+              ? {
+                  ...fieldResult,
+                  expected: value
+                }
+              : fieldResult
+          )
+        }
+      : record.comparison_result,
     item_error: null
   };
 }
@@ -90,9 +100,6 @@ export function updateApplicationFormatting(
   return {
     ...record,
     application_formatting: formatting,
-    comparison_result: null,
-    field_decisions: {},
-    status: "Pending Check",
     item_error: null
   };
 }
