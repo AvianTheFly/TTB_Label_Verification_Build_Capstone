@@ -174,7 +174,6 @@ function reviewedFieldResults(record: ApplicationPackageRecord): VerificationRes
 
 export async function parseApplicationPackages(files: File[]): Promise<{
   records: ApplicationPackageRecord[];
-  incomplete_records: [];
   errors: PackageValidationError[];
 }> {
   const images = new Map<string, File>();
@@ -215,7 +214,7 @@ export async function parseApplicationPackages(files: File[]): Promise<{
     item_error: null
   }));
 
-  return { records, incomplete_records: [], errors };
+  return { records, errors };
 }
 
 export function isSupportedImageFile(file: File): boolean {

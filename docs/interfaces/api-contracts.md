@@ -185,9 +185,9 @@ Frontend note: users upload label images only. The frontend creates `application
 
 Provider selection and credentials are backend configuration only. The frontend must never send API keys, model names, or real-vs-mock provider flags. Production uses the environment-configured vision provider; automated tests inject a mocked `VisionService`.
 
-Pairing rule:
+Batch item order:
 
-- Items are paired by the order of provided multipart parts.
+- Items are matched by the order of provided multipart parts.
 - The first provided `images` part is verified with the first provided `application_data` part.
 - The second provided `images` part is verified with the second provided `application_data` part, and so on.
 - The frontend should submit only complete rows, with one image and one application-data object for each label.

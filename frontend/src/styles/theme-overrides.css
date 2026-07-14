@@ -20,8 +20,7 @@
 .export-panel,
 .summary-card,
 .mode-switch,
-.batch-actions,
-.incomplete-warning {
+.batch-actions {
   border-color: var(--line);
   background: var(--surface);
   color: var(--ink);
@@ -64,7 +63,6 @@
 
 .review-summary p,
 .summary-card span,
-.incomplete-warning,
 .error-panel p {
   color: var(--muted);
 }
@@ -299,4 +297,3 @@ select option {
   margin: 0 0.85rem 0.65rem;
   padding: 0.65rem 0.8rem;
 }
-

@@ -279,7 +279,6 @@ describe("package parser", () => {
 
     expect(result.errors).toEqual([]);
     expect(result.records).toHaveLength(1);
-    expect(result.incomplete_records).toEqual([]);
     expect(result.records[0].image_filename).toBe("label.png");
     expect(result.records[0].application_data).toEqual({
       brand_name: "",
@@ -297,7 +296,6 @@ describe("package parser", () => {
     const result = await parseApplicationPackages([imageFile("first.png"), imageFile("second.png")]);
 
     expect(result.errors).toEqual([]);
-    expect(result.incomplete_records).toEqual([]);
     expect(result.records.map((record) => record.image_filename)).toEqual([
       "first.png",
       "second.png"
@@ -311,14 +309,13 @@ describe("package parser", () => {
     ]);
 
     expect(result.errors).toEqual([]);
-    expect(result.incomplete_records).toEqual([]);
     expect(result.records.map((record) => record.image_filename)).toEqual([
       "second.png",
       "first.png"
     ]);
   });
 
-  it("rejects non-image files instead of creating incomplete applications", async () => {
+  it("rejects non-image files without creating applications for them", async () => {
     const result = await parseApplicationPackages([
       new File(["{}"], "metadata.json", { type: "application/json" }),
       imageFile("orphan-image.png")
@@ -326,7 +323,6 @@ describe("package parser", () => {
 
     expect(result.records).toHaveLength(1);
     expect(result.records[0].image_filename).toBe("orphan-image.png");
-    expect(result.incomplete_records).toEqual([]);
     expect(result.errors).toEqual([
       expect.objectContaining({
         code: "unsupported_image_type",
@@ -393,7 +389,6 @@ describe("PackageWorkflow", () => {
     expect(container.textContent).not.toContain("Submit");
     expect(container.textContent).toContain("Upload Labels");
     expect(container.textContent).toContain("Applications");
-    expect(container.textContent).not.toContain("Incomplete Applications");
     expect(container.textContent).not.toContain("Use OPENAI KEY");
     expect(container.textContent).not.toContain("API Key");
     expect(container.textContent).not.toContain("Check Applications");
@@ -461,7 +456,6 @@ describe("PackageWorkflow", () => {
     await renderPackageWorkflow();
     await chooseFiles([new File(["{}"], "metadata.json", { type: "application/json" })]);
 
-    expect(container.textContent).not.toContain("Incomplete Applications");
     expect(container.textContent).toContain("metadata.json was not added");
     expect(fetch).not.toHaveBeenCalled();
 
@@ -494,7 +488,7 @@ describe("PackageWorkflow", () => {
     expect(container.textContent).toContain("1 total");
   });
 
-  it("does not show incomplete-application filters", async () => {
+  it("keeps unsupported files out of application counts", async () => {
     await renderPackageWorkflow();
     await chooseFiles([
       new File(["{}"], "metadata.json", { type: "application/json" }),
