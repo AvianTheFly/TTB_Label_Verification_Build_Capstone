@@ -16,3 +16,11 @@ Recorded during deployed verification testing.
 - `latency_ms` is the API-reported single-label verification timing.
 - Round-trip timing includes client-to-server request/response overhead.
 - Results are under the 5 second single-label target.
+
+## Cold Start
+
+- The timings above are warm verification timings.
+- On 2026-07-21, a cold `/health` request took about 11.2 seconds and the next warm request took
+  about 0.14 seconds.
+- The frontend displays **Waking verification service** while the free-tier backend starts. Cold
+  hosting startup is disclosed separately from the backend-reported single-label `latency_ms`.

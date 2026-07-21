@@ -68,8 +68,8 @@ Rules:
 - Government warning failures include the extracted warning text in `found`.
 - If best-effort style extraction explicitly reports `government_warning_lead_in_bold=false`, the
   `government_warning` field fails.
-- If warning style is unknown, text can pass and the message states that bold styling was not
-  confirmed automatically.
+- If warning style is unknown (`government_warning_lead_in_bold=null`), the warning field fails and
+  the result explains that the text is likely compliant but bold styling requires human review.
 - `extracted_formatting` carries optional style evidence from extraction or reviewer edits. It is
   separate from the seven canonical application fields.
 
@@ -122,6 +122,10 @@ Success response:
 
 Rules:
 
+- One request accepts at most the configured `MAX_BATCH_ITEMS` value; the submitted deployment uses
+  25.
+- The frontend preserves one user-visible workload while sending more than 25 items as sequential
+  ordered requests and mapping each group result back to its original application card.
 - Batch processing uses bounded concurrency.
 - One missing, invalid, or failed item does not fail the whole batch.
 - Each item contains either `result` or `error`.
@@ -160,6 +164,8 @@ Rules:
 - Unknown or unclear text fields are `null`, not guessed.
 - `government_warning_lead_in_bold` is best-effort style evidence and may be `true`, `false`, or
   `null`.
+- A `null` style result is not an approval: `/verify` and `/compare` route the warning to human
+  review until a reviewer confirms the formatting.
 
 ## `POST /compare`
 

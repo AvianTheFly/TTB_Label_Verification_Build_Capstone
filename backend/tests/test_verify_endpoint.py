@@ -58,6 +58,7 @@ def make_extracted_label(**overrides: object) -> ExtractedLabel:
         "producer": "OLD TOM DISTILLERY, LOUISVILLE KY",
         "country_of_origin": "USA",
         "government_warning": CANONICAL_GOVERNMENT_WARNING,
+        "government_warning_lead_in_bold": True,
     }
     data.update(overrides)
     return ExtractedLabel(**data)
@@ -121,7 +122,7 @@ def test_valid_verify_submission_returns_full_verification_result() -> None:
     body = response.json()
     assert_verification_result_literals(body)
     assert body["overall_verdict"] == "APPROVED"
-    assert body["extracted_formatting"] == {"government_warning_lead_in_bold": None}
+    assert body["extracted_formatting"] == {"government_warning_lead_in_bold": True}
     assert isinstance(body["latency_ms"], int)
     assert body["latency_ms"] >= 0
     assert len(body["results"]) == 7
@@ -202,6 +203,30 @@ def test_warning_needs_review_when_bold_lead_in_is_clearly_absent() -> None:
     assert warning_result["status"] == "FAIL"
     assert warning_result["found"] == CANONICAL_GOVERNMENT_WARNING
     assert "did not detect bold styling" in warning_result["message"]
+
+
+def test_warning_needs_review_when_boldness_cannot_be_determined() -> None:
+    client, _ = make_client(
+        FakeVisionService(result=make_extracted_label(government_warning_lead_in_bold=None))
+    )
+
+    response = post_verify(
+        client,
+        application_data=make_application_data(),
+        image_bytes=make_image_bytes(),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["overall_verdict"] == "NEEDS_REVIEW"
+    assert body["extracted_formatting"] == {"government_warning_lead_in_bold": None}
+    warning_result = next(
+        result for result in body["results"] if result["field"] == "government_warning"
+    )
+    assert warning_result["status"] == "FAIL"
+    assert warning_result["found"] == CANONICAL_GOVERNMENT_WARNING
+    assert "could not determine" in warning_result["message"]
+    assert "likely compliant" in warning_result["message"]
 
 
 def test_warning_failure_message_surfaces_normalized_extracted_text() -> None:

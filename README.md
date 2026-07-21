@@ -1,301 +1,72 @@
 # TTB Label Verification
 
-Live frontend: https://ttb-label-verification-build-capsto.vercel.app/
+AI-assisted proof of concept for comparing alcohol label images with application data. Reviewers can
+verify one label or a workload of hundreds, inspect field-level differences, and flag uncertain
+results for human review.
 
-Live backend: https://ttb-label-verification-api-0i68.onrender.com
+[Live application](https://ttb-label-verification-build-capsto.vercel.app/) ·
+[API health](https://ttb-label-verification-api-0i68.onrender.com/health) ·
+[Approach, tools, and assumptions](DOCUMENTATION.md) ·
+[API contracts](docs/interfaces/api-contracts.md)
 
-Public repository: https://github.com/AvianTheFly/TTB_Label_Verification_Build_Capstone
+> This is a review aid, not an official TTB approval system. It does not connect to COLA and does
+> not persist uploaded images or application data.
 
-AI-assisted proof-of-concept for checking alcohol beverage label images against structured
-application data. The app is standalone, stateless, and does not integrate with COLA or use a
-database.
+## Setup and run
 
-## Source Requirements
+### Prerequisites
 
-- `TTB_Label_Verification_Build_Playbook 1.pdf`
-- `Additional Project Requirements`
-- Supplemental audit: `docs/technical-requirements-audit.md`
+- Python 3.12
+- [`uv`](https://docs.astral.sh/uv/)
+- Node.js 22 and npm
 
-## What It Does
+### 1. Start the backend
 
-- Upload one or more JPG, PNG, or WEBP label images.
-- Create one application review card per image.
-- Enter the seven TTB-style application fields for each label.
-- Verify one application or verify the full batch.
-- Review `APPROVED` or `NEEDS_REVIEW` verdicts with per-field expected-vs-found details.
-- Use Ctrl+B in the government warning application and AI-detected fields to mark the warning
-  lead-in as bold during review.
-- Edit AI-detected text and re-run backend comparison through `/compare`.
-
-The first screen is the actual verification tool, not a marketing page. Manual deployed checks for
-single-label, batch, and accessibility/UX were recorded as passed before final submission cleanup.
-
-## Notable UI Extras
-
-These features are outside the core backend comparison requirement but make manual review faster:
-
-- Hover-to-zoom label inspection with a magnified image pane.
-- Rotate buttons for tilted label photos.
-- Drag/pan image positioning for closer inspection.
-- Lock/freeze zoom position while comparing text.
-- Search and advanced filters for finding applications in a batch.
-- Status count buttons for filtering applications and individual fields by pass/review state.
-- Pass/review field decision buttons for reviewer overrides after human inspection.
-
-## Canonical Fields
-
-Public API payloads use these exact snake_case names:
-
-- `brand_name`
-- `class_type`
-- `abv`
-- `net_contents`
-- `producer`
-- `country_of_origin`
-- `government_warning`
-
-User-facing labels may say friendly names such as "Alcohol Content", but API and model contracts
-keep the canonical names.
-
-## Architecture
-
-```text
-frontend/
-  React + TypeScript + Vite
-  upload surface, application cards, detail review, results, batch verification
-
-backend/
-  FastAPI + Pydantic v2 + uv
-  /health, /verify, /verify/batch, /extract, /compare
-  request validation, image preprocessing, vision provider boundary, comparison engine
-```
-
-Key boundaries:
-
-- `backend/app/domain/`: pure comparison logic, no FastAPI, files, network, or provider clients.
-- `backend/app/services/vision.py`: explicit `VisionService` provider interface.
-- `backend/app/services/image_preprocess.py`: request-scoped image validation and re-encoding.
-- `frontend/src/types/api.ts`: TypeScript types that mirror backend API field names.
-
-## Comparison Rules
-
-- `brand_name`, `class_type`, `producer`: fuzzy match after normalization.
-- `country_of_origin`: synonym normalization, such as `USA` and `United States`.
-- `abv`: numeric alcohol-content comparison with tolerance.
-- `net_contents`: unit normalization to mL.
-- `government_warning`: exact, case-sensitive comparison after whitespace collapse only.
-
-Verdict rule:
-
-- all fields `PASS` -> `APPROVED`
-- any field `FAIL` -> `NEEDS_REVIEW`
-
-Government warning failures always include the extracted warning text in `found` so a reviewer can
-inspect OCR/model mistakes.
-
-## Warning Style Detection
-
-The source requirements call out `GOVERNMENT WARNING:` as all caps and bold. This app enforces the
-text exactness requirement and also asks the vision provider for best-effort visual evidence. The
-frontend also lets reviewers use Ctrl+B in the government warning application and AI-detected fields
-to visibly mark the `GOVERNMENT WARNING:` lead-in bold after manual review.
-
-- `government_warning_lead_in_bold=true`: text can pass and the result message notes bold was detected.
-- `government_warning_lead_in_bold=false`: the warning field fails and needs review.
-- `government_warning_lead_in_bold=null`: text can pass, but the message notes bold styling was not confirmed.
-
-This is intentionally documented as weak evidence. Font weight detection from a label photo can be
-uncertain, especially with blur, glare, compression, small text, or unusual fonts.
-
-## Performance
-
-Single-label responses include backend `latency_ms`.
-
-Measured deployed p50/p95 score from `docs/deployed-timing-results.md`:
-
-| Metric | Result |
-| --- | ---: |
-| Deployed `latency_ms` p50 | 1501 ms |
-| Deployed `latency_ms` p95 | 2527 ms |
-| Deployed round-trip p50 | 1676 ms |
-| Deployed round-trip p95 | 2694 ms |
-
-These warm deployed p50/p95 results are under the 4.5-second OpenAI provider timeout and the
-5-second single-label target. Free-tier hosting can still add a
-cold-start delay before the backend is warm; the frontend shows a visible startup/loading status so
-the user is not left guessing during that delay.
-
-The real OpenAI provider timeout is set to 4.5 seconds so provider calls stay inside the single-label
-latency budget.
-
-## Environment
-
-Secrets belong only in local `.env` files or deployment-provider environment settings.
-
-Backend:
-
-| Variable | Purpose |
-| --- | --- |
-| `APP_ENV` | Runtime environment name. |
-| `BACKEND_CORS_ORIGINS` | Comma-separated allowed frontend origins. |
-| `MAX_UPLOAD_MB` | Maximum uploaded image size. |
-| `MAX_BATCH_ITEMS` | Maximum labels per batch request. |
-| `BATCH_CONCURRENCY_LIMIT` | Maximum concurrent batch items. |
-| `IMAGE_MAX_DIMENSION` | Maximum preprocessed image dimension. |
-| `IMAGE_JPEG_QUALITY` | JPEG quality for re-encoded images. |
-| `IMAGE_REENCODE_THRESHOLD_BYTES` | Size threshold for re-encoding. |
-| `VISION_PROVIDER` | `openai`, `demo`, or `fake`. Production uses `openai`. |
-| `VISION_MODEL` | OpenAI model used by the real provider. |
-| `OPENAI_TIMEOUT_SECONDS` | OpenAI client timeout; submitted value is `4.5` seconds. |
-| `OPENAI_API_KEY` | Backend-only OpenAI API key. |
-
-Model configuration: the backend reads `VISION_PROVIDER` and `VISION_MODEL` from environment
-variables. The submitted configuration uses `VISION_PROVIDER=openai` with `VISION_MODEL=gpt-5.4-nano`;
-the provider model name is not hardcoded in application logic.
-
-Frontend:
-
-| Variable | Purpose |
-| --- | --- |
-| `VITE_API_BASE_URL` | Backend origin used by the deployed or local frontend. |
-
-## Setup
-
-Backend requires Python 3.12. Frontend requires Node 22.
-
-```bash
-cp .env.example .env
-```
-
-Backend:
+The demo provider works without an OpenAI key and is the quickest way to run the project locally.
 
 ```bash
 cd backend
-uv sync
+cp ../.env.example .env
+uv sync --extra dev
+VISION_PROVIDER=demo OPENAI_API_KEY= uv run uvicorn app.main:app \
+  --reload --host 127.0.0.1 --port 8000
 ```
 
-Frontend:
+The API is available at `http://127.0.0.1:8000`; interactive API documentation is at
+`http://127.0.0.1:8000/docs`.
+
+To use real AI extraction, set these values in `backend/.env`, then start the same server without
+the inline demo variables:
+
+```dotenv
+VISION_PROVIDER=openai
+VISION_MODEL=gpt-5.4-nano
+OPENAI_TIMEOUT_SECONDS=4.5
+OPENAI_API_KEY=your_key_here
+```
+
+Never commit the `.env` file or expose the API key to the frontend.
+
+### 2. Start the frontend
+
+In a second terminal:
 
 ```bash
 cd frontend
 npm install
-```
-
-## Run Locally
-
-Backend with local demo extraction fixtures:
-
-```bash
-cd backend
-VISION_PROVIDER=demo OPENAI_API_KEY= uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
-```
-
-Frontend:
-
-```bash
-cd frontend
 VITE_API_BASE_URL=http://127.0.0.1:8000 npm run dev
 ```
 
-Open `http://localhost:5173`.
+Open `http://localhost:5173`. Use **Sample Labels** in the app if you do not have label images ready.
 
-For real extraction, run the backend with `VISION_PROVIDER=openai`, `VISION_MODEL` set, and
-`OPENAI_API_KEY` set in the backend environment.
-
-## API Summary
-
-`GET /health`
-
-```json
-{
-  "status": "ok",
-  "service": "ttb-label-verification",
-  "version": "0.1.0"
-}
-```
-
-`POST /verify`
-
-- Multipart fields: `image`, `application_data`.
-- Returns `VerificationResult` with `results`, `overall_verdict`, `latency_ms`, and optional
-  `extracted_formatting`.
-
-`POST /verify/batch`
-
-- Multipart fields: repeated `images`, repeated `application_data`.
-- Uses bounded concurrency.
-- One bad item returns an item-level error instead of failing the full batch.
-- Summary contains `passed`, `needs_review`, and `total`.
-
-`POST /extract`
-
-- Multipart field: `image`.
-- Returns extracted label fields plus optional style evidence.
-
-`POST /compare`
-
-- JSON fields: `application_data`, `extracted_data`, optional `extracted_formatting`, optional
-  `field_decisions`.
-- Recomputes backend comparison without calling the vision provider.
-
-See `docs/interfaces/api-contracts.md` and `docs/interfaces/error-contracts.md` for exact shapes.
-
-## API Examples
-
-Run these examples against a local backend started on `http://127.0.0.1:8000`. Replace image paths
-with local JPG, PNG, or WEBP files.
-
-Single-label verification:
-
-```bash
-curl -sS http://127.0.0.1:8000/verify \
-  -F "image=@./sample-label.jpg" \
-  -F 'application_data={
-    "brand_name":"Example Cellars",
-    "class_type":"Red Wine",
-    "abv":"13.5%",
-    "net_contents":"750 ml",
-    "producer":"Example Cellars, Napa, CA",
-    "country_of_origin":"United States",
-    "government_warning":"GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems."
-  }'
-```
-
-Batch verification:
-
-```bash
-curl -sS http://127.0.0.1:8000/verify/batch \
-  -F "images=@./sample-label-1.jpg" \
-  -F "images=@./sample-label-2.jpg" \
-  -F 'application_data={
-    "brand_name":"Example Cellars",
-    "class_type":"Red Wine",
-    "abv":"13.5%",
-    "net_contents":"750 ml",
-    "producer":"Example Cellars, Napa, CA",
-    "country_of_origin":"United States",
-    "government_warning":"GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems."
-  }' \
-  -F 'application_data={
-    "brand_name":"Example Brewing",
-    "class_type":"Beer",
-    "abv":"5.0%",
-    "net_contents":"12 fl oz",
-    "producer":"Example Brewing, Austin, TX",
-    "country_of_origin":"United States",
-    "government_warning":"GOVERNMENT WARNING: (1) According to the Surgeon General, women should not drink alcoholic beverages during pregnancy because of the risk of birth defects. (2) Consumption of alcoholic beverages impairs your ability to drive a car or operate machinery, and may cause health problems."
-  }'
-```
-
-## Checks
+### 3. Run the checks
 
 Backend:
 
 ```bash
 cd backend
-uv run --extra dev python --version
-uv run --extra dev ruff check .
-uv run --extra dev pytest
+OPENAI_TIMEOUT_SECONDS=4.5 uv run --extra dev ruff check .
+OPENAI_TIMEOUT_SECONDS=4.5 uv run --extra dev pytest
 ```
 
 Frontend:
@@ -307,59 +78,100 @@ npm test
 npm run build
 ```
 
-Final local verification from cleanup:
+Latest local result: 134 backend tests and 37 frontend tests passing.
 
-- backend ruff passed
-- backend tests passed: `131 passed`
-- frontend typecheck passed
-- frontend tests passed: `38 passed`
-- frontend production build passed
-- deployed backend `/health` returned `ok`
-- deployed frontend returned HTTP 200
+## How to use it
+
+1. Upload JPG, PNG, or WEBP label images.
+2. Enter the seven application fields for each label.
+3. Select **Verify** for one label or **Verify Batch** for the full workload.
+4. Review the overall verdict and each expected-versus-detected field.
+5. Correct extracted text or warning-style metadata and run the comparison again when needed.
+
+The frontend automatically divides workloads larger than 25 labels into ordered requests and
+combines their results in the same review screen. A failed group does not prevent later groups from
+running.
+
+## What is verified
+
+| Field | Comparison |
+| --- | --- |
+| Brand name, class/type, producer | Normalized fuzzy match |
+| Alcohol by volume | Numeric match with tolerance |
+| Net contents | Unit-normalized match in milliliters |
+| Country of origin | Synonym-normalized match |
+| Government warning | Exact, case-sensitive text after whitespace collapse |
+| Warning lead-in boldness | Best-effort AI evidence; uncertain or non-bold results require review |
+
+All fields passing produces `APPROVED`; any failed or uncertain field produces `NEEDS_REVIEW`.
+
+## Project structure
+
+```text
+backend/       FastAPI API, pure comparison rules, provider adapters, and tests
+frontend/      React review workflow, API client, styling, and tests
+docs/          API contracts, error contracts, technical audit, and timing evidence
+demo-data/     Synthetic sample labels for local demonstrations
+```
+
+Start with [DOCUMENTATION.md](DOCUMENTATION.md) for the implementation approach, design decisions,
+tools, assumptions, limitations, and performance notes. More detailed references are listed in
+[Documentation map](#documentation-map).
+
+## API summary
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/health` | Service readiness |
+| `POST` | `/verify` | Extract and compare one label |
+| `POST` | `/verify/batch` | Verify up to 25 labels with bounded concurrency |
+| `POST` | `/extract` | Extract canonical fields from one label |
+| `POST` | `/compare` | Recompare edited data without another model call |
+
+Public payloads use these canonical snake_case fields: `brand_name`, `class_type`, `abv`,
+`net_contents`, `producer`, `country_of_origin`, and `government_warning`.
+
+## Configuration
+
+Copy `.env.example` into `backend/.env` for local backend configuration. Important values are:
+
+| Variable | Purpose | Default/example |
+| --- | --- | --- |
+| `VISION_PROVIDER` | `openai`, `demo`, or `fake` extraction | `openai` |
+| `VISION_MODEL` | Model used by the OpenAI provider | `gpt-5.4-nano` |
+| `OPENAI_API_KEY` | Backend-only provider credential | empty |
+| `OPENAI_TIMEOUT_SECONDS` | Provider timeout, capped at 4.5 seconds | `4.5` |
+| `MAX_UPLOAD_MB` | Maximum size of one image | `10` |
+| `MAX_BATCH_ITEMS` | Maximum labels in one API request | `25` |
+| `BATCH_CONCURRENCY_LIMIT` | Concurrent items inside a batch | `3` |
+| `BACKEND_CORS_ORIGINS` | Allowed frontend origins | local Vite origins |
+| `VITE_API_BASE_URL` | Backend URL used by the frontend | `http://127.0.0.1:8000` |
+
+See [.env.example](.env.example) for all supported settings.
 
 ## Deployment
 
-Committed deployment config:
+- The backend is configured for Render in [render.yaml](render.yaml).
+- The frontend is configured for Vercel in [vercel.json](vercel.json).
+- Production secrets must be set in the hosting provider, never committed.
+- A free-tier backend cold start can delay the first request; the UI shows startup/loading state.
 
-- `render.yaml` for the FastAPI backend.
-- `vercel.json` for the Vite frontend.
+## Documentation map
 
-Backend deployment requirements:
+- [Approach, tools, and assumptions](DOCUMENTATION.md) — concise project design documentation.
+- [Backend guide](backend/README.md) — backend commands, layout, and rules.
+- [Frontend guide](frontend/README.md) — frontend commands, layout, and workflow.
+- [API contracts](docs/interfaces/api-contracts.md) — request and response shapes.
+- [Error contracts](docs/interfaces/error-contracts.md) — safe error behavior.
+- [Technical requirements audit](docs/technical-requirements-audit.md) — requirement traceability.
+- [Deployed timing results](docs/deployed-timing-results.md) — recorded latency evidence.
 
-- Python 3.12.
-- `VISION_PROVIDER=openai`.
-- `OPENAI_API_KEY` set only in Render environment variables.
-- `BACKEND_CORS_ORIGINS=https://ttb-label-verification-build-capsto.vercel.app`.
+## Current limitations
 
-Frontend deployment requirements:
-
-- Node 22.
-- `VITE_API_BASE_URL=https://ttb-label-verification-api-0i68.onrender.com`.
-
-## Security And Privacy
-
-- No database is used.
-- Uploaded images, extracted data, and application data are processed only for the current request.
-- Real API keys must never be committed.
-- `.env`, `backend/.env`, and `frontend/.env` are ignored.
-- The frontend never accepts or sends provider API keys.
-- Public API errors use a safe error envelope and do not expose stack traces, provider internals,
-  API keys, local paths, or raw image contents.
-
-## Assumptions And Limitations
-
-- This is a review aid, not an official TTB approval system.
-- It does not submit to TTB, COLA, or any external government system.
-- Vision extraction depends on visible label text and may return `null` for unclear fields.
-- Warning text exactness is enforced; warning bold detection is best-effort and should be reviewed
-  by a human when style is uncertain. Ctrl+B formatting is preserved as review metadata, not as
-  hidden text in the canonical application fields.
-- Free-tier cold starts may delay first contact with the backend, but a visible frontend loading
-  state is present.
-- Demo/fake providers are for local tests and demonstrations only.
-
-## Demo Data
-
-Synthetic demo inputs live in `demo-data/inputs/` and `frontend/public/demo-data/inputs/`.
-
-These are workflow fixtures, not real labels and not official TTB records.
+- AI extraction can be wrong or return unknown values when images are small, blurred, angled, or
+  affected by glare.
+- Bold-style detection is weak evidence. Unknown boldness always requires human review.
+- Large workloads are processed as sequential groups of 25, not as resumable background jobs.
+- Free-tier hosting may introduce a cold-start delay even though warm verification meets the target.
+- This prototype does not provide authentication, a database, audit retention, COLA integration, or
+  production federal compliance controls.

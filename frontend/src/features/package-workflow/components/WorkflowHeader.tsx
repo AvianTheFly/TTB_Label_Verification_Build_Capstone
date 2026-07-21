@@ -1,14 +1,16 @@
 interface WorkflowHeaderProps {
   canVerifyBatch: boolean;
+  checkingMessage: string | null;
   isChecking: boolean;
-  onDownloadDemoData: () => void;
+  onDownloadSampleLabels: () => void;
   onVerifyBatch: () => void;
 }
 
 export function WorkflowHeader({
   canVerifyBatch,
+  checkingMessage,
   isChecking,
-  onDownloadDemoData,
+  onDownloadSampleLabels,
   onVerifyBatch
 }: WorkflowHeaderProps) {
   return (
@@ -20,7 +22,7 @@ export function WorkflowHeader({
       <div className="top-actions" aria-label="Application actions">
         {isChecking && (
           <p className="loading-message" role="status">
-            Reading labels
+            {checkingMessage ?? "Reading labels"}
           </p>
         )}
         <div className="batch-action-group">
@@ -34,8 +36,8 @@ export function WorkflowHeader({
             Verify Batch
           </button>
         </div>
-        <button className="secondary-button" onClick={onDownloadDemoData} type="button">
-          Demo Data
+        <button className="secondary-button" onClick={onDownloadSampleLabels} type="button">
+          Sample Labels
         </button>
       </div>
     </div>

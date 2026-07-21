@@ -120,13 +120,14 @@ def compare_government_warning(
                 "Government warning text matches exactly after whitespace collapse, and AI "
                 "detected bold styling on the GOVERNMENT WARNING: lead-in.",
             )
-        return _pass(
+        return _fail(
             "government_warning",
             "exact",
             expected,
             found,
-            "Government warning text matches exactly after whitespace collapse. Bold lead-in "
-            "styling could not be confirmed automatically.",
+            "Government warning text matches exactly, but AI could not determine whether the "
+            "GOVERNMENT WARNING: lead-in is bold. The text is likely compliant; human review "
+            "of bold styling is required.",
         )
 
     return _fail(

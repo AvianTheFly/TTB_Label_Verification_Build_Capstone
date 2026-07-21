@@ -51,13 +51,15 @@ src/
 
 ## Workflow
 
-- Users upload one or more label images.
+- Users upload one or more label images. Workloads larger than 25 are sent as sequential API groups
+  while remaining one batch in the interface.
 - Each image becomes an application review card.
 - Users enter seven application-data fields in the detail view.
-- Users verify one application or the full batch.
+- Users verify one application or the full workload, with progress showing the active label range.
 - Results show status, expected values, AI-detected values, and readable messages.
 - Ctrl+B in the government warning application and AI-detected fields marks the warning lead-in as
   bold for review.
+- The **Sample Labels** action downloads synthetic label images for workflow testing.
 - A visible backend startup/loading status is shown for free-tier cold starts.
 
 The frontend does not accept OpenAI keys and does not implement comparison rules; comparison stays

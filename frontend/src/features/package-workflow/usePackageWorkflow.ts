@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { CanonicalLabelField } from "../../types/api";
-import { DEMO_DATA_ARCHIVE_FILENAME } from "./constants";
+import {
+  SAMPLE_LABELS_ARCHIVE_PATH,
+  SAMPLE_LABELS_DOWNLOAD_FILENAME
+} from "./constants";
 import { revokePreviewUrl } from "./filePreviews";
 import { ApplicationPackageRecord } from "./packageWorkflowUtils";
 import {
@@ -102,10 +105,10 @@ export function usePackageWorkflow() {
     );
   }
 
-  function downloadDemoData() {
+  function downloadSampleLabels() {
     const link = document.createElement("a");
-    link.href = `${import.meta.env.BASE_URL}demo-data/${DEMO_DATA_ARCHIVE_FILENAME}`;
-    link.download = DEMO_DATA_ARCHIVE_FILENAME;
+    link.href = `${import.meta.env.BASE_URL}${SAMPLE_LABELS_ARCHIVE_PATH}`;
+    link.download = SAMPLE_LABELS_DOWNLOAD_FILENAME;
     link.click();
   }
 
@@ -113,6 +116,7 @@ export function usePackageWorkflow() {
     advancedFilters: filters.advancedFilters,
     applicationSummary: filters.applicationSummary,
     checkError: verification.checkError,
+    checkingMessage: verification.checkingMessage,
     detailHeadingRef,
     fileInputRef: uploads.fileInputRef,
     filteredRecords: filters.filteredRecords,
@@ -132,7 +136,7 @@ export function usePackageWorkflow() {
     validationErrors: uploads.validationErrors,
     closeDetail: () => setSelectedPackageId(null),
     compareEditedRecord: verification.compareEditedRecord,
-    downloadDemoData,
+    downloadSampleLabels,
     openDetail: setSelectedPackageId,
     setFieldDecision: verification.setFieldDecision,
     setSearchTerm: filters.setSearchTerm,

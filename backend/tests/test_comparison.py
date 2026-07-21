@@ -31,6 +31,7 @@ def make_extracted(**overrides: object) -> ExtractedLabel:
         "producer": "OLD TOM DISTILLERY, LOUISVILLE KY",
         "country_of_origin": "USA",
         "government_warning": CANONICAL_GOVERNMENT_WARNING,
+        "government_warning_lead_in_bold": True,
     }
     data.update(overrides)
     return ExtractedLabel(**data)
@@ -170,7 +171,21 @@ def test_correct_all_caps_government_warning_passes() -> None:
 
     assert field_result.status == "PASS"
     assert field_result.match_type == "exact"
-    assert "could not be confirmed" in field_result.message
+    assert "detected bold styling" in field_result.message
+
+
+def test_government_warning_needs_review_when_boldness_is_unknown() -> None:
+    field_result = result_for_field(
+        make_application(),
+        make_extracted(government_warning_lead_in_bold=None),
+        "government_warning",
+    )
+
+    assert field_result.status == "FAIL"
+    assert field_result.found == CANONICAL_GOVERNMENT_WARNING
+    assert "could not determine" in field_result.message
+    assert "likely compliant" in field_result.message
+    assert "human review" in field_result.message
 
 
 def test_government_warning_fails_when_bold_lead_in_is_clearly_absent() -> None:

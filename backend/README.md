@@ -59,5 +59,8 @@ See `../docs/interfaces/api-contracts.md` and `../docs/interfaces/error-contract
 - Keep public application-data fields canonical and snake_case.
 - Do not persist uploaded images, extracted labels, application data, API keys, or request state.
 - Warning text comparison is exact after whitespace collapse; warning lead-in bold detection is
-  best-effort visual evidence. Reviewer-edited bold state is accepted through
-  `extracted_formatting` on `/compare`.
+  best-effort visual evidence. A detected bold lead-in can pass; detected non-bold or unknown style
+  requires review. Reviewer-confirmed bold state is accepted through `extracted_formatting` on
+  `/compare`.
+- The submitted deployment caps batches at 25 items per request and processes them with bounded
+  concurrency.

@@ -4,7 +4,7 @@ Final submission audit against:
 
 - `TTB_Label_Verification_Build_Playbook 1.pdf`
 - `Additional Project Requirements`
-- Codebase state after final cleanup
+- Current `feat/project-improvements` branch state
 
 Status labels:
 
@@ -22,7 +22,7 @@ uv run --extra dev ruff check .
 uv run --extra dev pytest
 ```
 
-Recorded result after final cleanup: ruff passed; `131 passed`.
+Recorded result on 2026-07-21: ruff passed; `134 passed`.
 
 Frontend:
 
@@ -33,7 +33,7 @@ npm test
 npm run build
 ```
 
-Recorded result after final cleanup: typecheck passed; `35 passed`; production build passed.
+Recorded result on 2026-07-21: typecheck passed; `37 passed`; production build passed.
 
 Deployed checks:
 
@@ -60,7 +60,7 @@ Deployed checks:
 | R-011 | Single-label response includes `latency_ms`. | Playbook | PASS | `/verify` response model/tests; live timing recorded. |
 | R-012 | Single-label target under 5 seconds. | Playbook | PASS | Deployed warm `latency_ms` p50 1501 ms, p95 2527 ms. |
 | R-013 | Free-tier cold start may exceed target. | Deployment reality | QUESTIONABLE | Disclosed; frontend shows visible startup/loading status. |
-| R-014 | Batch upload required. | Playbook/stakeholder notes | PASS | `/verify/batch` and frontend `Verify Batch`. |
+| R-014 | Batch upload required. | Playbook/stakeholder notes | PASS | `/verify/batch` is capped at 25 items per request; the frontend automatically sends larger workloads as sequential ordered groups and aggregates results. A 26-item regression test verifies 25+1 request splitting. |
 | R-015 | Batch uses bounded concurrency. | Playbook | PASS | Backend uses `asyncio.Semaphore` with configured limit. |
 | R-016 | Bad batch item does not fail whole batch. | Playbook | PASS | Per-item errors and tests. |
 | R-017 | Batch summary includes `passed`, `needs_review`, `total`. | Playbook | PASS | `BatchSummary` model/tests. |
@@ -72,7 +72,7 @@ Deployed checks:
 | R-023 | Net contents unit normalization. | Playbook | PASS | mL/L/fl oz tests. |
 | R-024 | Warning text exact and case-sensitive after whitespace collapse. | Playbook | PASS | Title-case and missing-colon tests fail as required. |
 | R-025 | Warning failure returns extracted text. | Playbook | PASS | `found` and message include extracted warning on failure. |
-| R-026 | Warning lead-in all caps and bold. | Additional requirements | QUESTIONABLE | Text exactness enforced; provider extracts best-effort bold evidence; reviewer can use Ctrl+B in warning fields; uncertainty remains documented. |
+| R-026 | Warning lead-in all caps and bold. | Additional requirements | QUESTIONABLE | Text exactness is enforced. Provider style evidence `true` passes, while `false` or `null` requires review. Reviewers can confirm formatting with Ctrl+B; automated visual detection remains best-effort. |
 | R-027 | Verdict rule: any fail -> `NEEDS_REVIEW`; all pass -> `APPROVED`. | Playbook | PASS | Domain/API tests. |
 | R-028 | Vision service behind explicit interface. | Phase 2 | PASS | `VisionService` protocol; fake/demo providers. |
 | R-029 | Structured JSON extraction into `ExtractedLabel`. | Phase 2 | PASS | Strict schema and parser tests. |
@@ -97,6 +97,9 @@ Deployed checks:
 - Free-tier cold starts can delay the first deployed request. The frontend shows visible loading
   status while the backend wakes.
 - Bold styling detection for `GOVERNMENT WARNING:` is best-effort. It can flag a clear not-bold
-  lead-in, and reviewers can use Ctrl+B to mark bold evidence manually, but uncertain image/style
-  evidence is not treated as definitive.
+  lead-in, and reviewers can use Ctrl+B to mark bold evidence manually. Unknown style evidence now
+  requires review and cannot produce an automatic approval.
+- The submitted deployment caps each API request at 25 labels. The frontend automatically splits a
+  larger importer workload into sequential groups and shows the active label range. A future queued
+  job model would add resumability, but is not required for the stateless prototype.
 - This is a prototype review aid, not an official TTB approval system.

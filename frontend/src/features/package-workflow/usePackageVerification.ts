@@ -12,6 +12,7 @@ import {
   verifyLabel
 } from "../../api/verification";
 import type {
+  BatchResult,
   CanonicalLabelField,
   FieldReviewDecision,
   VerificationResult
@@ -47,6 +48,7 @@ export function usePackageVerification({
 }: UsePackageVerificationParams) {
   const [isChecking, setIsChecking] = useState(false);
   const [checkError, setCheckError] = useState<string | null>(null);
+  const [checkingMessage, setCheckingMessage] = useState<string | null>(null);
 
   async function verifySingleApplication(packageId: string) {
     const record = recordsRef.current.find((candidate) => candidate.package_id === packageId);
@@ -67,6 +69,7 @@ export function usePackageVerification({
     }
 
     setIsChecking(true);
+    setCheckingMessage("Reading label");
     setCheckError(null);
     try {
       const result = await verifyLabel(record.image_file, record.application_data);
@@ -82,6 +85,7 @@ export function usePackageVerification({
         )
       );
     } finally {
+      setCheckingMessage(null);
       setIsChecking(false);
     }
   }
@@ -90,11 +94,6 @@ export function usePackageVerification({
     const currentRecords = recordsRef.current;
     if (currentRecords.length === 0) {
       setCheckError("Choose label images before verifying the batch.");
-      return;
-    }
-
-    if (currentRecords.length > MAX_BATCH_ITEMS) {
-      setCheckError(`Verify Batch can run ${MAX_BATCH_ITEMS} applications at a time.`);
       return;
     }
 
@@ -121,7 +120,7 @@ export function usePackageVerification({
     const shouldRunBatch =
       currentRecords.length <= 1 ||
       window.confirm(
-        `Verify ${currentRecords.length} applications now?\n\nBatch verification sends each complete application and label image to /verify/batch. The current limit is ${MAX_BATCH_ITEMS} applications per batch.`
+        `Verify ${currentRecords.length} applications now?\n\nLabels are sent in groups of up to ${MAX_BATCH_ITEMS} so larger workloads can finish safely.`
       );
     if (!shouldRunBatch) {
       return;
@@ -129,41 +128,79 @@ export function usePackageVerification({
 
     setIsChecking(true);
     setCheckError(null);
+    const submittedRecords = currentRecords.slice();
+    let failedGroupCount = 0;
     try {
-      const submittedRecords = currentRecords.slice();
-      const batchResult = await verifyBatch(
-        submittedRecords.map((record) => ({
-          image: record.image_file,
-          application_data: record.application_data
-        }))
-      );
+      for (let start = 0; start < submittedRecords.length; start += MAX_BATCH_ITEMS) {
+        const group = submittedRecords.slice(start, start + MAX_BATCH_ITEMS);
+        const end = start + group.length;
+        setCheckingMessage(`Reading labels ${start + 1}-${end} of ${submittedRecords.length}`);
 
-      for (const item of batchResult.items) {
-        const record = submittedRecords[item.index];
-        if (!record) {
-          continue;
-        }
-        if (item.result) {
-          updateRecordWithResult(record.package_id, item.result);
-        } else if (item.error) {
-          setRecords((current) =>
-            current.map((candidate) =>
-              candidate.package_id === record.package_id
-                ? {
-                    ...candidate,
-                    item_error: item.error?.message ?? "This application could not be checked.",
-                    status: "Needs Review"
-                  }
-                : candidate
-            )
+        try {
+          const batchResult = await verifyBatch(
+            group.map((record) => ({
+              image: record.image_file,
+              application_data: record.application_data
+            }))
           );
+          applyBatchGroupResult(group, batchResult);
+        } catch (error) {
+          failedGroupCount += 1;
+          markBatchGroupFailed(group, errorMessageFor(error));
         }
+      }
+
+      if (failedGroupCount > 0) {
+        setCheckError(
+          "Some label groups could not be checked. Review the affected applications and try them again."
+        );
       }
     } catch (error) {
       setCheckError(errorMessageFor(error));
     } finally {
+      setCheckingMessage(null);
       setIsChecking(false);
     }
+  }
+
+  function applyBatchGroupResult(
+    group: ApplicationPackageRecord[],
+    batchResult: BatchResult
+  ) {
+    const updates = new Map(
+      batchResult.items.flatMap((item) => {
+        const record = group[item.index];
+        return record ? [[record.package_id, item] as const] : [];
+      })
+    );
+
+    setRecords((current) =>
+      current.map((record) => {
+        const item = updates.get(record.package_id);
+        if (item?.result) {
+          return applyVerificationResult(record, item.result);
+        }
+        if (item?.error) {
+          return {
+            ...record,
+            item_error: item.error.message || "This application could not be checked.",
+            status: "Needs Review"
+          };
+        }
+        return record;
+      })
+    );
+  }
+
+  function markBatchGroupFailed(group: ApplicationPackageRecord[], message: string) {
+    const packageIds = new Set(group.map((record) => record.package_id));
+    setRecords((current) =>
+      current.map((record) =>
+        packageIds.has(record.package_id)
+          ? { ...record, item_error: message, status: "Needs Review" }
+          : record
+      )
+    );
   }
 
   function updateRecordWithResult(packageId: string, result: VerificationResult) {
@@ -254,6 +291,7 @@ export function usePackageVerification({
 
   return {
     checkError,
+    checkingMessage,
     compareEditedRecord,
     isChecking,
     setCheckError,

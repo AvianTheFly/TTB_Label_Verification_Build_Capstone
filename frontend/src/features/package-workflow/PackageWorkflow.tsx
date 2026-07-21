@@ -13,8 +13,9 @@ export function PackageWorkflow() {
       <section className="tool-layout package-workflow" aria-labelledby="package-title">
         <WorkflowHeader
           canVerifyBatch={workflow.records.length > 0}
+          checkingMessage={workflow.checkingMessage}
           isChecking={workflow.isChecking}
-          onDownloadDemoData={workflow.downloadDemoData}
+          onDownloadSampleLabels={workflow.downloadSampleLabels}
           onVerifyBatch={workflow.verifyBatchApplications}
         />
 

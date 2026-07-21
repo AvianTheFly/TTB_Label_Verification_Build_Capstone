@@ -130,7 +130,10 @@ async def test_demo_vision_service_uses_filename_keyed_extraction() -> None:
 def test_demo_application_inputs_match_intended_scenarios() -> None:
     project_root = Path(__file__).resolve().parents[2]
     cases = {
-        "evergreen-amber-bourbon": ("APPROVED", set()),
+        "evergreen-amber-bourbon": (
+            "NEEDS_REVIEW",
+            {"government_warning"},
+        ),
         "coastal-pear-cider": (
             "NEEDS_REVIEW",
             {"abv", "producer", "government_warning"},
@@ -144,6 +147,7 @@ def test_demo_application_inputs_match_intended_scenarios() -> None:
                 "net_contents",
                 "producer",
                 "country_of_origin",
+                "government_warning",
             },
         ),
     }

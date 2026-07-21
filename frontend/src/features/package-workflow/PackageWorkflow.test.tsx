@@ -30,7 +30,7 @@ function verificationResult(overrides: Partial<Record<string, unknown>> = {}) {
     overall_verdict: "APPROVED",
     latency_ms: 42,
     extracted_formatting: {
-      government_warning_lead_in_bold: null
+      government_warning_lead_in_bold: true
     },
     results: [
       {
@@ -87,7 +87,8 @@ function verificationResult(overrides: Partial<Record<string, unknown>> = {}) {
         expected: "GOVERNMENT WARNING: Test warning text.",
         found: "GOVERNMENT WARNING: Test warning text.",
         status: "PASS",
-        message: "Government warning text matches exactly after whitespace collapse."
+        message:
+          "Government warning text matches exactly after whitespace collapse, and AI detected bold styling on the GOVERNMENT WARNING: lead-in."
       }
     ],
     ...overrides
@@ -499,7 +500,7 @@ describe("PackageWorkflow", () => {
     expect(container.querySelector('[data-testid="package-upload-area"]')).not.toBeNull();
     expect(fileInput().accept).toBe("image/*");
     expect(container.textContent).toContain("Choose Images");
-    expect(container.textContent).toContain("Demo Data");
+    expect(container.textContent).toContain("Sample Labels");
     expect(container.textContent).not.toContain("Submit");
     expect(container.textContent).toContain("Upload Labels");
     expect(container.textContent).toContain("Applications");
@@ -519,7 +520,7 @@ describe("PackageWorkflow", () => {
     expect(container.querySelector('input[type="password"]')).toBeNull();
   });
 
-  it("downloads demo inputs as one archive", async () => {
+  it("downloads sample labels as one archive", async () => {
     const anchors: HTMLAnchorElement[] = [];
     const originalCreateElement = document.createElement.bind(document);
     vi.spyOn(document, "createElement").mockImplementation(((tagName: string, options?: ElementCreationOptions) => {
@@ -531,10 +532,10 @@ describe("PackageWorkflow", () => {
     }) as typeof document.createElement);
 
     await renderPackageWorkflow();
-    await clickButton("Demo Data");
+    await clickButton("Sample Labels");
 
     expect(anchors).toHaveLength(1);
-    expect(anchors[0].download).toBe("demo-inputs.zip");
+    expect(anchors[0].download).toBe("sample-labels.zip");
     expect(anchors[0].href).toContain("/demo-data/demo-inputs.zip");
   });
 
@@ -719,6 +720,38 @@ describe("PackageWorkflow", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("splits workloads larger than 25 into ordered batch requests", async () => {
+    mockWorkflowFetch();
+    const files = Array.from({ length: 26 }, (_, index) => imageFile(`label-${index + 1}.png`));
+
+    await renderPackageWorkflow();
+    await chooseFiles(files);
+
+    for (let index = 0; index < files.length; index += 1) {
+      await act(async () => {
+        packageButtonAt(index).click();
+      });
+      await fillApplicationData({
+        ...canonicalApplicationData,
+        brand_name: `BRAND ${index + 1}`
+      });
+      await clickButton("Close");
+    }
+
+    await clickButton("Verify Batch");
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const calls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const firstBatch = calls[0][1].body as FormData;
+    const secondBatch = calls[1][1].body as FormData;
+    expect(firstBatch.getAll("images")).toHaveLength(25);
+    expect(secondBatch.getAll("images")).toHaveLength(1);
+    expect((firstBatch.getAll("images")[0] as File).name).toBe("label-1.png");
+    expect((firstBatch.getAll("images")[24] as File).name).toBe("label-25.png");
+    expect((secondBatch.getAll("images")[0] as File).name).toBe("label-26.png");
+    expect(container.textContent).toContain("26 approved");
+  });
+
   it("blocks verification when numeric application fields do not include numbers", async () => {
     mockWorkflowFetch();
 
@@ -877,7 +910,11 @@ describe("PackageWorkflow", () => {
 
   it("lets reviewers mark warning text bold with ctrl b and sends extracted formatting", async () => {
     mockWorkflowFetch(
-      verificationResult(),
+      verificationResult({
+        extracted_formatting: {
+          government_warning_lead_in_bold: false
+        }
+      }),
       verificationResult({
         extracted_formatting: {
           government_warning_lead_in_bold: true

@@ -26,6 +26,7 @@ def make_extracted(**overrides: str | None) -> ExtractedLabel:
         "producer": "OLD TOM DISTILLERY, LOUISVILLE KY",
         "country_of_origin": "USA",
         "government_warning": CANONICAL_GOVERNMENT_WARNING,
+        "government_warning_lead_in_bold": True,
     }
     values.update(overrides)
     return ExtractedLabel.model_validate(values)
