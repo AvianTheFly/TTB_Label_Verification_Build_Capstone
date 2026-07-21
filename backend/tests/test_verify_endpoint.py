@@ -302,7 +302,6 @@ def test_partial_uncertain_extraction_returns_needs_review_not_false_approval() 
         "abv",
         "net_contents",
         "producer",
-        "country_of_origin",
         "government_warning",
     }
     assert all(

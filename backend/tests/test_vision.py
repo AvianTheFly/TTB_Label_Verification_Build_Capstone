@@ -379,6 +379,9 @@ async def test_openai_provider_uses_strict_structured_output_and_prompt_rules() 
     assert "Put each visible text value in the most specific matching field" in EXTRACTION_PROMPT
     assert "brand_name is the product/brand name" in EXTRACTION_PROMPT
     assert "producer is bottler/producer/importer name and address text" in EXTRACTION_PROMPT
+    assert "visible city, state name, or two-letter" in EXTRACTION_PROMPT
+    assert "state code from the producer/bottler address" in EXTRACTION_PROMPT
+    assert "may appear in both producer and country_of_origin" in EXTRACTION_PROMPT
     assert "Copy government_warning verbatim" in EXTRACTION_PROMPT
     assert "government_warning_lead_in_bold" in EXTRACTION_PROMPT
     assert "Return true only when the lead-in appears bold" in EXTRACTION_PROMPT

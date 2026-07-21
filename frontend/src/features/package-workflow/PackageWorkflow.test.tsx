@@ -623,6 +623,33 @@ describe("PackageWorkflow", () => {
     expect(container.textContent).toContain("1 total");
   });
 
+  it("shows pending-check counts and filters pending applications", async () => {
+    mockWorkflowFetch();
+
+    await renderPackageWorkflow();
+    await chooseFiles([imageFile("approved.png"), imageFile("pending.png")]);
+    await act(async () => {
+      packageButtonAt(0).click();
+    });
+    await fillApplicationData();
+    await clickButton("Verify");
+    await clickButton("Close");
+
+    const pendingFilter = container.querySelector(
+      ".applications-section .section-stat--pending"
+    );
+    expect(pendingFilter?.textContent).toContain("1 pending check");
+    expect(container.textContent).toContain("1 approved");
+
+    await act(async () => {
+      pendingFilter?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.querySelectorAll(".package-card")).toHaveLength(1);
+    expect(container.textContent).toContain("pending.png");
+    expect(container.textContent).not.toContain("approved.png");
+  });
+
   it("keeps unsupported files out of application counts", async () => {
     await renderPackageWorkflow();
     await chooseFiles([
@@ -848,7 +875,27 @@ describe("PackageWorkflow", () => {
 
     expect(fetch).not.toHaveBeenCalled();
     expect(container.textContent).toContain("Alcohol Content with a number");
-    expect(container.textContent).toContain("Net Contents with a number");
+    expect(container.textContent).toContain("Net Contents with an amount and unit");
+  });
+
+  it("blocks net contents that has a number but no unit", async () => {
+    mockWorkflowFetch();
+
+    await renderPackageWorkflow();
+    await chooseFiles([imageFile("label.png")]);
+    await act(async () => {
+      firstPackageButton().click();
+    });
+    await fillApplicationData({
+      ...canonicalApplicationData,
+      net_contents: "750"
+    });
+    await clickButton("Verify");
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(container.textContent).toContain(
+      "Net Contents with an amount and unit, such as 750 mL"
+    );
   });
 
   it("keeps AI detected text read-only until verification populates it", async () => {
@@ -967,6 +1014,35 @@ describe("PackageWorkflow", () => {
     expect(extractedWarning?.textContent).toBe("54321");
   });
 
+  it("preserves line boundaries from pasted warning markup", async () => {
+    mockWorkflowFetch();
+
+    await renderPackageWorkflow();
+    await uploadOpenFillAndVerify();
+
+    const applicationWarning = container.querySelector(
+      '[aria-label="Application Value Government Warning"]'
+    );
+    if (!(applicationWarning instanceof HTMLElement)) {
+      throw new Error("Missing application warning editor");
+    }
+
+    await act(async () => {
+      applicationWarning.innerHTML =
+        "<div>GOVERNMENT WARNING:</div><div>Test warning text.</div>";
+      applicationWarning.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    });
+    await waitForAsyncUpdates();
+    await blurField("Application Value Government Warning");
+
+    expect(applicationWarning.textContent).toBe("GOVERNMENT WARNING:\nTest warning text.");
+    const fetchCalls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const comparisonPayload = JSON.parse(fetchCalls[fetchCalls.length - 1][1].body);
+    expect(comparisonPayload.application_data.government_warning).toBe(
+      "GOVERNMENT WARNING:\nTest warning text."
+    );
+  });
+
   it("keeps the caret in place when marking application warning text bold", async () => {
     mockWorkflowFetch();
 
@@ -1040,6 +1116,47 @@ describe("PackageWorkflow", () => {
     expect(container.querySelector("#data-title")).not.toBeNull();
     await clickButtonLabel("Close detail view");
     expect(container.querySelector("#data-title")).toBeNull();
+  });
+
+  it("manages keyboard focus while the detail dialog is open", async () => {
+    mockWorkflowFetch();
+
+    await renderPackageWorkflow();
+    await chooseFiles([imageFile("label.png")]);
+    const opener = firstPackageButton();
+    await act(async () => {
+      opener.focus();
+      opener.click();
+    });
+    await waitForAsyncUpdates();
+
+    const dialog = container.querySelector('[role="dialog"]');
+    const heading = container.querySelector("#detail-title");
+    if (!(dialog instanceof HTMLElement) || !(heading instanceof HTMLElement)) {
+      throw new Error("Missing detail dialog");
+    }
+    expect(document.activeElement).toBe(heading);
+
+    const focusable = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [contenteditable="true"], [tabindex]:not([tabindex="-1"])'
+      )
+    );
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    last.focus();
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Tab" }));
+    });
+    expect(document.activeElement).toBe(first);
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "Escape" }));
+    });
+    await waitForAsyncUpdates();
+
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(opener);
   });
 
   it("filters detail data fields from the data header count buttons", async () => {

@@ -14,6 +14,7 @@ from app.domain.models import ExtractedLabel
 from app.main import create_app
 from app.services.fake_vision import FakeVisionService
 from app.services.image_preprocess import PreprocessedImage
+from app.use_cases.batch_verification import process_batch_items
 
 
 def make_image_bytes(image_format: str = "PNG") -> bytes:
@@ -338,6 +339,31 @@ def test_batch_concurrency_is_bounded(monkeypatch) -> None:
         assert_verification_result_literals(item["result"])
     assert service.calls == 5
     assert service.max_active == 2
+    get_settings.cache_clear()
+
+
+def test_batch_reads_and_processes_only_one_concurrency_sized_chunk_at_a_time(
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("BATCH_CONCURRENCY_LIMIT", "2")
+    processed_chunk_sizes: list[int] = []
+
+    async def track_processed_chunk(**kwargs):
+        processed_chunk_sizes.append(len(kwargs["items"]))
+        return await process_batch_items(**kwargs)
+
+    monkeypatch.setattr("app.api.batch.process_batch_items", track_processed_chunk)
+    client = make_client(FakeVisionService(result=make_extracted_label()))
+
+    response = post_batch(
+        client,
+        application_items=[make_application_data() for _ in range(5)],
+        image_items=[(make_image_bytes(), f"label-{index}.png", "image/png") for index in range(5)],
+    )
+
+    assert response.status_code == 200
+    assert response.json()["summary"] == {"passed": 5, "needs_review": 0, "total": 5}
+    assert processed_chunk_sizes == [2, 2, 1]
     get_settings.cache_clear()
 
 

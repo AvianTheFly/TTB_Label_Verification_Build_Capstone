@@ -10,7 +10,7 @@ from app.core.config import get_settings
 from app.core.errors import ApiError
 from app.domain.models import BatchResult
 from app.services.vision import VisionService
-from app.use_cases.batch_verification import process_batch_items
+from app.use_cases.batch_verification import combine_batch_results, process_batch_items
 from app.use_cases.timing import elapsed_ms
 
 logger = logging.getLogger(__name__)
@@ -46,46 +46,59 @@ async def verify_batch(
                 details={"max_batch_items": settings.max_batch_items},
             )
 
-        parse_start = perf_counter()
-        items = [
-            await build_batch_item(
-                index=index,
-                image=image_parts[index] if index < len(image_parts) else None,
-                application_data=data_parts[index] if index < len(data_parts) else None,
-                max_upload_mb=settings.max_upload_mb,
-            )
-            for index in range(total)
-        ]
-        parse_ms = elapsed_ms(parse_start)
-        input_error_count = sum(1 for item in items if item.error is not None)
         logger.info(
             (
                 "batch_verify_request_accepted total=%s image_parts=%s application_parts=%s "
-                "input_error_count=%s parse_ms=%s concurrency_limit=%s max_batch_items=%s"
+                "concurrency_limit=%s max_batch_items=%s"
             ),
             total,
             len(image_parts),
             len(data_parts),
-            input_error_count,
-            parse_ms,
             settings.batch_concurrency_limit,
             settings.max_batch_items,
             extra={
                 "total": total,
                 "image_parts": len(image_parts),
                 "application_parts": len(data_parts),
-                "input_error_count": input_error_count,
-                "parse_ms": parse_ms,
                 "concurrency_limit": settings.batch_concurrency_limit,
                 "max_batch_items": settings.max_batch_items,
             },
         )
 
-        result = await process_batch_items(
-            items=items,
-            vision_service=vision_service,
-            settings=settings,
+        parse_ms = 0
+        chunk_results = []
+        input_error_count = 0
+        chunk_size = settings.batch_concurrency_limit
+        for chunk_start in range(0, total, chunk_size):
+            chunk_end = min(chunk_start + chunk_size, total)
+            chunk_parse_start = perf_counter()
+            items = [
+                await build_batch_item(
+                    index=index,
+                    image=image_parts[index] if index < len(image_parts) else None,
+                    application_data=data_parts[index] if index < len(data_parts) else None,
+                    max_upload_mb=settings.max_upload_mb,
+                )
+                for index in range(chunk_start, chunk_end)
+            ]
+            parse_ms += elapsed_ms(chunk_parse_start)
+            input_error_count += sum(1 for item in items if item.error is not None)
+            chunk_results.append(
+                await process_batch_items(
+                    items=items,
+                    vision_service=vision_service,
+                    settings=settings,
+                )
+            )
+
+        logger.info(
+            "batch_verify_input_parsing_completed input_error_count=%s parse_ms=%s",
+            input_error_count,
+            parse_ms,
+            extra={"input_error_count": input_error_count, "parse_ms": parse_ms},
         )
+
+        result = combine_batch_results(chunk_results)
         latency_ms = elapsed_ms(start)
         latency_budget_ms = int(settings.single_label_timeout_seconds * 1000)
         item_latencies = [

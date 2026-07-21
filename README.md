@@ -78,7 +78,7 @@ npm test
 npm run build
 ```
 
-Latest local result: 140 backend tests and 40 frontend tests passing.
+Latest local result: 149 backend tests and 45 frontend tests passing.
 
 ## How to use it
 
@@ -99,7 +99,7 @@ running.
 | Brand name, class/type, producer | Normalized fuzzy match |
 | Alcohol by volume | Numeric match with tolerance |
 | Net contents | Unit-normalized match in milliliters |
-| Country of origin | Synonym-normalized match |
+| Country of origin | Synonym-normalized match; domestic U.S. labels may use city/state evidence or omit an explicit country |
 | Government warning | Exact, case-sensitive match to the canonical statement after whitespace collapse |
 | Warning lead-in boldness | Best-effort AI evidence; uncertain or non-bold results require review |
 

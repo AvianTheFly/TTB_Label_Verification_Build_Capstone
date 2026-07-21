@@ -237,7 +237,13 @@ def test_compare_allows_null_extracted_fields_and_returns_needs_review() -> None
     body = response.json()
     assert_verification_result_literals(body)
     assert body["overall_verdict"] == "NEEDS_REVIEW"
-    assert all(result["status"] == "FAIL" for result in body["results"])
+    by_field = {result["field"]: result for result in body["results"]}
+    assert by_field["country_of_origin"]["status"] == "PASS"
+    assert all(
+        result["status"] == "FAIL"
+        for field, result in by_field.items()
+        if field != "country_of_origin"
+    )
     assert all(result["found"] is None for result in body["results"])
 
 

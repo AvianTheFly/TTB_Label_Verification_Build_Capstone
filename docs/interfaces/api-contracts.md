@@ -70,6 +70,9 @@ Rules:
 - Failure results include `expected` and `found` values whenever available.
 - Government warning text comparison is exact and case-sensitive after whitespace collapse.
 - Government warning failures include the extracted warning text in `found`.
+- A United States application does not require explicit country text on a domestic label. Visible
+  U.S. city/state evidence can populate `country_of_origin`; a missing explicit country also passes
+  unless the label explicitly identifies a conflicting foreign country.
 - If best-effort style extraction explicitly reports `government_warning_lead_in_bold=false`, the
   `government_warning` field fails.
 - If warning style is unknown (`government_warning_lead_in_bold=null`), the warning field fails and

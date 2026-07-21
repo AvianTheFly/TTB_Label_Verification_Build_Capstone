@@ -58,7 +58,7 @@ the uploaded files, preventing an older verification or comparison from overwrit
 | `producer` | Normalized fuzzy match | Allows formatting variation in names and addresses. |
 | `abv` | Parsed numeric comparison | Compares the alcohol value rather than display syntax. |
 | `net_contents` | Normalize units to mL | Treats equivalent metric and US customary values consistently. |
-| `country_of_origin` | Synonym normalization | Treats values such as USA and United States as equivalent. |
+| `country_of_origin` | Synonym and domestic-location normalization | Treats USA and United States as equivalent. A U.S. application also passes when the domestic label omits an explicit country or shows matching city/state evidence. |
 | `government_warning` | Exact, case-sensitive match to the canonical statement after whitespace collapse | Preserves the stricter statutory wording requirement. |
 
 All field results are explicit `PASS` or `FAIL` values. Every pass yields `APPROVED`; any failure
@@ -82,8 +82,9 @@ the style metadata in the interface, then call `/compare` without repeating AI e
 
 Each `/verify/batch` request accepts at most the configured limit, which is 25 in the submitted
 deployment. The backend publishes its effective limit through `/health`, so the frontend does not
-duplicate that configuration. Within each request, the backend uses bounded concurrency and
-isolates errors per item so one unreadable image does not fail the entire group.
+duplicate that configuration. Within each request, the backend reads and processes only one
+concurrency-sized chunk at a time. This bounds retained raw-image memory as well as concurrent
+model calls, while isolating errors so one unreadable image does not fail the entire group.
 
 To support stakeholder workloads of 200–300 labels without a background-job system, the frontend:
 
@@ -94,8 +95,9 @@ To support stakeholder workloads of 200–300 labels without a background-job sy
 5. continues with later groups if one group-level request fails.
 
 The 25-item limit is therefore a request-safety boundary, not a user workload limit. Sequential
-groups control memory, model concurrency, and hosting-request risk. A production system needing
-pause/resume or recovery across browser sessions should use durable queued jobs instead.
+frontend groups and concurrency-sized backend chunks control memory, model concurrency, and
+hosting-request risk. A production system needing pause/resume or recovery across browser sessions
+should use durable queued jobs instead.
 
 ## Tools used
 

@@ -127,6 +127,53 @@ def test_net_contents_normalization_matches_fluid_ounces() -> None:
     assert field_result.status == "PASS"
 
 
+def test_net_contents_normalization_accepts_british_unit_spelling() -> None:
+    field_result = result_for_field(
+        make_application(net_contents="750 millilitres"),
+        make_extracted(net_contents="750 mL"),
+        "net_contents",
+    )
+
+    assert field_result.status == "PASS"
+
+
+def test_net_contents_message_identifies_application_value_without_unit() -> None:
+    field_result = result_for_field(
+        make_application(net_contents="750"),
+        make_extracted(net_contents="750 mL"),
+        "net_contents",
+    )
+
+    assert field_result.status == "FAIL"
+    assert field_result.message == (
+        "Application net contents needs an amount and supported unit, such as 750 mL."
+    )
+
+
+def test_net_contents_message_identifies_unreadable_ai_value() -> None:
+    field_result = result_for_field(
+        make_application(net_contents="750 mL"),
+        make_extracted(net_contents="seven hundred fifty"),
+        "net_contents",
+    )
+
+    assert field_result.status == "FAIL"
+    assert "AI detected net contents text" in field_result.message
+
+
+def test_net_contents_mismatch_message_reports_converted_values() -> None:
+    field_result = result_for_field(
+        make_application(net_contents="750 mL"),
+        make_extracted(net_contents="700 mL"),
+        "net_contents",
+    )
+
+    assert field_result.status == "FAIL"
+    assert field_result.message == (
+        "Net contents do not match after unit conversion: 750 mL expected, 700 mL detected."
+    )
+
+
 def test_country_synonym_normalization_matches_usa_to_united_states() -> None:
     field_result = result_for_field(
         make_application(country_of_origin="United States"),
@@ -136,6 +183,55 @@ def test_country_synonym_normalization_matches_usa_to_united_states() -> None:
 
     assert field_result.status == "PASS"
     assert field_result.match_type == "synonym"
+
+
+def test_domestic_country_passes_when_country_is_not_printed() -> None:
+    field_result = result_for_field(
+        make_application(country_of_origin="United States"),
+        make_extracted(country_of_origin=None, producer="Old Tom Distillery"),
+        "country_of_origin",
+    )
+
+    assert field_result.status == "PASS"
+    assert "not required on a domestic" in field_result.message
+
+
+def test_domestic_country_passes_from_state_code() -> None:
+    field_result = result_for_field(
+        make_application(country_of_origin="United States"),
+        make_extracted(country_of_origin="Louisville, KY"),
+        "country_of_origin",
+    )
+
+    assert field_result.status == "PASS"
+    assert "city/state evidence" in field_result.message
+
+
+def test_domestic_country_passes_from_city_shared_by_application_and_label() -> None:
+    field_result = result_for_field(
+        make_application(
+            country_of_origin="United States",
+            producer="Old Tom Distillery, Louisville",
+        ),
+        make_extracted(
+            country_of_origin="Louisville",
+            producer="Old Tom Distillery, Louisville",
+        ),
+        "country_of_origin",
+    )
+
+    assert field_result.status == "PASS"
+    assert "city/state evidence" in field_result.message
+
+
+def test_domestic_country_still_fails_for_explicit_foreign_country() -> None:
+    field_result = result_for_field(
+        make_application(country_of_origin="United States"),
+        make_extracted(country_of_origin="Canada"),
+        "country_of_origin",
+    )
+
+    assert field_result.status == "FAIL"
 
 
 def test_title_case_government_warning_fails_without_lowercasing() -> None:

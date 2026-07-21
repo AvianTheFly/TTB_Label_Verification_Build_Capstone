@@ -41,10 +41,12 @@ export function summarizeApplications(records: ApplicationPackageRecord[]): Appl
         summary.needs_review += 1;
       } else if (record.status === "Approved") {
         summary.passed += 1;
+      } else {
+        summary.pending += 1;
       }
       return summary;
     },
-    { needs_review: 0, passed: 0, total: 0 }
+    { needs_review: 0, passed: 0, pending: 0, total: 0 }
   );
 }
 
@@ -68,11 +70,11 @@ export function comparisonRuleText(field: CanonicalLabelField): string {
     case "abv":
       return "PASS when the alcohol strength is the same within 0.1 percentage points. Proof is converted to ABV, so 90 proof counts as 45% ABV. FAIL when the number is outside that tolerance or cannot be read.";
     case "net_contents":
-      return "PASS when the container size is the same within 1 mL. The tool converts mL, L, and cL, so 750 mL and 0.75 L match. FAIL for different amounts or units the tool cannot convert.";
+      return "PASS when the container size is the same within 1 mL. The tool converts mL, L, cL, and fluid ounces, so 750 mL and 0.75 L match. FAIL explains whether the values differ or which value needs a supported amount and unit.";
     case "producer":
       return "PASS when the producer, bottler, or company name and location clearly refer to the same business. Capital letters, punctuation, or small wording differences can be okay. FAIL when the company or location appears different.";
     case "country_of_origin":
-      return "PASS when the country means the same place. Common United States wording such as USA, US, and United States of America is treated as United States. FAIL when it names a different country.";
+      return "PASS when the country means the same place. USA, US, and United States of America are treated as United States. Domestic applications also pass when no country is printed or the label shows matching U.S. city/state evidence. FAIL when the label explicitly names a different country.";
     case "government_warning":
       return "This is strict. PASS only when the warning words and capitalization match exactly, after ignoring extra spaces. Title case, missing punctuation, or changed wording fails. If AI clearly does not detect bold GOVERNMENT WARNING: text, this needs review. Uncertain bold styling still needs a person to check.";
   }

@@ -60,7 +60,7 @@ export function RichWarningTextarea({
   }, [isLeadInBold, value]);
 
   function handleInput(event: FormEvent<HTMLDivElement>) {
-    onChange(event.currentTarget.textContent ?? "");
+    onChange(plainTextFromEditor(event.currentTarget));
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -90,6 +90,48 @@ export function RichWarningTextarea({
       tabIndex={readOnly ? -1 : 0}
     />
   );
+}
+
+const BLOCK_ELEMENTS = new Set(["DIV", "P"]);
+
+function plainTextFromEditor(editor: HTMLElement): string {
+  let text = "";
+
+  function appendLineBreak() {
+    if (text && !text.endsWith("\n")) {
+      text += "\n";
+    }
+  }
+
+  function visit(node: Node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      text += node.textContent ?? "";
+      return;
+    }
+    if (!(node instanceof HTMLElement)) {
+      return;
+    }
+    if (node.tagName === "BR") {
+      text += "\n";
+      return;
+    }
+
+    const isBlock = BLOCK_ELEMENTS.has(node.tagName);
+    if (isBlock) {
+      appendLineBreak();
+    }
+    for (const child of node.childNodes) {
+      visit(child);
+    }
+    if (isBlock) {
+      appendLineBreak();
+    }
+  }
+
+  for (const child of editor.childNodes) {
+    visit(child);
+  }
+  return text.replace(/\u00a0/g, " ").replace(/\n+$/, "");
 }
 
 function warningHtml(value: string, isLeadInBold: boolean): string {

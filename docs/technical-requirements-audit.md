@@ -22,7 +22,7 @@ uv run --extra dev ruff check .
 uv run --extra dev pytest
 ```
 
-Recorded result on 2026-07-21: ruff passed; `134 passed`.
+Recorded result on 2026-07-21: ruff passed; `149 passed`.
 
 Frontend:
 
@@ -33,7 +33,7 @@ npm test
 npm run build
 ```
 
-Recorded result on 2026-07-21: typecheck passed; `40 passed`; production build passed.
+Recorded result on 2026-07-21: typecheck passed; `45 passed`; production build passed.
 
 Deployed checks:
 
@@ -61,13 +61,13 @@ Deployed checks:
 | R-012 | Single-label target under 5 seconds. | Playbook | PASS | Deployed warm `latency_ms` p50 1501 ms, p95 2527 ms. |
 | R-013 | Free-tier cold start may exceed target. | Deployment reality | QUESTIONABLE | Disclosed; frontend shows visible startup/loading status. |
 | R-014 | Batch upload required. | Playbook/stakeholder notes | PASS | `/verify/batch` is capped at 25 items per request; the frontend automatically sends larger workloads as sequential ordered groups and aggregates results. A 26-item regression test verifies 25+1 request splitting. |
-| R-015 | Batch uses bounded concurrency. | Playbook | PASS | Backend uses `asyncio.Semaphore` with configured limit. |
+| R-015 | Batch uses bounded concurrency. | Playbook | PASS | Backend reads and processes one concurrency-sized chunk at a time; the use case also enforces the configured limit with `asyncio.Semaphore`. |
 | R-016 | Bad batch item does not fail whole batch. | Playbook | PASS | Per-item errors and tests. |
 | R-017 | Batch summary includes `passed`, `needs_review`, `total`. | Playbook | PASS | `BatchSummary` model/tests. |
 | R-018 | Pydantic models for required data shapes. | Phase 1 | PASS | `ApplicationData`, `ExtractedLabel`, `FieldResult`, `VerificationResult`, batch models. |
 | R-019 | Domain comparison logic is pure. | Phase 1 | PASS | Domain import guard test passes. |
 | R-020 | Fuzzy compare for brand/class/producer. | Playbook | PASS | RapidFuzz comparison and tests. |
-| R-021 | Country synonym normalization. | Playbook | PASS | USA/United States tests. |
+| R-021 | Country synonym normalization. | Playbook | PASS | USA/United States normalization plus domestic U.S. city/state and no-explicit-country cases are tested. |
 | R-022 | ABV numeric normalization. | Playbook | PASS | Percent/proof tests. |
 | R-023 | Net contents unit normalization. | Playbook | PASS | mL/L/fl oz tests. |
 | R-024 | Warning text exact and case-sensitive after whitespace collapse. | Playbook | PASS | Application and extracted warning text must match the canonical statement; title-case, missing-colon, and non-statutory text tests fail as required. |

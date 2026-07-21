@@ -21,6 +21,7 @@ export type PackageRecordKey = Pick<ApplicationPackageRecord, "image_filename">;
 export interface ApplicationSummary {
   needs_review: number;
   passed: number;
+  pending: number;
   total: number;
 }
 

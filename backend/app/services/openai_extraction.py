@@ -29,9 +29,14 @@ Rules:
 - Put each visible text value in the most specific matching field:
   brand_name is the product/brand name; class_type is the beverage class/type;
   abv is alcohol by volume or proof text; net_contents is bottle/can volume;
-  producer is bottler/producer/importer name and address text; country_of_origin is
-  origin text; government_warning is the required warning statement.
-- Do not place the same visible text in multiple fields unless the label explicitly repeats it.
+  producer is bottler/producer/importer name and address text; country_of_origin is explicit
+  origin text or visible domestic U.S. location evidence; government_warning is the required
+  warning statement.
+- For a domestic U.S. label with no printed country, copy visible city, state name, or two-letter
+  state code from the producer/bottler address into country_of_origin. Copy the visible location
+  text as printed; do not replace it with or infer the words United States.
+- Do not place the same visible text in multiple fields unless the label explicitly repeats it,
+  except that visible city/state evidence may appear in both producer and country_of_origin.
 - If several candidate values appear for one field and the correct one is unclear, use null.
 - Copy government_warning verbatim from the visible label when possible, preserving
   capitalization, punctuation, and wording.

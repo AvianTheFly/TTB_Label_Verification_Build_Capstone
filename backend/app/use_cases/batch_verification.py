@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from app.core.config import Settings
@@ -78,8 +79,16 @@ async def process_batch_items(
         return BatchItemResult(index=item.index, result=result)
 
     processed = await asyncio.gather(*(process_one(item) for item in items))
-    processed.sort(key=lambda item: item.index)
-    return BatchResult(items=processed, summary=_summarize(processed))
+    return build_batch_result(processed)
+
+
+def combine_batch_results(results: Iterable[BatchResult]) -> BatchResult:
+    return build_batch_result(item for result in results for item in result.items)
+
+
+def build_batch_result(items: Iterable[BatchItemResult]) -> BatchResult:
+    ordered_items = sorted(items, key=lambda item: item.index)
+    return BatchResult(items=ordered_items, summary=_summarize(ordered_items))
 
 
 def _summarize(items: list[BatchItemResult]) -> BatchSummary:

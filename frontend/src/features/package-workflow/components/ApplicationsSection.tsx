@@ -46,6 +46,13 @@ export function ApplicationsSection({
               tone: "neutral"
             },
             {
+              active: statusFilters["Pending Check"],
+              filterKey: "Pending Check",
+              label: "pending check",
+              value: summary.pending,
+              tone: "pending"
+            },
+            {
               active: statusFilters["Needs Review"],
               filterKey: "Needs Review",
               label: "needs review",

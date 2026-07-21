@@ -62,5 +62,5 @@ See `../docs/interfaces/api-contracts.md` and `../docs/interfaces/error-contract
   best-effort visual evidence. A detected bold lead-in can pass; detected non-bold or unknown style
   requires review. Reviewer-confirmed bold state is accepted through `extracted_formatting` on
   `/compare`.
-- The submitted deployment caps batches at 25 items per request and processes them with bounded
-  concurrency.
+- The submitted deployment caps batches at 25 items per request and reads/processes only one
+  concurrency-sized chunk at a time.

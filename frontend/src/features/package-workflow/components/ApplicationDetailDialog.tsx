@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
 
 import type { CanonicalLabelField, FieldReviewDecision } from "../../../types/api";
@@ -50,10 +51,35 @@ export function ApplicationDetailDialog({
   isVerifying,
   record
 }: ApplicationDetailDialogProps) {
+  const dialogRef = useRef<HTMLElement>(null);
   const title = record.application_data.brand_name.trim() || record.image_filename;
   const fieldSummary = summarizeFieldDecisions(resolvedFieldDecisions(record));
   const reviewLabel =
     fieldSummary.fail === 1 ? "1 field to review" : `${fieldSummary.fail} fields to review`;
+
+  useEffect(() => {
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    detailHeadingRef.current?.focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (event.key === "Tab" && dialogRef.current) {
+        trapDialogFocus(event, dialogRef.current);
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [detailHeadingRef, onClose]);
 
   return (
     <div
@@ -70,7 +96,9 @@ export function ApplicationDetailDialog({
         aria-modal="true"
         className="detail-panel"
         onMouseDown={(event) => event.stopPropagation()}
+        ref={dialogRef}
         role="dialog"
+        tabIndex={-1}
       >
         <div className="detail-panel__header">
           <div className="detail-title-group">
@@ -150,4 +178,34 @@ export function ApplicationDetailDialog({
       </section>
     </div>
   );
+}
+
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "textarea:not([disabled])",
+  '[contenteditable="true"]',
+  '[tabindex]:not([tabindex="-1"])'
+].join(",");
+
+function trapDialogFocus(event: KeyboardEvent, dialog: HTMLElement) {
+  const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+  if (focusable.length === 0) {
+    event.preventDefault();
+    dialog.focus();
+    return;
+  }
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement;
+
+  if (event.shiftKey && (active === first || !dialog.contains(active))) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+    event.preventDefault();
+    first.focus();
+  }
 }

@@ -15,6 +15,7 @@ from app.domain.normalization import (
     ABV_TOLERANCE,
     NET_CONTENTS_TOLERANCE_ML,
     collapse_whitespace,
+    has_us_state_reference,
     normalize_country,
     normalize_for_fuzzy,
     parse_abv,
@@ -44,14 +45,44 @@ def compare_producer(expected: str, found: str | None) -> FieldResult:
     return _compare_fuzzy("producer", expected, found)
 
 
-def compare_country_of_origin(expected: str, found: str | None) -> FieldResult:
+def compare_country_of_origin(
+    expected: str,
+    found: str | None,
+    *,
+    application_producer: str | None = None,
+    extracted_producer: str | None = None,
+) -> FieldResult:
+    expected_normalized = normalize_country(expected)
+
+    if expected_normalized == "united states" and found is None:
+        address_has_state = bool(
+            extracted_producer and has_us_state_reference(extracted_producer)
+        )
+        message = (
+            "Domestic application matches U.S. state/address evidence on the label."
+            if address_has_state
+            else "Country of origin is not required on a domestic United States label."
+        )
+        return _pass("country_of_origin", "synonym", expected, found, message)
+
     if found is None:
         return _fail("country_of_origin", "synonym", expected, found, "No extracted value found.")
 
-    expected_normalized = normalize_country(expected)
     found_normalized = normalize_country(found)
     if expected_normalized == found_normalized:
         return _pass("country_of_origin", "synonym", expected, found, "Country matches.")
+
+    if expected_normalized == "united states" and (
+        has_us_state_reference(found)
+        or _matches_application_city(found, application_producer, extracted_producer)
+    ):
+        return _pass(
+            "country_of_origin",
+            "synonym",
+            expected,
+            found,
+            "Domestic application matches U.S. city/state evidence on the label.",
+        )
 
     return _fail(
         "country_of_origin",
@@ -83,13 +114,35 @@ def compare_net_contents(expected: str, found: str | None) -> FieldResult:
 
     expected_ml = parse_net_contents_ml(expected)
     found_ml = parse_net_contents_ml(found)
-    if expected_ml is None or found_ml is None:
-        return _fail("net_contents", "unit", expected, found, "Could not parse net contents.")
+    if expected_ml is None:
+        return _fail(
+            "net_contents",
+            "unit",
+            expected,
+            found,
+            "Application net contents needs an amount and supported unit, such as 750 mL.",
+        )
+    if found_ml is None:
+        return _fail(
+            "net_contents",
+            "unit",
+            expected,
+            found,
+            "AI detected net contents text, but its amount or unit could not be interpreted. "
+            "Review the detected value.",
+        )
 
     if abs(expected_ml - found_ml) <= NET_CONTENTS_TOLERANCE_ML:
         return _pass("net_contents", "unit", expected, found, "Net contents match.")
 
-    return _fail("net_contents", "unit", expected, found, "Net contents do not match.")
+    return _fail(
+        "net_contents",
+        "unit",
+        expected,
+        found,
+        f"Net contents do not match after unit conversion: {expected_ml:g} mL expected, "
+        f"{found_ml:g} mL detected.",
+    )
 
 
 def compare_government_warning(
@@ -175,6 +228,15 @@ def compare_label(
                     extracted_label.government_warning_lead_in_bold,
                 )
             )
+        elif field == "country_of_origin":
+            results.append(
+                compare_country_of_origin(
+                    application_data.country_of_origin,
+                    extracted_label.country_of_origin,
+                    application_producer=application_data.producer,
+                    extracted_producer=extracted_label.producer,
+                )
+            )
         else:
             results.append(
                 compare(getattr(application_data, field), getattr(extracted_label, field))
@@ -184,6 +246,22 @@ def compare_label(
         extracted_formatting=LabelFormatting(
             government_warning_lead_in_bold=extracted_label.government_warning_lead_in_bold
         ),
+    )
+
+
+def _matches_application_city(
+    found: str,
+    application_producer: str | None,
+    extracted_producer: str | None,
+) -> bool:
+    normalized_found = normalize_for_fuzzy(found)
+    if not normalized_found or len(normalized_found.split()) > 3:
+        return False
+    return bool(
+        application_producer
+        and extracted_producer
+        and normalized_found in normalize_for_fuzzy(application_producer)
+        and normalized_found in normalize_for_fuzzy(extracted_producer)
     )
 
 

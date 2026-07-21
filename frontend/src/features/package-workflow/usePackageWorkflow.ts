@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { CanonicalLabelField } from "../../types/api";
 import {
@@ -117,6 +117,8 @@ export function usePackageWorkflow() {
     link.click();
   }
 
+  const closeDetail = useCallback(() => setSelectedPackageId(null), []);
+
   return {
     advancedFilters: filters.advancedFilters,
     applicationSummary: filters.applicationSummary,
@@ -139,7 +141,7 @@ export function usePackageWorkflow() {
     sortedRecords: filters.sortedRecords,
     statusFilters: filters.statusFilters,
     validationErrors: uploads.validationErrors,
-    closeDetail: () => setSelectedPackageId(null),
+    closeDetail,
     compareEditedRecord: verification.compareEditedRecord,
     downloadSampleLabels,
     openDetail: setSelectedPackageId,
