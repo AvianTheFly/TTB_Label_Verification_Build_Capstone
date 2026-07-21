@@ -98,10 +98,21 @@ def compare_government_warning(
     if found is None:
         return _fail("government_warning", "exact", expected, found, "No extracted value found.")
 
+    canonical_collapsed = collapse_whitespace(CANONICAL_GOVERNMENT_WARNING)
     expected_collapsed = collapse_whitespace(expected)
     found_collapsed = collapse_whitespace(found)
 
-    if expected_collapsed == found_collapsed:
+    if expected_collapsed != canonical_collapsed:
+        return _fail(
+            "government_warning",
+            "exact",
+            expected,
+            found,
+            "Application government warning does not match the canonical statement after "
+            "whitespace collapse.",
+        )
+
+    if found_collapsed == canonical_collapsed:
         if lead_in_bold is False:
             return _fail(
                 "government_warning",
@@ -135,7 +146,7 @@ def compare_government_warning(
         "exact",
         expected,
         found,
-        "Government warning does not match after whitespace collapse. "
+        "Government warning does not match the canonical statement after whitespace collapse. "
         f"AI detected: {found_collapsed}",
     )
 

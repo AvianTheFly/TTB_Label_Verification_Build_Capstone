@@ -70,7 +70,7 @@ Deployed checks:
 | R-021 | Country synonym normalization. | Playbook | PASS | USA/United States tests. |
 | R-022 | ABV numeric normalization. | Playbook | PASS | Percent/proof tests. |
 | R-023 | Net contents unit normalization. | Playbook | PASS | mL/L/fl oz tests. |
-| R-024 | Warning text exact and case-sensitive after whitespace collapse. | Playbook | PASS | Title-case and missing-colon tests fail as required. |
+| R-024 | Warning text exact and case-sensitive after whitespace collapse. | Playbook | PASS | Application and extracted warning text must match the canonical statement; title-case, missing-colon, and non-statutory text tests fail as required. |
 | R-025 | Warning failure returns extracted text. | Playbook | PASS | `found` and message include extracted warning on failure. |
 | R-026 | Warning lead-in all caps and bold. | Additional requirements | QUESTIONABLE | Text exactness is enforced. Provider style evidence `true` passes, while `false` or `null` requires review. Reviewers can confirm formatting with Ctrl+B; automated visual detection remains best-effort. |
 | R-027 | Verdict rule: any fail -> `NEEDS_REVIEW`; all pass -> `APPROVED`. | Playbook | PASS | Domain/API tests. |

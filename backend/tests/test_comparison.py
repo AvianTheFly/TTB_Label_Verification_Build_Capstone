@@ -211,7 +211,7 @@ def test_government_warning_passes_when_bold_lead_in_is_detected() -> None:
     assert "detected bold styling" in field_result.message
 
 
-def test_government_warning_compares_application_to_extracted_not_canonical() -> None:
+def test_noncanonical_application_warning_fails_when_extracted_text_matches() -> None:
     submitted_warning = "GOVERNMENT WARNING: Label-specific application text."
     extracted_warning = "GOVERNMENT WARNING:\n\nLabel-specific   application text."
     field_result = result_for_field(
@@ -220,19 +220,22 @@ def test_government_warning_compares_application_to_extracted_not_canonical() ->
         "government_warning",
     )
 
-    assert field_result.status == "PASS"
+    assert field_result.status == "FAIL"
     assert field_result.match_type == "exact"
+    assert "Application government warning does not match the canonical statement" in (
+        field_result.message
+    )
 
 
-def test_non_statute_government_warning_passes_when_application_and_extracted_match() -> None:
+def test_noncanonical_application_warning_fails_when_extracted_text_is_canonical() -> None:
     non_statute_warning = "GOVERNMENT WARNING: Short label-specific warning."
     field_result = result_for_field(
         make_application(government_warning=non_statute_warning),
-        make_extracted(government_warning=non_statute_warning),
+        make_extracted(government_warning=CANONICAL_GOVERNMENT_WARNING),
         "government_warning",
     )
 
-    assert field_result.status == "PASS"
+    assert field_result.status == "FAIL"
     assert field_result.match_type == "exact"
 
 

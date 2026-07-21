@@ -56,7 +56,7 @@ text.
 | `abv` | Parsed numeric comparison | Compares the alcohol value rather than display syntax. |
 | `net_contents` | Normalize units to mL | Treats equivalent metric and US customary values consistently. |
 | `country_of_origin` | Synonym normalization | Treats values such as USA and United States as equivalent. |
-| `government_warning` | Exact and case-sensitive after whitespace collapse | Preserves the stricter statutory wording requirement. |
+| `government_warning` | Exact, case-sensitive match to the canonical statement after whitespace collapse | Preserves the stricter statutory wording requirement. |
 
 All field results are explicit `PASS` or `FAIL` values. Every pass yields `APPROVED`; any failure
 yields `NEEDS_REVIEW`. A warning mismatch includes the extracted warning so the reviewer can see the

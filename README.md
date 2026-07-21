@@ -100,7 +100,7 @@ running.
 | Alcohol by volume | Numeric match with tolerance |
 | Net contents | Unit-normalized match in milliliters |
 | Country of origin | Synonym-normalized match |
-| Government warning | Exact, case-sensitive text after whitespace collapse |
+| Government warning | Exact, case-sensitive match to the canonical statement after whitespace collapse |
 | Warning lead-in boldness | Best-effort AI evidence; uncertain or non-bold results require review |
 
 All fields passing produces `APPROVED`; any failed or uncertain field produces `NEEDS_REVIEW`.
