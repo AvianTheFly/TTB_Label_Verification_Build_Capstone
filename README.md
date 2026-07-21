@@ -110,7 +110,7 @@ All fields passing produces `APPROVED`; any failed or uncertain field produces `
 ```text
 backend/       FastAPI API, pure comparison rules, provider adapters, and tests
 frontend/      React review workflow, API client, styling, and tests
-docs/          API contracts, error contracts, technical audit, and timing evidence
+docs/          API contracts, error contracts, and timing evidence
 demo-data/     Synthetic sample labels for local demonstrations
 ```
 
@@ -165,7 +165,6 @@ stop the backend during startup instead of producing a partially working deploym
 - [Frontend guide](frontend/README.md) — frontend commands, layout, and workflow.
 - [API contracts](docs/interfaces/api-contracts.md) — request and response shapes.
 - [Error contracts](docs/interfaces/error-contracts.md) — safe error behavior.
-- [Technical requirements audit](docs/technical-requirements-audit.md) — requirement traceability.
 - [Deployed timing results](docs/deployed-timing-results.md) — recorded latency evidence.
 
 ## Current limitations

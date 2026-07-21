@@ -2,15 +2,10 @@
 
 You are helping maintain the finalized TTB Label Verification proof-of-concept.
 
-Primary source of truth:
-
-- `TTB_Label_Verification_Build_Playbook 1.pdf`
-- `Additional Project Requirements`
-
 Current final docs:
 
 - `README.md`
-- `docs/technical-requirements-audit.md`
+- `DOCUMENTATION.md`
 - `docs/interfaces/api-contracts.md`
 - `docs/interfaces/error-contracts.md`
 - `docs/deployed-timing-results.md`

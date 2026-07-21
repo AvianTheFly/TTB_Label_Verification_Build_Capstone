@@ -177,7 +177,6 @@ backend startup/loading rather than appearing frozen. Full measurement notes are
 
 - [API contracts](docs/interfaces/api-contracts.md)
 - [Error contracts](docs/interfaces/error-contracts.md)
-- [Technical requirements audit](docs/technical-requirements-audit.md)
 - [Deployed timing results](docs/deployed-timing-results.md)
 - [Backend guide](backend/README.md)
 - [Frontend guide](frontend/README.md)
