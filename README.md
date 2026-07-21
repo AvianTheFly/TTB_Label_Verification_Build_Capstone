@@ -147,7 +147,7 @@ Copy `.env.example` into `backend/.env` for local backend configuration. Importa
 | `BACKEND_CORS_ORIGINS` | Allowed frontend origins | local Vite origins |
 | `VITE_API_BASE_URL` | Backend URL used by the frontend | `http://127.0.0.1:8000` |
 
-See [.env.example](.env.example) for all supported settings.
+See [.env.example](.env.example) for commonly used settings.
 Upload size, batch size, and batch concurrency settings must be positive integers; invalid values
 stop the backend during startup instead of producing a partially working deployment.
 

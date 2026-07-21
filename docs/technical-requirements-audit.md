@@ -4,7 +4,7 @@ Final submission audit against:
 
 - `TTB_Label_Verification_Build_Playbook 1.pdf`
 - `Additional Project Requirements`
-- Current `feat/project-improvements` branch state
+- Current `main` branch state
 
 Status labels:
 
@@ -49,7 +49,7 @@ Deployed checks:
 | --- | --- | --- | --- | --- |
 | R-001 | Standalone proof-of-concept; no COLA integration. | Additional requirements | PASS | No COLA client, auth, persistence, or submission integration. |
 | R-002 | No database; each request self-contained. | Playbook | PASS | No DB dependency, migrations, ORM, or persistent request store. |
-| R-003 | Do not store uploads, extracted data, or application data beyond request lifetime. | Additional requirements | PASS | Backend processes in memory; browser export is user-initiated. |
+| R-003 | Do not store uploads, extracted data, or application data beyond request lifetime. | Additional requirements | PASS | Backend processes in memory; frontend review data remains in browser memory only. |
 | R-004 | Secrets only in environment variables. | Playbook | PASS | `.env*` ignored except `.env.example`; no tracked real keys found. |
 | R-005 | Python 3.12, FastAPI, Pydantic v2, `uv`. | Playbook | PASS | Backend pins Python 3.12 and uses FastAPI/Pydantic v2/uv. |
 | R-006 | React, TypeScript, Vite frontend. | Playbook | PASS | `frontend/package.json`; typecheck/tests/build pass. |
