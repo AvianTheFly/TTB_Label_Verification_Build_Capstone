@@ -2,6 +2,7 @@ import {
   Dispatch,
   MutableRefObject,
   SetStateAction,
+  useRef,
   useState
 } from "react";
 
@@ -29,6 +30,11 @@ import {
 
 const MAX_BATCH_ITEMS = 25;
 
+interface RequestToken {
+  epoch: number;
+  version: number;
+}
+
 function errorMessageFor(error: unknown): string {
   if (error instanceof VerificationApiError) {
     return error.message;
@@ -49,6 +55,32 @@ export function usePackageVerification({
   const [isChecking, setIsChecking] = useState(false);
   const [checkError, setCheckError] = useState<string | null>(null);
   const [checkingMessage, setCheckingMessage] = useState<string | null>(null);
+  const requestEpochRef = useRef(0);
+  const requestVersionsRef = useRef(new Map<string, number>());
+
+  function beginRecordRequest(packageId: string): RequestToken {
+    const version = (requestVersionsRef.current.get(packageId) ?? 0) + 1;
+    requestVersionsRef.current.set(packageId, version);
+    return { epoch: requestEpochRef.current, version };
+  }
+
+  function isCurrentRequest(packageId: string, token: RequestToken): boolean {
+    return (
+      requestEpochRef.current === token.epoch &&
+      requestVersionsRef.current.get(packageId) === token.version
+    );
+  }
+
+  function invalidateRecordRequest(packageId: string) {
+    requestVersionsRef.current.set(
+      packageId,
+      (requestVersionsRef.current.get(packageId) ?? 0) + 1
+    );
+  }
+
+  function invalidateAllRequests() {
+    requestEpochRef.current += 1;
+  }
 
   async function verifySingleApplication(packageId: string) {
     const record = recordsRef.current.find((candidate) => candidate.package_id === packageId);
@@ -71,18 +103,24 @@ export function usePackageVerification({
     setIsChecking(true);
     setCheckingMessage("Reading label");
     setCheckError(null);
+    const requestToken = beginRecordRequest(packageId);
     try {
       const result = await verifyLabel(record.image_file, record.application_data);
-      updateRecordWithResult(packageId, result);
+      updateRecordWithResult(packageId, result, requestToken);
     } catch (error) {
+      if (!isCurrentRequest(packageId, requestToken)) {
+        return;
+      }
       const message = errorMessageFor(error);
       setCheckError(message);
       setRecords((current) =>
-        current.map((candidate) =>
-          candidate.package_id === packageId
-            ? { ...candidate, item_error: message, status: "Needs Review" }
-            : candidate
-        )
+        isCurrentRequest(packageId, requestToken)
+          ? current.map((candidate) =>
+              candidate.package_id === packageId
+                ? { ...candidate, item_error: message, status: "Needs Review" }
+                : candidate
+            )
+          : current
       );
     } finally {
       setCheckingMessage(null);
@@ -129,6 +167,13 @@ export function usePackageVerification({
     setIsChecking(true);
     setCheckError(null);
     const submittedRecords = currentRecords.slice();
+    const batchEpoch = requestEpochRef.current;
+    const requestTokens = new Map(
+      submittedRecords.map((record) => [
+        record.package_id,
+        beginRecordRequest(record.package_id)
+      ])
+    );
     let failedGroupCount = 0;
     try {
       for (let start = 0; start < submittedRecords.length; start += MAX_BATCH_ITEMS) {
@@ -143,20 +188,24 @@ export function usePackageVerification({
               application_data: record.application_data
             }))
           );
-          applyBatchGroupResult(group, batchResult);
+          applyBatchGroupResult(group, batchResult, requestTokens);
         } catch (error) {
-          failedGroupCount += 1;
-          markBatchGroupFailed(group, errorMessageFor(error));
+          if (requestEpochRef.current === batchEpoch) {
+            failedGroupCount += 1;
+          }
+          markBatchGroupFailed(group, errorMessageFor(error), requestTokens);
         }
       }
 
-      if (failedGroupCount > 0) {
+      if (failedGroupCount > 0 && requestEpochRef.current === batchEpoch) {
         setCheckError(
           "Some label groups could not be checked. Review the affected applications and try them again."
         );
       }
     } catch (error) {
-      setCheckError(errorMessageFor(error));
+      if (requestEpochRef.current === batchEpoch) {
+        setCheckError(errorMessageFor(error));
+      }
     } finally {
       setCheckingMessage(null);
       setIsChecking(false);
@@ -165,7 +214,8 @@ export function usePackageVerification({
 
   function applyBatchGroupResult(
     group: ApplicationPackageRecord[],
-    batchResult: BatchResult
+    batchResult: BatchResult,
+    requestTokens: Map<string, RequestToken>
   ) {
     const updates = new Map(
       batchResult.items.flatMap((item) => {
@@ -176,6 +226,10 @@ export function usePackageVerification({
 
     setRecords((current) =>
       current.map((record) => {
+        const requestToken = requestTokens.get(record.package_id);
+        if (!requestToken || !isCurrentRequest(record.package_id, requestToken)) {
+          return record;
+        }
         const item = updates.get(record.package_id);
         if (item?.result) {
           return applyVerificationResult(record, item.result);
@@ -192,24 +246,37 @@ export function usePackageVerification({
     );
   }
 
-  function markBatchGroupFailed(group: ApplicationPackageRecord[], message: string) {
+  function markBatchGroupFailed(
+    group: ApplicationPackageRecord[],
+    message: string,
+    requestTokens: Map<string, RequestToken>
+  ) {
     const packageIds = new Set(group.map((record) => record.package_id));
     setRecords((current) =>
-      current.map((record) =>
-        packageIds.has(record.package_id)
+      current.map((record) => {
+        const requestToken = requestTokens.get(record.package_id);
+        return packageIds.has(record.package_id) &&
+          requestToken &&
+          isCurrentRequest(record.package_id, requestToken)
           ? { ...record, item_error: message, status: "Needs Review" }
-          : record
-      )
+          : record;
+      })
     );
   }
 
-  function updateRecordWithResult(packageId: string, result: VerificationResult) {
+  function updateRecordWithResult(
+    packageId: string,
+    result: VerificationResult,
+    requestToken: RequestToken
+  ) {
     setRecords((current) =>
-      current.map((record) =>
-        record.package_id === packageId
-          ? applyVerificationResult(record, result)
-          : record
-      )
+      isCurrentRequest(packageId, requestToken)
+        ? current.map((record) =>
+            record.package_id === packageId
+              ? applyVerificationResult(record, result)
+              : record
+          )
+        : current
     );
   }
 
@@ -268,6 +335,7 @@ export function usePackageVerification({
     fieldDecisions: ApplicationPackageRecord["field_decisions"]
   ) {
     setCheckError(null);
+    const requestToken = beginRecordRequest(record.package_id);
     try {
       const result = await compareExtractedData(
         record.application_data,
@@ -276,16 +344,20 @@ export function usePackageVerification({
         fieldDecisions
       );
       setRecords((current) =>
-        current.map((candidate) =>
-          candidate.package_id === record.package_id
-            ? {
-                ...applyComparisonResult(candidate, result, fieldDecisions)
-              }
-            : candidate
-        )
+        isCurrentRequest(record.package_id, requestToken)
+          ? current.map((candidate) =>
+              candidate.package_id === record.package_id
+                ? {
+                    ...applyComparisonResult(candidate, result, fieldDecisions)
+                  }
+                : candidate
+            )
+          : current
       );
     } catch (error) {
-      setCheckError(errorMessageFor(error));
+      if (isCurrentRequest(record.package_id, requestToken)) {
+        setCheckError(errorMessageFor(error));
+      }
     }
   }
 
@@ -293,6 +365,8 @@ export function usePackageVerification({
     checkError,
     checkingMessage,
     compareEditedRecord,
+    invalidateAllRequests,
+    invalidateRecordRequest,
     isChecking,
     setCheckError,
     setFieldDecision,

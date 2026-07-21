@@ -78,7 +78,7 @@ npm test
 npm run build
 ```
 
-Latest local result: 134 backend tests and 37 frontend tests passing.
+Latest local result: 134 backend tests and 39 frontend tests passing.
 
 ## How to use it
 

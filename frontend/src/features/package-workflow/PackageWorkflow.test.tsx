@@ -132,6 +132,14 @@ function okJson(payload: unknown) {
   };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
+}
+
 function mockWorkflowFetch(result = verificationResult(), compareResult = result) {
   vi.stubGlobal(
     "fetch",
@@ -680,6 +688,39 @@ describe("PackageWorkflow", () => {
     expect((formData.get("image") as File).name).toBe("label.png");
     expect(JSON.parse(String(formData.get("application_data")))).toEqual(canonicalApplicationData);
     expect(container.textContent).toContain("Approved");
+  });
+
+  it("does not apply a verification response after application data changes", async () => {
+    const pendingVerification = deferred<ReturnType<typeof okJson>>();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        if (String(input).endsWith("/verify")) {
+          return pendingVerification.promise;
+        }
+        return Promise.resolve(okJson(verificationResult()));
+      })
+    );
+
+    await renderPackageWorkflow();
+    await chooseFiles([imageFile("label.png")]);
+    await act(async () => {
+      firstPackageButton().click();
+    });
+    await fillApplicationData();
+    await clickButton("Verify");
+
+    await changeField("Application Value Brand Name", "UPDATED BRAND");
+    await act(async () => {
+      pendingVerification.resolve(okJson(verificationResult()));
+      await pendingVerification.promise;
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[aria-label="Current status: Pending Check"]')).not.toBeNull();
+    const extractedBrand = container.querySelector('[aria-label="Extracted Value Brand Name"]');
+    expect(extractedBrand).toBeInstanceOf(HTMLTextAreaElement);
+    expect((extractedBrand as HTMLTextAreaElement).value).toBe("");
   });
 
   it("calls /verify/batch from the homepage for complete applications", async () => {
@@ -1275,6 +1316,59 @@ describe("PackageWorkflow", () => {
       field_decisions: { brand_name: "fail" }
     });
     expect(container.textContent).toContain("Needs Review");
+  });
+
+  it("ignores an older field-decision response that finishes last", async () => {
+    const compareRequests: Array<ReturnType<typeof deferred<ReturnType<typeof okJson>>>> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        if (String(input).endsWith("/verify")) {
+          return Promise.resolve(okJson(verificationResult()));
+        }
+        const request = deferred<ReturnType<typeof okJson>>();
+        compareRequests.push(request);
+        return request.promise;
+      })
+    );
+
+    await renderPackageWorkflow();
+    await uploadOpenFillAndVerify();
+
+    await clickButtonLabel("Fail Brand Name");
+    await clickButtonLabel("Pass Brand Name");
+    expect(compareRequests).toHaveLength(2);
+
+    await act(async () => {
+      compareRequests[1].resolve(okJson(verificationResult()));
+      await compareRequests[1].promise;
+      await Promise.resolve();
+    });
+    await act(async () => {
+      compareRequests[0].resolve(
+        okJson(
+          verificationResult({
+            overall_verdict: "NEEDS_REVIEW",
+            results: [
+              {
+                field: "brand_name",
+                match_type: "fuzzy",
+                expected: "OLD TOM DISTILLERY",
+                found: "Old Tom Distillery",
+                status: "FAIL",
+                message: "Reviewer marked this field as fail."
+              },
+              ...verificationResult().results.slice(1)
+            ]
+          })
+        )
+      );
+      await compareRequests[0].promise;
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[aria-label="Current status: Approved"]')).not.toBeNull();
+    expect(buttonWithLabel("Pass Brand Name").getAttribute("aria-pressed")).toBe("true");
   });
 
   it("does not contain frontend comparison tolerance logic", () => {

@@ -20,6 +20,7 @@ import {
 } from "./recordMutations";
 
 interface UsePackageUploadsParams {
+  invalidateRequests: () => void;
   recordsRef: MutableRefObject<ApplicationPackageRecord[]>;
   setCheckError: Dispatch<SetStateAction<string | null>>;
   setRecords: Dispatch<SetStateAction<ApplicationPackageRecord[]>>;
@@ -27,6 +28,7 @@ interface UsePackageUploadsParams {
 }
 
 export function usePackageUploads({
+  invalidateRequests,
   recordsRef,
   setCheckError,
   setRecords,
@@ -60,6 +62,7 @@ export function usePackageUploads({
   function addUploadedFiles(fileList: FileList | File[]) {
     const incomingFiles = Array.from(fileList);
     const files = mergeFilesByName(uploadedFilesRef.current, incomingFiles);
+    invalidateRequests();
     setCheckError(null);
     void applyUploadedFiles(files);
   }

@@ -30,6 +30,7 @@ export function usePackageWorkflow() {
     setRecords
   });
   const uploads = usePackageUploads({
+    invalidateRequests: verification.invalidateAllRequests,
     recordsRef,
     setCheckError: verification.setCheckError,
     setRecords,
@@ -54,6 +55,7 @@ export function usePackageWorkflow() {
     field: CanonicalLabelField,
     value: string
   ) {
+    verification.invalidateRecordRequest(packageId);
     setRecords((current) =>
       current.map((record) =>
         record.package_id === packageId
@@ -64,6 +66,7 @@ export function usePackageWorkflow() {
   }
 
   function updateApplicationBoldFormatting(packageId: string, isBold: boolean) {
+    verification.invalidateRecordRequest(packageId);
     setRecords((current) =>
       current.map((record) =>
         record.package_id === packageId
@@ -81,6 +84,7 @@ export function usePackageWorkflow() {
     field: CanonicalLabelField,
     value: string
   ) {
+    verification.invalidateRecordRequest(packageId);
     setRecords((current) =>
       current.map((record) =>
         record.package_id === packageId
@@ -91,6 +95,7 @@ export function usePackageWorkflow() {
   }
 
   function updateExtractedBoldFormatting(packageId: string, isBold: boolean) {
+    verification.invalidateRecordRequest(packageId);
     setRecords((current) =>
       current.map((record) =>
         record.package_id === packageId

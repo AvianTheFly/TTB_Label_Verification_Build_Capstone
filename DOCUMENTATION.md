@@ -46,6 +46,9 @@ The warning rich-text interaction is isolated in `RichWarningTextarea.tsx`. It r
 metadata for the bold `GOVERNMENT WARNING:` lead-in while preserving the canonical warning as plain
 text.
 
+Per-application request tokens invalidate pending responses when a reviewer edits data or changes
+the uploaded files, preventing an older verification or comparison from overwriting newer state.
+
 ## Comparison strategy
 
 | Field | Rule | Reasoning |
