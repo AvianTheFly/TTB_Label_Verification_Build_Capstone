@@ -140,11 +140,23 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function mockWorkflowFetch(result = verificationResult(), compareResult = result) {
+function mockWorkflowFetch(
+  result = verificationResult(),
+  compareResult = result,
+  maxBatchItems = 25
+) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
+      if (url.endsWith("/health")) {
+        return okJson({
+          status: "ok",
+          service: "ttb-label-verification",
+          version: "0.1.0",
+          max_batch_items: maxBatchItems
+        });
+      }
       if (url.endsWith("/extract")) {
         return okJson(extractionResult());
       }
@@ -749,7 +761,7 @@ describe("PackageWorkflow", () => {
       body: expect.any(FormData),
       signal: expect.any(AbortSignal)
     });
-    const formData = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1].body as FormData;
+    const formData = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[1][1].body as FormData;
     expect(formData.getAll("images").map((file) => (file as File).name)).toEqual([
       "first.png",
       "second.png"
@@ -758,7 +770,7 @@ describe("PackageWorkflow", () => {
     expect(container.textContent).toContain("FIRST BRAND");
     expect(container.textContent).toContain("SECOND BRAND");
     expect(container.textContent).toContain("Approved");
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it("splits workloads larger than 25 into ordered batch requests", async () => {
@@ -781,16 +793,42 @@ describe("PackageWorkflow", () => {
 
     await clickButton("Verify Batch");
 
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(3);
     const calls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
-    const firstBatch = calls[0][1].body as FormData;
-    const secondBatch = calls[1][1].body as FormData;
+    const firstBatch = calls[1][1].body as FormData;
+    const secondBatch = calls[2][1].body as FormData;
     expect(firstBatch.getAll("images")).toHaveLength(25);
     expect(secondBatch.getAll("images")).toHaveLength(1);
     expect((firstBatch.getAll("images")[0] as File).name).toBe("label-1.png");
     expect((firstBatch.getAll("images")[24] as File).name).toBe("label-25.png");
     expect((secondBatch.getAll("images")[0] as File).name).toBe("label-26.png");
     expect(container.textContent).toContain("26 approved");
+  });
+
+  it("uses the batch limit published by the backend", async () => {
+    mockWorkflowFetch(verificationResult(), verificationResult(), 2);
+    const files = [imageFile("first.png"), imageFile("second.png"), imageFile("third.png")];
+
+    await renderPackageWorkflow();
+    await chooseFiles(files);
+
+    for (let index = 0; index < files.length; index += 1) {
+      await act(async () => {
+        packageButtonAt(index).click();
+      });
+      await fillApplicationData({
+        ...canonicalApplicationData,
+        brand_name: `BRAND ${index + 1}`
+      });
+      await clickButton("Close");
+    }
+
+    await clickButton("Verify Batch");
+
+    const calls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect((calls[1][1].body as FormData).getAll("images")).toHaveLength(2);
+    expect((calls[2][1].body as FormData).getAll("images")).toHaveLength(1);
   });
 
   it("blocks verification when numeric application fields do not include numbers", async () => {

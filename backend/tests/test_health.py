@@ -13,4 +13,5 @@ def test_health_returns_service_status() -> None:
         "status": "ok",
         "service": "ttb-label-verification",
         "version": "0.1.0",
+        "max_batch_items": 25,
     }

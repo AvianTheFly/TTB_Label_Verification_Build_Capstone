@@ -15,9 +15,9 @@ class Settings(BaseSettings):
     backend_cors_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["http://localhost:5173", "http://127.0.0.1:5173"]
     )
-    max_upload_mb: int = 10
-    max_batch_items: int = 25
-    batch_concurrency_limit: int = 3
+    max_upload_mb: int = Field(default=10, ge=1)
+    max_batch_items: int = Field(default=25, ge=1)
+    batch_concurrency_limit: int = Field(default=3, ge=1)
     single_label_timeout_seconds: float = 4.8
     image_max_dimension: int = 1600
     image_jpeg_quality: int = 60

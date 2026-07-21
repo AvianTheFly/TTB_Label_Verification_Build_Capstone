@@ -33,7 +33,7 @@ npm test
 npm run build
 ```
 
-Recorded result on 2026-07-21: typecheck passed; `37 passed`; production build passed.
+Recorded result on 2026-07-21: typecheck passed; `40 passed`; production build passed.
 
 Deployed checks:
 

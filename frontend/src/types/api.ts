@@ -2,6 +2,7 @@ export interface HealthResponse {
   status: "ok";
   service: string;
   version: string;
+  max_batch_items: number;
 }
 
 export type CanonicalLabelField =

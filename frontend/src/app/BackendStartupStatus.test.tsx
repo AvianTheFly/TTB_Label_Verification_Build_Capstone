@@ -54,7 +54,8 @@ describe("BackendStartupStatus", () => {
       resolveHealth({
         status: "ok",
         service: "ttb-label-verification",
-        version: "0.1.0"
+        version: "0.1.0",
+        max_batch_items: 25
       });
       await Promise.resolve();
     });

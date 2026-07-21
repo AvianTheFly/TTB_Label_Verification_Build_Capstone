@@ -10,6 +10,7 @@ class HealthResponse(BaseModel):
     status: str
     service: str
     version: str
+    max_batch_items: int
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -19,4 +20,5 @@ async def health() -> HealthResponse:
         status="ok",
         service=settings.service_slug,
         version=settings.app_version,
+        max_batch_items=settings.max_batch_items,
     )

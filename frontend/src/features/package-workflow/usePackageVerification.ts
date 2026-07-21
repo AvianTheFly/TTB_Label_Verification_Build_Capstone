@@ -12,6 +12,7 @@ import {
   verifyBatch,
   verifyLabel
 } from "../../api/verification";
+import { getHealth } from "../../api/health";
 import type {
   BatchResult,
   CanonicalLabelField,
@@ -27,8 +28,6 @@ import {
   applyComparisonResult,
   applyVerificationResult
 } from "./recordMutations";
-
-const MAX_BATCH_ITEMS = 25;
 
 interface RequestToken {
   epoch: number;
@@ -155,16 +154,8 @@ export function usePackageVerification({
       return;
     }
 
-    const shouldRunBatch =
-      currentRecords.length <= 1 ||
-      window.confirm(
-        `Verify ${currentRecords.length} applications now?\n\nLabels are sent in groups of up to ${MAX_BATCH_ITEMS} so larger workloads can finish safely.`
-      );
-    if (!shouldRunBatch) {
-      return;
-    }
-
     setIsChecking(true);
+    setCheckingMessage("Checking batch capacity");
     setCheckError(null);
     const submittedRecords = currentRecords.slice();
     const batchEpoch = requestEpochRef.current;
@@ -176,8 +167,25 @@ export function usePackageVerification({
     );
     let failedGroupCount = 0;
     try {
-      for (let start = 0; start < submittedRecords.length; start += MAX_BATCH_ITEMS) {
-        const group = submittedRecords.slice(start, start + MAX_BATCH_ITEMS);
+      const { max_batch_items: maxBatchItems } = await getHealth();
+      if (!Number.isInteger(maxBatchItems) || maxBatchItems < 1) {
+        throw new VerificationApiError(
+          "The verification service returned an invalid batch limit.",
+          "configuration_error"
+        );
+      }
+
+      const shouldRunBatch =
+        submittedRecords.length <= 1 ||
+        window.confirm(
+          `Verify ${submittedRecords.length} applications now?\n\nLabels are sent in groups of up to ${maxBatchItems} so larger workloads can finish safely.`
+        );
+      if (!shouldRunBatch) {
+        return;
+      }
+
+      for (let start = 0; start < submittedRecords.length; start += maxBatchItems) {
+        const group = submittedRecords.slice(start, start + maxBatchItems);
         const end = start + group.length;
         setCheckingMessage(`Reading labels ${start + 1}-${end} of ${submittedRecords.length}`);
 

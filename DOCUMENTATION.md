@@ -80,8 +80,10 @@ the style metadata in the interface, then call `/compare` without repeating AI e
 
 ## Batch design
 
-Each `/verify/batch` request accepts at most 25 labels. Within that request, the backend uses bounded
-concurrency and isolates errors per item so one unreadable image does not fail the entire group.
+Each `/verify/batch` request accepts at most the configured limit, which is 25 in the submitted
+deployment. The backend publishes its effective limit through `/health`, so the frontend does not
+duplicate that configuration. Within each request, the backend uses bounded concurrency and
+isolates errors per item so one unreadable image does not fail the entire group.
 
 To support stakeholder workloads of 200–300 labels without a background-job system, the frontend:
 

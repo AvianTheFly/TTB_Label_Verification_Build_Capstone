@@ -87,3 +87,13 @@ def test_openai_max_output_tokens_are_validated() -> None:
 
     with pytest.raises(ValueError):
         Settings(_env_file=None, openai_max_output_tokens=99)
+
+
+@pytest.mark.parametrize(
+    "setting",
+    ["max_upload_mb", "max_batch_items", "batch_concurrency_limit"],
+)
+@pytest.mark.parametrize("value", [0, -1])
+def test_operational_limits_must_be_positive(setting: str, value: int) -> None:
+    with pytest.raises(ValueError):
+        Settings(_env_file=None, **{setting: value})

@@ -78,7 +78,7 @@ npm test
 npm run build
 ```
 
-Latest local result: 134 backend tests and 39 frontend tests passing.
+Latest local result: 140 backend tests and 40 frontend tests passing.
 
 ## How to use it
 
@@ -122,7 +122,7 @@ tools, assumptions, limitations, and performance notes. More detailed references
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/health` | Service readiness |
+| `GET` | `/health` | Service readiness and effective batch limit |
 | `POST` | `/verify` | Extract and compare one label |
 | `POST` | `/verify/batch` | Verify up to 25 labels with bounded concurrency |
 | `POST` | `/extract` | Extract canonical fields from one label |
@@ -148,6 +148,8 @@ Copy `.env.example` into `backend/.env` for local backend configuration. Importa
 | `VITE_API_BASE_URL` | Backend URL used by the frontend | `http://127.0.0.1:8000` |
 
 See [.env.example](.env.example) for all supported settings.
+Upload size, batch size, and batch concurrency settings must be positive integers; invalid values
+stop the backend during startup instead of producing a partially working deployment.
 
 ## Deployment
 

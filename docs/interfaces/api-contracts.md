@@ -25,9 +25,13 @@ Response:
 {
   "status": "ok",
   "service": "ttb-label-verification",
-  "version": "0.1.0"
+  "version": "0.1.0",
+  "max_batch_items": 25
 }
 ```
+
+`max_batch_items` publishes the backend's effective per-request limit so the frontend can partition
+larger workloads without duplicating configuration.
 
 ## `POST /verify`
 
