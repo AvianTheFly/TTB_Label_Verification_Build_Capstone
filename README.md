@@ -4,8 +4,10 @@ AI-assisted proof of concept for comparing alcohol label images with application
 verify one label or a workload of hundreds, inspect field-level differences, and flag uncertain
 results for human review.
 
-[Live application](https://ttb-label-verification-build-capsto.vercel.app/) ·
-[API health](https://ttb-label-verification-api-0i68.onrender.com/health) ·
+Live application: `https://ttb-label-verification-build-capsto.vercel.app/`
+
+API health: `https://ttb-label-verification-api-0i68.onrender.com/health`
+
 [Approach, tools, and assumptions](DOCUMENTATION.md) ·
 [API contracts](docs/interfaces/api-contracts.md)
 
